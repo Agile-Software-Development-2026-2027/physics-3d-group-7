@@ -1,0 +1,23 @@
+# CI: runs on every pull request and on every push to main.
+# The job "test" is a required check on main: a pull request cannot be merged until it is green.
+# Do not rename the job.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: # lets you run CI by hand from the Actions tab
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Add here the steps that build and test your project.
+      # Until then this job does nothing and always passes.
