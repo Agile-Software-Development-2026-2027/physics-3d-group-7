@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "astral-sh.ty",
+    "ms-python.python"
+  ]
+}
+

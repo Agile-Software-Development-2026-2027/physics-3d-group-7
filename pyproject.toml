@@ -1,0 +1,55 @@
+[project]
+name = "apkit4d"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+apkit4d = "apkit4d:main"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+    "ty>=0.0.86",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+exclude = [
+    ".venv"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ty.src]
+exclude = ["tests"]
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ty.rules]
+missing-type-argument = "error"
+possibly-unresolved-reference = "warn"
+
+[tool.pylint]
+ignore = [".venv", "venv"]
+disable = ["redefined-outer-name"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v --cov=src --cov-fail-under=80 --cov-report=term-missing --cov-report=html"
