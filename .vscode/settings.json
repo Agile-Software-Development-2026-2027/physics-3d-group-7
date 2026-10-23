@@ -10,7 +10,11 @@
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
   "python.languageServer": "Pylance",
   "ty.disableLanguageServices": true,
-  "ty.diagnosticMode": "workspace"
-  
+  "ty.diagnosticMode": "workspace",
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }
 

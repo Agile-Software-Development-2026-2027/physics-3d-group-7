@@ -73,6 +73,7 @@ def evaluate_mc_stability(
     num_current = len(current_positions)
 
     for _ in range(num_resamples):
+        # Perturb the prediction, not the detection: that is where uncertainty lies
         noise = rng.normal(0.0, sigma, size=predicted_positions.shape).astype(np.float32)
         perturbed_pred = predicted_positions + noise
         pert_costs = np.sum(
@@ -96,7 +97,8 @@ def compute_assignment_margins(
     matched_pairs: NDArray[np.int32],
     sigma: NDArray[np.float32],
 ) -> tuple[dict[tuple[int, int], float], dict[int, int]]:
-    """Compute ambiguity margins and candidate counts for accepted matches.
+    """
+    Compute ambiguity margins and candidate counts for accepted matches.
 
     The margin is the distance to the closest alternative candidate minus the distance
     to the chosen candidate, normalized by the effective sigma.
@@ -115,6 +117,10 @@ def compute_assignment_margins(
     if len(matched_pairs) == 0:
         return {}, {}
 
+    # Margin: distance to the best ALTERNATIVE minus the chosen one, in units of prediction sigma.
+    # Needed because Monte Carlo score saturates when alternatives are distant: there it only reports
+    # "no ambiguity", whereas the margin continues to distinguish comfortable assignments from borderline
+    # ones. Both sides are checked: other detections for that track, and other tracks claiming that detection.
     sigma_eff = float(np.sqrt(np.mean(sigma**2)))
     edge_distances = np.sqrt(
         np.sum(
@@ -161,6 +167,18 @@ def link_consecutive_frames(
 ) -> FrameLinkResult:
     """
     Perform frame-to-frame trajectory linking detections with Monte Carlo stability scoring.
+
+    Connection reliability is computed as in u-track3D (Cell Rep Methods 2023):
+    resample N times the PREDICTED position of each track and rerun the assignment;
+    the score is the fraction of resamples in which the connection remains the same.
+    1 = no ambiguity, 0 = outcome depends entirely on the prediction.
+
+    Resampling dispersion is not chosen a priori but estimated from true residuals
+    (observed minus predicted position) of accepted matches in already processed frames,
+    axis by axis. The score does not assume the motion model is correct for the sample.
+    If it is not, residuals and perturbations grow larger, lowering scores — self-reporting
+    that predictions are unreliable for the data.
+
     Args:
         detections: Standardized detections table sorted by frame.
         config: Tracking configuration parameters.
@@ -174,6 +192,7 @@ def link_consecutive_frames(
     num_detections = len(det)
     labels = np.full(num_detections, -1, dtype=np.int32)
     reliability = np.full(num_detections, np.nan, dtype=np.float32)
+    # How much further away the second choice was, in units of sigma
     margin_sigma = np.full(num_detections, np.nan, dtype=np.float32)
     candidate_count = np.zeros(num_detections, dtype=np.int16)
 
@@ -197,6 +216,7 @@ def link_consecutive_frames(
     num_tracks = 0
     gate_squared = config.max_dist_um**2
 
+    # Initial dispersion: one third of the search radius, later replaced by data
     sigma = np.full(3, config.max_dist_um / 3.0, dtype=np.float32)
 
     for f in frames:
@@ -263,13 +283,15 @@ def link_consecutive_frames(
                         margin_sigma[current_idx[ib]] = margins.get((ia, ib), np.nan)
                         candidate_count[current_idx[ib]] = cand_counts.get(ia, 0)
 
+                    # Residuals: how much the prediction actually deviated on this frame
                     residuals = np.abs(
                         current_coords[matched_pairs[:, 1]] - pred_positions[matched_pairs[:, 0]]
                     )
                     sigma = update_adaptive_sigma(residuals, sigma)
 
-        # Only tracks that matched a detection in THIS frame stay active.
-        # Tracks without matches are retired here.
+        # Track lists are rebuilt from scratch each frame: only tracks with a detection
+        # in THIS frame remain active (either continued or newly initiated). Tracks left
+        # without a match close here; gap closing handles reconnecting any missing detections.
         next_labels: list[int] = []
         next_positions: list[NDArray[np.float32]] = []
         next_velocities: list[NDArray[np.float32]] = []
@@ -331,5 +353,6 @@ this woudl also require updating the for
         for a, b in matched_pairs:
             labels[start + b] = active_labels[a]
             
-I did not doo this because I'm not competent enough to be sure, Ill ask Giusy to chekc if I'm missing something
+I did not doo this because I'm not competent enough to be sure
+Ill ask Giusy to chekc if I'm missing something
 """
