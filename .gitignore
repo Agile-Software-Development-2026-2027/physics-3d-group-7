@@ -16,3 +16,5 @@ htmlcov/
 
 # Private materrials
 *.czi
+legacy*
+local_tmp*
