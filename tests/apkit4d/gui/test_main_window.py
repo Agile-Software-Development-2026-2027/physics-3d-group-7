@@ -1,5 +1,7 @@
 import pytest
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QFileDialog
 
 from apkit4d.gui.app import run
 from apkit4d.gui.main_window import MainWindow
@@ -36,6 +38,20 @@ def test_open_file_rejects_other_formats(window, qtbot, tmp_path):
 def test_open_file_rejects_missing_files(window, qtbot, tmp_path):
     with qtbot.assertNotEmitted(window.file_opened):
         assert not window.open_file(tmp_path / "missing.czi")
+
+
+def test_open_action_opens_the_chosen_file(window, qtbot, czi_file, monkeypatch):
+    # the user picks czi_file in the file dialog
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args: (str(czi_file), ""))
+    with qtbot.waitSignal(window.file_opened) as blocker:
+        window.findChild(QAction, "open_action").trigger()
+    assert blocker.args == [czi_file]
+
+
+def test_quit_action_closes_the_window(window):
+    window.show()
+    window.findChild(QAction, "quit_action").trigger()
+    assert not window.isVisible()
 
 
 def test_run_shows_the_window_and_returns_when_closed(qapp, czi_file):

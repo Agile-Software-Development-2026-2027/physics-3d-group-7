@@ -20,7 +20,8 @@ class MainWindow(QMainWindow):
     """
     Application window with a File menu, a central area and a status bar.
 
-    The central area holds a placeholder until the 3D view is added.
+    The central area holds a placeholder until the 3D view is added. Every component
+    has an object name, so tests can find it with `findChild` and simulate the user.
 
     Signals:
         file_opened: Emitted with the path of a .czi file once it has been accepted.
@@ -34,16 +35,20 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
 
         placeholder = QLabel("Open a .czi file to start (File > Open)")
+        placeholder.setObjectName("central_placeholder")
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setCentralWidget(placeholder)
 
         self._build_file_menu()
+        self.statusBar().setObjectName("status_bar")
         self.statusBar().showMessage("No file open")
 
     def _build_file_menu(self) -> None:
         menu = self.menuBar().addMenu("&File")
+        menu.setObjectName("file_menu")
 
         open_action = QAction("&Open...", self)
+        open_action.setObjectName("open_action")
         open_action.setShortcut(QKeySequence("Ctrl+O"))
         open_action.triggered.connect(self._choose_file)
         menu.addAction(open_action)
@@ -51,6 +56,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         quit_action = QAction("&Quit", self)
+        quit_action.setObjectName("quit_action")
         quit_action.setShortcut(QKeySequence("Ctrl+Q"))
         quit_action.triggered.connect(self.close)
         menu.addAction(quit_action)
