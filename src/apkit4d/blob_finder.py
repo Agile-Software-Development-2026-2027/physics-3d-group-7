@@ -29,6 +29,8 @@ import pandas as pd
 from scipy import ndimage
 from skimage.segmentation import watershed
 
+SQRT_3 = np.sqrt(3)
+
 # The 3d volume read from the CZI. Goes through prepocessing before running blob finding over it
 type Image = np.ndarray[tuple[int, int, int], np.dtype[np.float32]]
 
@@ -94,8 +96,11 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
 
     dz, dy, dx = p.diameter_z_um, p.diameter_xy_um, p.diameter_xy_um
     vz, vy, vx = voxel_dims
-    sqrt3 = np.sqrt(3)
-    return max(0.5, (dz / 2) / sqrt3 / vz), max(0.5, (dy / 2) / sqrt3 / vy), max(0.5, (dx / 2) / sqrt3 / vx)
+    return (
+        max(0.5, (dz / 2) / SQRT_3 / vz),
+        max(0.5, (dy / 2) / SQRT_3 / vy),
+        max(0.5, (dx / 2) / SQRT_3 / vx),
+    )
 
 
 def _ellipsoid(radii):
@@ -169,7 +174,7 @@ def log_response(
     Args:
         img: the 3D image volume
         p: configuration of the detection
-        voxel: dimension of the voxel for each axis (z, y, x)
+        voxel_dim: dimension of the voxel for each axis (z, y, x)
 
     Returns:
         A pair containing the smoothed image volume and the scale-normalized
