@@ -5,15 +5,18 @@ It coordinates frame-to-frame LAP matching, gap closing, track length filtering,
 and canonical track ID ordering.
 
 RefactorNote:
-    It may be becausedifferences startes to stack but this was a tad harder than the others IDK.
+    Equivalent of `run_link` from legacy `link.py` (lines 306-328).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+import matplotlib.figure
 import numpy as np
 import pandas as pd
 
+from apkit4d.analysis.diagnostics import render_diagnostics_figure
+from apkit4d.analysis.metrics import STATS_COLUMNS, compute_track_statistics
 from apkit4d.core.models import TrackingConfig
 from apkit4d.tracking.frame_to_frame import link_consecutive_frames
 from apkit4d.tracking.gap_closing import close_trajectory_gaps
@@ -30,6 +33,8 @@ class TrackingResult:
 
     tracks: pd.DataFrame
     metadata: dict[str, Any]
+    stats: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=STATS_COLUMNS))
+    diagnostics_figure: matplotlib.figure.Figure | None = None
 
 
 class ParticleLinker:
@@ -52,27 +57,40 @@ class ParticleLinker:
         self.config = config or TrackingConfig()
         self.lap_solver = lap_solver
 
-    def link(self, detections: pd.DataFrame, seed: int = 0) -> TrackingResult:
+    def link(
+        self,
+        detections: pd.DataFrame,
+        seed: int = 0,
+        compute_stats: bool = True,
+        compute_diagnostics: bool = False,
+        dataset_name: str = "",
+        dt_s: float | None = None,
+    ) -> TrackingResult:
         """
         Link particle detections across frames into continuous trajectories.
 
         Args:
             detections: Input DataFrame with at least ['frame', 'z_um', 'y_um', 'x_um'].
             seed: Random seed for Monte Carlo stability perturbations.
+            compute_stats: Whether to compute per-track summary metrics (default True,
+                matching legacy run_link).
+            compute_diagnostics: Whether to generate the 6-panel diagnostics figure (default False).
+            dataset_name: Dataset name displayed on the diagnostics figure title.
+            dt_s: Time step in seconds between successive frames for speed scaling.
 
         Returns:
-            TrackingResult with tracked DataFrame and summary metadata.
+            TrackingResult with tracked DataFrame, summary metadata, trajectory statistics,
+            and optional figure.
 
-        RefactorNore:
-            Technically we could have added a dataClass for the metadata instead of using a dict, but we're in
-            python and python is garbage for stuff like this, so since I hate using decorators for data
-            classes I will use as less as possible.
+        RefactorNote:
+            Equivalent of `run_link` from legacy `link.py` (lines 306-328).
         """
         if detections.empty:
             empty_tracks = pd.DataFrame(
                 columns=list(detections.columns)
                 + ["track_id", "reliability", "margin_sigma", "candidate_count"]
             )
+            empty_stats = pd.DataFrame(columns=STATS_COLUMNS)
             metadata = {
                 "num_detections": 0,
                 "num_segments_f2f": 0,
@@ -80,7 +98,12 @@ class ParticleLinker:
                 "num_tracks_retained": 0,
                 "gaps_closed": 0,
             }
-            return TrackingResult(tracks=empty_tracks, metadata=metadata)
+            return TrackingResult(
+                tracks=empty_tracks,
+                metadata=metadata,
+                stats=empty_stats,
+                diagnostics_figure=None,
+            )
 
         for col in REQUIRED_COLUMNS:
             if col not in detections.columns:
@@ -134,4 +157,21 @@ class ParticleLinker:
             "gaps_closed": num_segments_f2f - num_tracks_gap_closed,
         }
 
-        return TrackingResult(tracks=tracks, metadata=metadata)
+        stats = compute_track_statistics(tracks) if compute_stats else pd.DataFrame(columns=STATS_COLUMNS)
+        diagnostics_fig = None
+        if compute_diagnostics and not tracks.empty:
+            diagnostics_fig = render_diagnostics_figure(
+                tracks=tracks,
+                stats=stats,
+                info=metadata,
+                config=self.config,
+                name=dataset_name,
+                dt_s=dt_s,
+            )
+
+        return TrackingResult(
+            tracks=tracks,
+            metadata=metadata,
+            stats=stats,
+            diagnostics_figure=diagnostics_fig,
+        )

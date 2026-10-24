@@ -64,6 +64,9 @@ def evaluate_mc_stability(
 
     Returns:
         Mapping of (track_idx, det_idx) to fraction of resamples where the match held.
+
+    RefactorNote:
+        Equivalent of lines 179-191 in legacy `link_frame_to_frame`.
     """
     if num_resamples <= 0 or len(matched_pairs) == 0:
         return {}
@@ -113,14 +116,20 @@ def compute_assignment_margins(
 
     Returns:
         Tuple of (margin_dict, candidate_counts_per_track).
+
+    RefactorNote:
+        Equivalent of the margin and alternative candidate calculation block
+        (lines 192-215) in legacy `link_frame_to_frame`.
     """
     if len(matched_pairs) == 0:
         return {}, {}
 
-    # Margin: distance to the best ALTERNATIVE minus the chosen one, in units of prediction sigma.
-    # Needed because Monte Carlo score saturates when alternatives are distant: there it only reports
-    # "no ambiguity", whereas the margin continues to distinguish comfortable assignments from borderline
-    # ones. Both sides are checked: other detections for that track, and other tracks claiming that detection.
+    # Margin: distance of the best ALTERNATIVE minus the chosen one, in units of
+    # σ(sigma) of the prediction. Needed because the Monte Carlo score saturates
+    # when alternatives are distant: there it only reports "no ambiguity",
+    # while the margin continues to distinguish a comfortable case from a borderline
+    # one. Both sides are checked: other detections for that track, and other
+    # tracks that claim that detection.
     sigma_eff = float(np.sqrt(np.mean(sigma**2)))
     edge_distances = np.sqrt(
         np.sum(
@@ -168,16 +177,16 @@ def link_consecutive_frames(
     """
     Perform frame-to-frame trajectory linking detections with Monte Carlo stability scoring.
 
-    Connection reliability is computed as in u-track3D (Cell Rep Methods 2023):
-    resample N times the PREDICTED position of each track and rerun the assignment;
-    the score is the fraction of resamples in which the connection remains the same.
-    1 = no ambiguity, 0 = outcome depends entirely on the prediction.
+    Connection reliability is computed as in u-track3D (Cell Rep Methods 2023): the PREDICTED
+    position of each track is resampled N times and the assignment rerun; the score is the
+    fraction of resamples that keep the same connection. A score of 1 means no ambiguity,
+    a score of 0 means the outcome hinges entirely on the prediction.
 
-    Resampling dispersion is not chosen a priori but estimated from true residuals
-    (observed minus predicted position) of accepted matches in already processed frames,
-    axis by axis. The score does not assume the motion model is correct for the sample.
-    If it is not, residuals and perturbations grow larger, lowering scores — self-reporting
-    that predictions are unreliable for the data.
+    The resampling spread is not set a priori: it is estimated per axis from the actual
+    residuals (observed minus predicted position) of accepted matches in previously processed
+    frames. That is the point, the score does not assume the motion model is correct for this
+    sample. If it is not, residuals and perturbations grow larger and scores drop accordingly:
+    the method reports on its own that predictions are unreliable for these data.
 
     Args:
         detections: Standardized detections table sorted by frame.
@@ -187,12 +196,15 @@ def link_consecutive_frames(
 
     Returns:
         FrameLinkResult containing assigned segment labels, reliability, margin, and candidate counts.
+
+    RefactorNote:
+        Equivalent of `link_frame_to_frame` from legacy `link.py` (lines 130-248).
     """
     det = detections.reset_index(drop=True)
     num_detections = len(det)
     labels = np.full(num_detections, -1, dtype=np.int32)
     reliability = np.full(num_detections, np.nan, dtype=np.float32)
-    # How much further away the second choice was, in units of sigma
+    # How much further away the second choice was, in units of σ(sigma)
     margin_sigma = np.full(num_detections, np.nan, dtype=np.float32)
     candidate_count = np.zeros(num_detections, dtype=np.int16)
 

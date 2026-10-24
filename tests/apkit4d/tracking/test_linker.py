@@ -65,6 +65,30 @@ class TestParticleLinker:
         assert "margin_sigma" in tracks.columns
         assert "candidate_count" in tracks.columns
 
+        # Verify stats computation is automatically triggered
+        assert not result.stats.empty
+        assert len(result.stats) == 2
+        assert "track_id" in result.stats.columns
+        assert "median_step_um" in result.stats.columns
+
+    def test_linker_computes_diagnostics_figure(self) -> None:
+        """Verify that linker generates a valid diagnostics figure when requested."""
+        import matplotlib.pyplot as plt
+
+        cfg = TrackingConfig(max_dist_um=15.0, min_len=2)
+        linker = ParticleLinker(config=cfg)
+
+        rows = []
+        for f in range(3):
+            rows.append({"frame": f, "z_um": 10.0 + f, "y_um": 0.0, "x_um": 0.0, "t_s": 0.1 * f})
+
+        df = pd.DataFrame(rows)
+        res = linker.link(df, compute_diagnostics=True, dataset_name="Sample_Exp", dt_s=0.1)
+
+        assert res.diagnostics_figure is not None
+        assert len(res.diagnostics_figure.axes) == 6
+        plt.close(res.diagnostics_figure)
+
     def test_linker_filters_short_tracks(self) -> None:
         """Verify that tracks with points < min_len are pruned."""
         cfg = TrackingConfig(max_dist_um=10.0, min_len=4)
