@@ -16,3 +16,6 @@ htmlcov/
 
 # Private materrials
 *.czi
+
+# Runtime artifacts produced by the app
+data/
