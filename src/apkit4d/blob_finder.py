@@ -1,6 +1,9 @@
-"""
-blobfinder.py
-=============
+"""Detect blobs in an already preprocessed 3D image.
+
+Voxel: 3-dimensional pixel.
+
+Something is _anisotropic_ if it has properties that depend on the direction of measurement.
+
 Detection 3D a semi LoG e crescita watershed, senza trackpy.
 
   1. smoothing gaussiano anisotropo alla scala del blob atteso
@@ -19,23 +22,34 @@ allunga ogni cellula su ~70 µm (~4 slice), molto piu' dei suoi ~10 µm reali.
 Per un blob gaussiano in 3D la risposta LoG normalizzata e' massima a sigma = r/√3.
 """
 
-from dataclasses import dataclass, asdict, fields
+from dataclasses import asdict, dataclass, fields
 
 import numpy as np
 import pandas as pd
 from scipy import ndimage
+from skimage.segmentation import watershed
+
+# The 3d volume read from the CZI. Goes through prepocessing before running blob finding over it
+type Image = np.ndarray[tuple[int, int, int], np.dtype[np.float32]]
 
 
 @dataclass
 class BlobParams:
+    """User specified configuration for blob finding"""
+
     diameter_xy_um: float = 15.0
-    diameter_z_um: float = 70.0
-    threshold: float = 0.1       # sulla risposta -LoG del volume preprocessato [0, 1]
-    split: float = 1.0           # distanza minima fra semi, in frazioni del diametro: sotto 1
-                                 # la stessa cellula si spezza in piu' blob lungo Z (misurato
-                                 # sul file LF4D 10x: a 0.6 il 32% dei blob ha un vicino a
-                                 # meno di 8 µm in XY, a 1.0 il 5%)
-    grow_frac: float = 0.3       # confine della regione: frazione del picco del segmento
+    diameter_z_um: float = 70.0  # structures are usually elongated on the Z axis
+
+    # soglia risposta log
+    threshold: float = 0.1  # sulla risposta -LoG del volume preprocessato [0, 1]
+
+    split: float = 1.0  # distanza minima fra semi, in frazioni del diametro: sotto 1
+    # la stessa cellula si spezza in piu' blob lungo Z (misurato
+    # sul file LF4D 10x: a 0.6 il 32% dei blob ha un vicino a
+    # meno di 8 µm in XY, a 1.0 il 5%)
+
+    grow_frac: float = 0.3  # confine della regione: frazione del picco del segmento
+
     min_volume_um3: float = 200.0
     max_volume_um3: float = 1e6
 
@@ -48,21 +62,47 @@ class BlobParams:
         return cls(**{k: v for k, v in (d or {}).items() if k in names})
 
 
-DET_COLUMNS = ["frame", "label", "z", "y", "x", "z_um", "y_um", "x_um", "volume_um3",
-               "n_voxels", "z_extent", "response", "peak", "mean_intensity", "max_intensity"]
+DET_COLUMNS = [
+    "frame",
+    "label",
+    "z",
+    "y",
+    "x",
+    "z_um",
+    "y_um",
+    "x_um",
+    "volume_um3",
+    "n_voxels",
+    "z_extent",
+    "response",
+    "peak",
+    "mean_intensity",
+    "max_intensity",
+]
 
 
-def _sigmas(p: BlobParams, voxel):
-    """Sigma gaussiana per asse (z, y, x) in voxel, da diametro in µm: sigma = (d/2)/√3."""
-    d_um = (p.diameter_z_um, p.diameter_xy_um, p.diameter_xy_um)
-    return tuple(max(0.5, (d / 2) / np.sqrt(3) / v) for d, v in zip(d_um, voxel))
+def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Returns the filter scales to use in the LoG.
+
+    Scales the standard deviations σ for each axis (z, y, x), converting from
+    diameters in µm to voxels.
+
+    The radius of each blob matches LoG filter scale σ via the relation r=√3·σ
+    (in the case of 3 dimensions), so σ=r/√3, where r=d/2.
+    [Source](https://pydocs.github.io/p/skimage/0.17.2/api/skimage.feature.blob.blob_log.html)
+    """
+
+    dz, dy, dx = p.diameter_z_um, p.diameter_xy_um, p.diameter_xy_um
+    vz, vy, vx = voxel_dims
+    sqrt3 = np.sqrt(3)
+    return max(0.5, (dz / 2) / sqrt3 / vz), max(0.5, (dy / 2) / sqrt3 / vy), max(0.5, (dx / 2) / sqrt3 / vx)
 
 
 def _ellipsoid(radii):
     # per eccesso: in Z il raggio vale ~1.9 slice e arrotondando per difetto la distanza
     # minima fra semi scenderebbe a una sola slice
     r = [max(1, int(np.ceil(x))) for x in radii]
-    zz, yy, xx = np.ogrid[-r[0]:r[0] + 1, -r[1]:r[1] + 1, -r[2]:r[2] + 1]
+    zz, yy, xx = np.ogrid[-r[0] : r[0] + 1, -r[1] : r[1] + 1, -r[2] : r[2] + 1]
     return (zz / r[0]) ** 2 + (yy / r[1]) ** 2 + (xx / r[2]) ** 2 <= 1.0
 
 
@@ -89,8 +129,10 @@ def _label_stats(labels, intensity, n_lab):
     den = np.where(use_w, sw, safe_n)
     out = {"n": n, "mean": sw / safe_n}
     for name, c in (("z", zi), ("y", yi), ("x", xi)):
-        out[name] = np.where(use_w, np.bincount(lab, w * c, minlength=n_lab),
-                             np.bincount(lab, c, minlength=n_lab)) / den
+        out[name] = (
+            np.where(use_w, np.bincount(lab, w * c, minlength=n_lab), np.bincount(lab, c, minlength=n_lab))
+            / den
+        )
     mx = np.zeros(n_lab, dtype=np.float64)
     np.maximum.at(mx, lab, w)
     zmin = np.full(n_lab, np.iinfo(np.int64).max)
@@ -102,28 +144,75 @@ def _label_stats(labels, intensity, n_lab):
     return out
 
 
-def log_response(img: np.ndarray, p: BlobParams, voxel):
-    """(smoothing, risposta -LoG normalizzata di scala)."""
-    s = _sigmas(p, voxel)
-    sm = ndimage.gaussian_filter(img.astype(np.float32, copy=False), s)
-    resp = np.zeros_like(sm)
-    kernel = np.array([1.0, -2.0, 1.0], dtype=np.float32)
-    for ax, sig in enumerate(s):
-        resp -= (sig ** 2) * ndimage.correlate1d(sm, kernel, axis=ax, mode="nearest")
-    return sm, resp
+def log_response(
+    img: Image,
+    p: BlobParams,
+    voxel_dim: tuple[float, float, float],
+) -> tuple[Image, Image]:
+    """Computes the opposite of the Laplacian of the Gaussian (-LoG) response
+    for a 3D image volume.
+
+    The LoG will produce a very strong negative response near bright blobs and
+    a very strong positive response near dark blobs, dependening on the radius.
+    That's why we use the opposite.
+
+    Intuitively, the Gaussian smooths things out a bit and then with the
+    Laplacian we detect how the points in our space increases/decreases in
+    brightness in neighborhoods of potential blobs:
+
+        "Informally, the Laplacian Δf(p) of a function f at a point p measures
+        by how much the average value of f over small spheres or balls centered
+        at p deviates from f(p)."
+
+    Cfr: <https://en.wikipedia.org/wiki/Blob_detection#The_Laplacian_of_Gaussian>
+
+    Args:
+        img: the 3D image volume
+        p: configuration of the detection
+        voxel: dimension of the voxel for each axis (z, y, x)
+
+    Returns:
+        A pair containing the smoothed image volume and the scale-normalized
+        -LoG response volume. The local maxima on the -LoG response corresponde
+        to the centers of the cells.
+    """
+
+    # Apply Gaussian smoothing along the three axis using our sigmas. Removes
+    # noise and moves everything to the scale of the sigmas, which are in turn
+    # influenced by the radii.
+    sigmas = _sigmas(p, voxel_dim)
+    smoothed = ndimage.gaussian_filter(img.astype(np.float32, copy=False), sigmas)
+
+    # Convolution via Gaussian kernel, plus scale-normalization (mul by σ²).
+    # The kernel is symmetric so cross-correlation and convolution are the same here.
+    # Summing the second derivative across all axes gives us the Laplacian operator.
+    response = np.zeros_like(smoothed)
+    kernel = [1.0, -2.0, 1.0]  # second-derivative kernel
+    for ax, sigma in enumerate(sigmas):
+        response -= (sigma**2) * ndimage.correlate1d(smoothed, weights=kernel, axis=ax, mode="nearest")
+    return smoothed, response
 
 
-def find_seeds(resp: np.ndarray, p: BlobParams, voxel, threshold=None):
+def find_seeds(
+    response: Image, p: BlobParams, voxel_dim: tuple[float, float, float], threshold: float | None = None
+):
     """Massimi locali della risposta sopra soglia: array (n, 3) di indici (z, y, x)."""
-    d_vox = (p.diameter_z_um / voxel[0], p.diameter_xy_um / voxel[1], p.diameter_xy_um / voxel[2])
+    d_vox = (p.diameter_z_um / voxel_dim[0], p.diameter_xy_um / voxel_dim[1], p.diameter_xy_um / voxel_dim[2])
     fp = _ellipsoid([p.split * d / 2 for d in d_vox])
     thr = p.threshold if threshold is None else threshold
-    peaks = (resp == ndimage.maximum_filter(resp, footprint=fp, mode="nearest")) & (resp > thr)
+    peaks = (response == ndimage.maximum_filter(response, footprint=fp, mode="nearest")) & (response > thr)
     return np.argwhere(peaks)
 
 
-def find_blobs(img: np.ndarray, p: BlobParams, voxel, intensity=None, frame: int = 0,
-               offset=(0, 0, 0), return_labels: bool = False):
+def find_blobs(
+    img: Image,
+    p: BlobParams,
+    voxel: tuple[float, float, float],
+    intensity=None,
+    frame: int = 0,
+    offset=(0, 0, 0),
+    return_labels: bool = False,
+) -> tuple[pd.DataFrame, np.ndarray | None, np.ndarray]:
     """Detection su un volume preprocessato (Z, Y, X) in [0, 1].
 
     intensity: volume grezzo della stessa ROI per il centroide pesato (default: img).
@@ -131,28 +220,27 @@ def find_blobs(img: np.ndarray, p: BlobParams, voxel, intensity=None, frame: int
     Ritorna (df, labels o None, seeds_response) — l'ultimo serve all'istogramma dei
     candidati nella GUI.
     """
-    from skimage.segmentation import watershed
 
-    sm, resp = log_response(img, p, voxel)
-    seeds = find_seeds(resp, p, voxel)
-    seed_resp = resp[tuple(seeds.T)] if len(seeds) else np.array([])
+    smoothed, response = log_response(img, p, voxel)
+    seeds = find_seeds(response, p, voxel)
+    seed_resp = response[tuple(seeds.T)] if len(seeds) else np.array([])
     if len(seeds) == 0:
         return pd.DataFrame(columns=DET_COLUMNS), None, seed_resp
 
     # della risposta LoG servono solo i valori ai semi: liberarla PRIMA del watershed
     # toglie 100 MB dal picco (e' il picco a limitare quanti processi puo' usare il batch)
-    del resp
+    del response
     markers = np.zeros(img.shape, dtype=np.int32)
     markers[tuple(seeds.T)] = np.arange(1, len(seeds) + 1)
-    seed_val = sm[tuple(seeds.T)]
-    mask = sm > p.grow_frac * float(seed_val.min())
-    labels = watershed(-sm, markers, mask=mask)
+    seed_val = smoothed[tuple(seeds.T)]
+    mask = smoothed > p.grow_frac * float(seed_val.min())
+    labels = watershed(-smoothed, markers, mask=mask)
     del markers, mask
 
     # confine relativo: ogni regione tiene i voxel sopra grow_frac x il proprio picco
     n_lab = len(seeds) + 1
-    peak = _label_max(labels, sm, n_lab)
-    labels[sm < p.grow_frac * peak[labels]] = 0
+    peak = _label_max(labels, smoothed, n_lab)
+    labels[smoothed < p.grow_frac * peak[labels]] = 0
 
     inten = img if intensity is None else intensity
     st = _label_stats(labels, inten, n_lab)
@@ -162,18 +250,22 @@ def find_blobs(img: np.ndarray, p: BlobParams, voxel, intensity=None, frame: int
         return pd.DataFrame(columns=DET_COLUMNS), (labels if return_labels else None), seed_resp
 
     vox_vol = float(np.prod(voxel))
-    df = pd.DataFrame({
-        "frame": frame,
-        "label": idx,
-        "z": st["z"][idx] + offset[0], "y": st["y"][idx] + offset[1], "x": st["x"][idx] + offset[2],
-        "volume_um3": st["n"][idx] * vox_vol,
-        "n_voxels": st["n"][idx],
-        "z_extent": st["z_extent"][idx],
-        "response": seed_resp[idx - 1],
-        "peak": peak[idx],
-        "mean_intensity": st["mean"][idx],
-        "max_intensity": st["max"][idx],
-    })
+    df = pd.DataFrame(
+        {
+            "frame": frame,
+            "label": idx,
+            "z": st["z"][idx] + offset[0],
+            "y": st["y"][idx] + offset[1],
+            "x": st["x"][idx] + offset[2],
+            "volume_um3": st["n"][idx] * vox_vol,
+            "n_voxels": st["n"][idx],
+            "z_extent": st["z_extent"][idx],
+            "response": seed_resp[idx - 1],
+            "peak": peak[idx],
+            "mean_intensity": st["mean"][idx],
+            "max_intensity": st["max"][idx],
+        }
+    )
     df["z_um"], df["y_um"], df["x_um"] = df["z"] * voxel[0], df["y"] * voxel[1], df["x"] * voxel[2]
     ok = (df["volume_um3"] >= p.min_volume_um3) & (df["volume_um3"] <= p.max_volume_um3)
     if return_labels:
