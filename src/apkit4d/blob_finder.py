@@ -1,6 +1,8 @@
-"""Detect blobs in an already preprocessed 3D image.
+"""Detect blobs in an already preprocessed 3D image volume.
 
 Voxel: 3-dimensional pixel.
+
+Seeds are the centers of the blobs. Blobs are ellipsoids.
 
 Something is _anisotropic_ if it has properties that depend on the direction of measurement.
 
@@ -46,6 +48,7 @@ class BlobParams:
     threshold: float = 0.1  # sulla risposta -LoG del volume preprocessato [0, 1]
 
     split: float = 1.0  # distanza minima fra semi, in frazioni del diametro: sotto 1
+
     # la stessa cellula si spezza in piu' blob lungo Z (misurato
     # sul file LF4D 10x: a 0.6 il 32% dei blob ha un vicino a
     # meno di 8 µm in XY, a 1.0 il 5%)
@@ -91,7 +94,7 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
 
     The radius of each blob matches LoG filter scale σ via the relation r=√3·σ
     (in the case of 3 dimensions), so σ=r/√3, where r=d/2.
-    [Source](https://pydocs.github.io/p/skimage/0.17.2/api/skimage.feature.blob.blob_log.html)
+    Cfr: <https://pydocs.github.io/p/skimage/0.17.2/api/skimage.feature.blob.blob_log.html>
     """
 
     dz, dy, dx = p.diameter_z_um, p.diameter_xy_um, p.diameter_xy_um
@@ -101,14 +104,6 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
         max(0.5, (dy / 2) / SQRT_3 / vy),
         max(0.5, (dx / 2) / SQRT_3 / vx),
     )
-
-
-def _ellipsoid(radii):
-    # per eccesso: in Z il raggio vale ~1.9 slice e arrotondando per difetto la distanza
-    # minima fra semi scenderebbe a una sola slice
-    r = [max(1, int(np.ceil(x))) for x in radii]
-    zz, yy, xx = np.ogrid[-r[0] : r[0] + 1, -r[1] : r[1] + 1, -r[2] : r[2] + 1]
-    return (zz / r[0]) ** 2 + (yy / r[1]) ** 2 + (xx / r[2]) ** 2 <= 1.0
 
 
 def _label_max(labels, values, n_lab):
@@ -178,11 +173,11 @@ def log_response(
 
     Returns:
         A pair containing the smoothed image volume and the scale-normalized
-        -LoG response volume. The local maxima on the -LoG response corresponde
+        -LoG response volume. The local maxima on the -LoG response corresponds
         to the centers of the cells.
     """
 
-    # Apply Gaussian smoothing along the three axis using our sigmas. Removes
+    # Apply Gaussian smoothing along the three axes using our sigmas. Removes
     # noise and moves everything to the scale of the sigmas, which are in turn
     # influenced by the radii.
     sigmas = _sigmas(p, voxel_dim)
@@ -198,12 +193,49 @@ def log_response(
     return smoothed, response
 
 
+def _ellipsoid(radii: tuple[float, float, float]) -> np.ndarray[tuple[int, int, int], np.dtype[np.bool_]]:
+    """Creates an ellipsoid in a space of boolean points.
+
+    Args:
+        radii: of the ellipsoid along the (z, y, x) axes.
+
+    Returns:
+        A 3d image volume. Points in the space that are inside and on the
+        surface of the ellipsoid are True, all other points are False.
+    """
+
+    # per eccesso: in Z il raggio vale ~1.9 slice e arrotondando per difetto la distanza
+    # minima fra semi scenderebbe a una sola slice
+
+    rz, ry, rx = (max(1, int(np.ceil(r))) for r in radii)  # center is (rz, ry, rx)
+    zz, yy, xx = np.ogrid[-rz : rz + 1, -ry : ry + 1, -rx : rx + 1]
+    return (zz / rz) ** 2 + (yy / ry) ** 2 + (xx / rx) ** 2 <= 1.0
+
+
 def find_seeds(
     response: Image, p: BlobParams, voxel_dim: tuple[float, float, float], threshold: float | None = None
-):
-    """Massimi locali della risposta sopra soglia: array (n, 3) di indici (z, y, x)."""
-    d_vox = (p.diameter_z_um / voxel_dim[0], p.diameter_xy_um / voxel_dim[1], p.diameter_xy_um / voxel_dim[2])
-    fp = _ellipsoid([p.split * d / 2 for d in d_vox])
+) -> np.ndarray[tuple[int, int], np.dtype[np.int64]]:
+    """Identifies the the local maxima in the -LoG response, i.e. the center of blobs.
+
+    Args:
+        response: the -LoG response computed over the 3D image volume
+        p: the blob finding configuration, `split` and `threshold` are considered
+        voxel_dim: dimension of the voxel for each axis (z, y, x)
+        threshold: minimum value of the peaks to consider, overrides the one in `p`
+
+    Returns:
+        An array containing triples representing the coordinates of the seeds
+    """
+
+    vz, vy, vx = voxel_dim
+    fp = _ellipsoid(
+        (
+            p.split * (p.diameter_z_um / vz) / 2,
+            p.split * (p.diameter_xy_um / vy) / 2,
+            p.split * (p.diameter_xy_um / vx) / 2,
+        )
+    )
+
     thr = p.threshold if threshold is None else threshold
     peaks = (response == ndimage.maximum_filter(response, footprint=fp, mode="nearest")) & (response > thr)
     return np.argwhere(peaks)
