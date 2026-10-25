@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "scikit-image>=0.26.0",
+    "scipy>=1.18.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
