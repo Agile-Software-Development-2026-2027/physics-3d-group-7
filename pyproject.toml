@@ -15,7 +15,7 @@ requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [project.scripts]
-apkit4d = "apkit4d:main"
+apkit4d = "apkit4d.cli.cli:main"
 
 [dependency-groups]
 dev = [
