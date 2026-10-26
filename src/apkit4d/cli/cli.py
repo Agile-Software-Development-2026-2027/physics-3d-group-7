@@ -1,5 +1,6 @@
 import click
 
+from apkit4d.cli.commands.batch import batch
 from apkit4d.cli.commands.gui import gui
 
 
@@ -9,6 +10,7 @@ def cli():
 
 
 cli.add_command(gui)
+cli.add_command(batch)
 
 
 def main():
