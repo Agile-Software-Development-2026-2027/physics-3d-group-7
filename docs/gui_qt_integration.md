@@ -52,7 +52,7 @@ In both demos the controls are plain Qt widgets that emit signals, and each demo
 
 napari works by properties: setting `layer.contrast_limits`, `layer.gamma` or `viewer.dims.set_current_step(0, t)` redraws the view by itself. It also has its own events, for example `viewer.dims.events.current_step`, to know when the view changes frame on its own (arrow keys). Most controls take one to three lines.
 
-PyVista works by commands: we change the VTK objects and then call `plotter.render()`. It has no time axis, so on every frame change we write the new volume values and draw again the points and the tracks of that frame. Track tails and gamma (VTK has no gamma for volumes, we bend the gray ramp of the lookup table) are written by hand. The demo is 174 lines of code against 129 for napari, without comments and docstrings.
+PyVista works by commands: we change the VTK objects and then ask a redraw with the widget's Qt `update()`. It has no time axis, so on every frame change we write the new volume values and draw again the points and the tracks of that frame. Track tails and gamma (VTK has no gamma for volumes, we bend the gray ramp of the lookup table) are written by hand. The demo is 172 lines of code against 143 for napari, without comments and docstrings.
 
 ## Long computations
 
@@ -65,12 +65,14 @@ This does not depend on the viewer. `superqt.utils.thread_worker` (napari's `thr
 napari:
 
 - clicks go to the active layer, which is the last one added unless we choose it;
+- in "select" mode a Points layer turns every mouse drag into a box selection, so the view cannot be rotated: keep the normal mode and pick points with a click callback (`layer.get_value(..., view_direction=..., dims_displayed=..., world=True)` finds the point under the mouse in 3D);
 - a Tracks layer with no data raises an error, so the layer is created only when there are tracks;
 - line widths are in data units and the voxel scale stretches them (voxels are about 6 times taller than wide), so boxes and lines should be given in micrometers with scale 1;
 - `viewer.camera` is deprecated since 0.9, use `viewer.scene.camera`.
 
 PyVista:
 
+- ask redraws with the widget's Qt `update()`: the view is a `QOpenGLWidget`, so `plotter.render()` draws once and Qt draws again when it repaints (every change drawn twice). The same double draw happens inside pyvistaqt when the user rotates with the mouse, and we cannot avoid it from our code;
 - `add_volume` works on its own copy of the grid, new frames go into `actor.mapper.dataset`;
 - keep our own reference to the volume mapper and property: the plotter keeps only the Python object of the last mapper, and the lookup table stored on it is lost when other actors are added (contrast and gamma stop working);
 - the default volume interpolation is nearest, which looks blocky with few z slices, so we set it to linear;
@@ -97,7 +99,7 @@ A command in `[project.scripts]` always opens a console window on Windows. If th
 | time series | built in (4D data) | done by us on every frame |
 | points, tracks, gamma | built in | points yes, track tails and gamma by hand |
 | updating the view | set a property | change VTK objects and render |
-| demo size | 129 lines | 174 lines |
-| pitfalls | active layer, empty tracks, line widths and voxel scale | copied grid, lost lookup table, nearest interpolation |
+| demo size | 143 lines | 172 lines |
+| pitfalls | select mode blocks rotation, active layer, empty tracks, line widths and voxel scale | double draw with render(), copied grid, lost lookup table, nearest interpolation |
 
 Speed and memory are measured in SCRUM-29, and the choice is in the final report (SCRUM-30).
