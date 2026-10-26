@@ -4,6 +4,7 @@ import types
 import click
 import pytest
 from click.testing import CliRunner
+from helper import get_argument, get_option, is_param_defined
 
 from apkit4d.cli.cli import cli
 
@@ -20,25 +21,6 @@ def fake_gui(monkeypatch):
     fake.run = lambda *a, **k: calls.append((a, k))
     monkeypatch.setitem(sys.modules, "ApKit4D.gui", fake)
     return calls
-
-
-def get_argument(command, name) -> click.Argument:
-    return next(p for p in command.params if isinstance(p, click.Argument) and p.name == name)
-
-
-def get_option(command, name) -> click.Option:
-    return next(p for p in command.params if isinstance(p, click.Option) and name in p.opts)
-
-
-def is_param_defined(command, name) -> bool:
-    for p in command.params:
-        if isinstance(p, click.Argument) and p.name == name:
-            return True
-
-        if isinstance(p, click.Option) and name in p.opts:
-            return True
-
-    return False
 
 
 def test_apkit4d_gui_is_defined(runner, fake_gui):
