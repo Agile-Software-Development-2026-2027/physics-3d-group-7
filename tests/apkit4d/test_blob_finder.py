@@ -1,7 +1,14 @@
 import numpy as np
 from scipy import ndimage
 
-from apkit4d.blob_finder import BlobParams, _ellipsoid, _sigmas, find_seeds, log_response
+from apkit4d.blob_finder import (
+    BlobParams,
+    _ellipsoid,
+    _sigmas,
+    find_seeds,
+    log_response,
+    watershed_from_seeds,
+)
 
 
 def test_sigmas():
@@ -112,3 +119,44 @@ def test_find_seeds_suppresses_peaks_closer_than_the_split_distance():
     assert len(seeds) == 2
     assert [1, 2, 3] in seeds
     assert [6, 6, 3] in seeds
+
+
+def test_watershed_floods_a_peak_and_generates_a_labeled_region():
+    smoothed = np.zeros((30, 30, 30), dtype=np.float32)
+    zz, yy, xx = np.ogrid[-10:10, -10:10, -10:10]
+    blob = np.exp(-(zz**2 + yy**2 + xx**2) / 10.0).astype(np.float32)
+
+    smoothed[5:25, 5:25, 5:25] = blob
+
+    seeds = np.array([[15, 15, 15]], dtype=np.int64)
+
+    labels = watershed_from_seeds(smoothed, seeds, BlobParams(grow_frac=0.3))
+
+    assert labels[15, 15, 15] == 1
+    assert labels[15, 14, 15] == 1
+    assert labels[0, 0, 0] == 0
+
+
+def test_watershed_does_nothing_with_empty_seeds():
+    shape = (20, 20, 20)
+    smoothed = np.ones(shape, dtype=np.float32)
+    seeds = np.empty((0, 3), dtype=np.int64)
+
+    labels = watershed_from_seeds(smoothed, seeds, BlobParams())
+
+    assert labels.shape == shape
+    assert np.all(labels == 0)
+
+
+def test_watershed_segments_regions_with_multiple_seeds():
+    smoothed = np.zeros((30, 30, 30), dtype=np.float32)
+
+    smoothed[10, 10, 10] = 1.0
+    smoothed[20, 20, 20] = 0.8
+
+    seeds = np.array([[10, 10, 10], [20, 20, 20]], dtype=np.int64)
+
+    labels = watershed_from_seeds(smoothed, seeds, BlobParams(grow_frac=0.1))
+
+    assert labels[10, 10, 10] == 1
+    assert labels[20, 20, 20] == 2
