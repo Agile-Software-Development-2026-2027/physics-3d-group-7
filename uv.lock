@@ -11,6 +11,8 @@ name = "apkit4d"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
+    { name = "clirunner" },
     { name = "pyside6-essentials" },
 ]
 
@@ -25,7 +27,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyside6-essentials", specifier = ">=6.12.0" }]
+requires-dist = [
+    { name = "click", specifier = "==8.5.0" },
+    { name = "clirunner", specifier = "==0.2.0" },
+    { name = "pyside6-essentials", specifier = ">=6.12.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
@@ -44,6 +50,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4e/b5/721b8799b04bf9afe054a3899c6cf4e880fcf8563cc71c15610242490a0c/cfgv-3.5.0.tar.gz", hash = "sha256:d5b1034354820651caa73ede66a6294d6e95c1b00acc5e9b098e917404669132", size = 7334, upload-time = "2025-11-19T20:55:51.612Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl", hash = "sha256:a8dc6b26ad22ff227d2634a65cb388215ce6cc96bbcc5cfde7641ae87e8dacc0", size = 7445, upload-time = "2025-11-19T20:55:50.744Z" },
+]
+
+[[package]]
+name = "click"
+version = "8.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/0e/7fa0ef50764b67090eca4114772a2abf8b6148198475e54c660b97caeee6/click-8.5.0.tar.gz", hash = "sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34", size = 382235, upload-time = "2026-08-26T13:33:14.56Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl", hash = "sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360", size = 125251, upload-time = "2026-08-26T13:33:12.928Z" },
+]
+
+[[package]]
+name = "clirunner"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/03/dafc1a7e78fb60b8e45f3b93e326c3c60fc991fbadc989b52c13563e45f0/clirunner-0.2.0.tar.gz", hash = "sha256:28081a2ee6b60d39dc3ce7526716d199b23028bf929228d1440bd1928d1ff03f", size = 33305, upload-time = "2025-06-05T04:11:12.529Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/5b/fff666b3f59e1569749ce086fea07deba5820023e1efeebb19943f141b26/clirunner-0.2.0-py2.py3-none-any.whl", hash = "sha256:205357dab5d6fa8b7ddfb01d7cf0c7b302472989524865958e7fa663542c38fc", size = 24742, upload-time = "2025-06-05T04:11:10.965Z" },
 ]
 
 [[package]]
