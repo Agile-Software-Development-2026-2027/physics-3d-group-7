@@ -181,3 +181,50 @@ class CziSource:
         Close the CZI file and release its resources.
         """
         self._czi.close()
+
+
+def suggest_z_range(vol: np.ndarray) -> tuple[int, int, np.ndarray]:
+    """Suggest a useful Z range based on image intensity.
+
+    Args:
+        vol: 3D image volume with shape (Z, Y, X).
+
+    Returns:
+        Minimum Z index, maximum Z index, and intensity profile.
+    
+    Raises:
+        ValueError: If the volume has invalid dimensions or is empty.
+    """
+    if vol.ndim != 3:
+        raise ValueError("Expected a 3D volume with shape (Z, Y, X)")
+
+    if any(size == 0 for size in vol.shape):
+        raise ValueError("Volume must not be empty")
+
+    n_z = vol.shape[0]
+
+    profile = np.percentile(vol.reshape(n_z, -1), 99, axis=1)
+
+    # A single Z slice cannot define a range.
+    if n_z == 1:
+        return 0, 0, profile
+
+    threshold = np.percentile(profile, 20) * 1.5
+    above_threshold = np.where(profile > threshold)[0]
+
+    z_min = max(0, int(above_threshold[0]) - 1) if len(above_threshold) else 0
+
+    gradient = np.gradient(profile)
+    gradient_threshold = np.percentile(gradient, 90)
+
+    z_max = n_z - 1
+
+    for z in range(n_z - 1, n_z // 2, -1):
+        if gradient[z] < gradient_threshold:
+            z_max = z
+            break
+
+    if z_min >= z_max:
+        z_min, z_max = 0, n_z - 1
+
+    return z_min, z_max, profile
