@@ -1,3 +1,4 @@
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +73,8 @@ class CziSource:
         """
         self.path = Path(path)
         self.channel = channel
+        self._lock = threading.Lock()
+        self._closed = False
 
         if not self.path.is_file():
             raise FileNotFoundError(f"CZI file not found: {self.path}")
@@ -81,6 +84,11 @@ class CziSource:
         try:
             scene = self._czi.scenes[0]
             sizes = scene.sizes
+
+            # Reject unsupported raw lightfield data.
+
+            if "H" in sizes:
+                raise ValueError("Unsupported CZI data: H axis detected. Expected a reconstructed 3D volume.")
 
             # Store axis dimensions for selecting time points and channels.
             self._dims = sizes
@@ -138,22 +146,27 @@ class CziSource:
 
         Raises:
             IndexError: If the time point is out of range.
+            ValueError: If the CZI file is already closed.
         """
-        # Check that the requested time point exists.
-        if t < 0 or t >= self.info.n_t:
-            raise IndexError(f"Invalid time point {t}. Available time points: 0-{self.info.n_t - 1}")
-
         # Select only axes that are present in the CZI file.
-        if "T" in self._dims and "C" in self._dims:
-            return self._czi.asarray(T=t, C=self.channel)
+        with self._lock:
+            if self._closed:
+                raise ValueError("Cannot read from a closed CZI file.")
 
-        if "T" in self._dims:
-            return self._czi.asarray(T=t)
+            # Check that the requested time point exists.
+            if t < 0 or t >= self.info.n_t:
+                raise IndexError(f"Invalid time point {t}. Available time points: 0-{self.info.n_t - 1}")
 
-        if "C" in self._dims:
-            return self._czi.asarray(C=self.channel)
+            if "T" in self._dims and "C" in self._dims:
+                return self._czi.asarray(T=t, C=self.channel)
 
-        return self._czi.asarray()
+            if "T" in self._dims:
+                return self._czi.asarray(T=t)
+
+            if "C" in self._dims:
+                return self._czi.asarray(C=self.channel)
+
+            return self._czi.asarray()
 
     def as_dask(self) -> da.Array:
         """
@@ -180,7 +193,10 @@ class CziSource:
         """
         Close the CZI file and release its resources.
         """
-        self._czi.close()
+        with self._lock:
+            if not self._closed:
+                self._czi.close()
+                self._closed = True
 
 
 def suggest_z_range(vol: np.ndarray) -> tuple[int, int, np.ndarray]:
@@ -191,7 +207,7 @@ def suggest_z_range(vol: np.ndarray) -> tuple[int, int, np.ndarray]:
 
     Returns:
         Minimum Z index, maximum Z index, and intensity profile.
-    
+
     Raises:
         ValueError: If the volume has invalid dimensions or is empty.
     """
