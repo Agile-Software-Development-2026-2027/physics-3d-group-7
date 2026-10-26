@@ -10,6 +10,7 @@ The points are the spot centers and the tracks are their paths, so they match th
 volume exactly without running any detection.
 """
 
+import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,6 +51,35 @@ class DemoData:
     points: NDArray[np.float64]
     point_info: pd.DataFrame
     tracks: NDArray[np.float64]
+
+
+def from_args(argv: list[str]) -> DemoData:
+    """
+    The data chosen on the command line, the same for every demo and for the benchmark.
+
+    No arguments gives small random data, `--random Z Y X` random data with frames of that
+    shape (a real volume is about 95 512 512), otherwise a .czi file optionally followed by
+    the legacy blobs and tracks files.
+
+    Args:
+        argv: The command line arguments, without the program name.
+
+    Returns:
+        The data for the demo.
+    """
+    parser = argparse.ArgumentParser(description="Data for the GUI demos.")
+    parser.add_argument("files", nargs="*", type=Path, help="file.czi [blobs.parquet tracks.parquet]")
+    parser.add_argument(
+        "--random", nargs=3, type=int, metavar=("Z", "Y", "X"), help="random data with frames of this shape"
+    )
+    parser.add_argument("--frames", type=int, default=60, help="number of frames of the random data")
+    args = parser.parse_args(argv)
+    if len(args.files) > 3:
+        parser.error("expected at most three files: file.czi blobs.parquet tracks.parquet")
+    if args.random:
+        z, y, x = args.random
+        return random_data(n_frames=args.frames, frame_shape=(z, y, x))
+    return load(*args.files)
 
 
 def load(czi: Path | None = None, blobs: Path | None = None, tracks: Path | None = None) -> DemoData:

@@ -8,10 +8,10 @@ panel is the same as in the PyVista demo.
 Usage:
     uv run python -m demos.napari_demo
     uv run python -m demos.napari_demo file.czi [blobs.parquet tracks.parquet]
+    uv run python -m demos.napari_demo --random 95 512 512
 """
 
 import sys
-from pathlib import Path
 
 import dask
 import dask.array as da
@@ -23,7 +23,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow
 
 from demos.controls import ControlPanel
-from demos.data import DemoData, load
+from demos.data import DemoData, from_args
 
 POINT_SIZE_UM: float = 12.0  # about the size of an alga
 TAIL_FRAMES: int = 20  # how much of the past path of each track is drawn
@@ -188,10 +188,9 @@ class NapariDemo(QMainWindow):
 
 def main() -> int:
     """
-    Start the demo with random data, or with the files given on the command line.
+    Start the demo with the data chosen on the command line (see `demos.data.from_args`).
     """
-    files = [Path(arg) for arg in sys.argv[1:]]
-    data = load(*files)
+    data = from_args(sys.argv[1:])
     app = QApplication.instance() or QApplication(sys.argv)
     window = NapariDemo(data)
     window.show()

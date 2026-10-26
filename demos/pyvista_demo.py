@@ -5,13 +5,16 @@ pyvistaqt's QtInteractor is a normal Qt widget, placed in our QMainWindow with t
 side panel as the napari demo. PyVista has no time axis: on every frame change the
 volume values are replaced and the points and tracks of that frame are drawn again.
 
+Redraws are asked with the Qt `update()` of the widget, not with `plotter.render()`: the
+view is a QOpenGLWidget, so render() draws once and Qt draws again when it repaints.
+
 Usage:
     uv run python -m demos.pyvista_demo
     uv run python -m demos.pyvista_demo file.czi [blobs.parquet tracks.parquet]
+    uv run python -m demos.pyvista_demo --random 95 512 512
 """
 
 import sys
-from pathlib import Path
 
 import numpy as np
 import pyvista as pv
@@ -22,7 +25,7 @@ from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow
 from pyvistaqt import QtInteractor
 
 from demos.controls import ControlPanel
-from demos.data import DemoData, load
+from demos.data import DemoData, from_args
 
 POINT_SIZE_PX: float = 24.0
 TAIL_FRAMES: int = 20  # same as the napari demo
@@ -157,29 +160,29 @@ class PyVistaDemo(QMainWindow):
         self.volume_grid.point_data["intensity"][:] = self.data.read_frame(t).ravel()
         self.volume_grid.Modified()
         self._draw_overlays()
-        self.plotter.render()
+        self.plotter.update()
 
     def _set_contrast(self, low: int, high: int) -> None:
         self.volume_mapper.lookup_table.scalar_range = (low, high)
         self.volume_prop.reapply_lookup_table()
-        self.plotter.render()
+        self.plotter.update()
 
     def _set_gamma(self, gamma: float) -> None:
         # VTK has no gamma for volumes: the gray ramp of the lookup table is bent instead
         ramp = np.linspace(0.0, 1.0, 256) ** gamma
         self.volume_mapper.lookup_table.values = (np.column_stack([ramp] * 4) * 255).astype(np.uint8)
         self.volume_prop.reapply_lookup_table()
-        self.plotter.render()
+        self.plotter.update()
 
     def _show_points(self, visible: bool) -> None:
         self.show_points = visible
         self._draw_overlays()
-        self.plotter.render()
+        self.plotter.update()
 
     def _show_tracks(self, visible: bool) -> None:
         self.show_tracks = visible
         self._draw_overlays()
-        self.plotter.render()
+        self.plotter.update()
 
     def _show_roi(self, visible: bool) -> None:
         self.show_roi = visible
@@ -193,7 +196,7 @@ class PyVistaDemo(QMainWindow):
             self.plotter.add_mesh(
                 box, style="wireframe", color="cyan", name="roi", pickable=False, render=False
             )
-        self.plotter.render()
+        self.plotter.update()
 
     def _draw_overlays(self) -> None:
         # PyVista has no time axis: the actors of the current frame replace the old ones (same name)
@@ -237,10 +240,9 @@ class PyVistaDemo(QMainWindow):
 
 def main() -> int:
     """
-    Start the demo with random data, or with the files given on the command line.
+    Start the demo with the data chosen on the command line (see `demos.data.from_args`).
     """
-    files = [Path(arg) for arg in sys.argv[1:]]
-    data = load(*files)
+    data = from_args(sys.argv[1:])
     app = QApplication.instance() or QApplication(sys.argv)
     window = PyVistaDemo(data)
     window.show()
