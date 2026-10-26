@@ -18,14 +18,14 @@ from apkit4d.cli.constants import CZI_METAVAR
     is_flag=True,
     default=False,
     help="Render with software OpenGL (Mesa) instead of the GPU (slower in 3D). "
-    "Use it when the NVIDIA driver cannot create a context. ",
+    + "Use it when the NVIDIA driver cannot create a context. ",
 )
 @click.option(
     "--diagnostic",
     is_flag=True,
     default=False,
     help="Log every GUI freeze longer than 1 second to ApKit4D_blocchi.log, "
-    "with the line of code responsible.",
+    + "with the line of code responsible.",
 )
 def gui(czi: Path | None, software_gl: bool, diagnostic: bool):
     from apkit4d.gui.app import run
