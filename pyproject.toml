@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "czifile>=2026.10.14",
+    "dask[array]>=2026.8.0",
     "pyside6-essentials>=6.12.0",
 ]
 

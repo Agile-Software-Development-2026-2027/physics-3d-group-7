@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import czifile
+import dask
+import dask.array as da
 import numpy as np
 
 
@@ -152,6 +154,27 @@ class CziSource:
             return self._czi.asarray(C=self.channel)
 
         return self._czi.asarray()
+
+    def as_dask(self) -> da.Array:
+        """
+        Create a lazy 4D array of the CZI acquisition.
+
+        Returns:
+            Dask array with shape (T, Z, Y, X).
+        """
+        info = self.info
+        shape = (info.n_z, info.n_y, info.n_x)
+
+        frames = [
+            da.from_delayed(
+                dask.delayed(self.read)(t),
+                shape=shape,
+                dtype=info.dtype,
+            )
+            for t in range(info.n_t)
+        ]
+
+        return da.stack(frames)
 
     def close(self) -> None:
         """
