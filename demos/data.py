@@ -53,6 +53,30 @@ class DemoData:
     tracks: NDArray[np.float64]
 
 
+def default_contrast(frame: NDArray[np.uint16]) -> tuple[int, int]:
+    """
+    Contrast limits for a maximum intensity projection of `frame`, the same in every demo.
+
+    The view shows the brightest voxel along each ray, which over hundreds of voxels is well
+    above the average noise. The low limit is set above the noise (median plus 6 robust
+    standard deviations), so the background stays black.
+
+    Args:
+        frame: One (z, y, x) volume.
+
+    Returns:
+        (low, high) intensity limits.
+    """
+    values = frame.astype(np.float32)
+    median = float(np.median(values))
+    noise = 1.4826 * float(np.median(np.abs(values - median)))  # robust standard deviation
+    low = median + 6 * noise
+    high = float(np.percentile(values, 99.9))
+    if high <= low:  # very few bright voxels: half way between the noise and the maximum
+        high = low + (float(values.max()) - low) / 2
+    return int(low), int(high)
+
+
 def from_args(argv: list[str]) -> DemoData:
     """
     The data chosen on the command line, the same for every demo and for the benchmark.

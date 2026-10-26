@@ -54,12 +54,15 @@ class View:
         canvas: The Qt widget of the 3D view, where the mouse drag is sent.
         draws: Returns how many times the 3D view has been drawn so far.
         finish: Waits until the GPU has finished drawing.
+        camera: Returns the camera state, to check that a drag really rotated the view (a redraw
+            alone is not enough: in napari a drag can also draw a selection box).
     """
 
     window: QMainWindow
     canvas: QWidget
     draws: Callable[[], int]
     finish: Callable[[], None]
+    camera: Callable[[], tuple[float, ...]]
 
 
 def napari_view(data: DemoData) -> View:
@@ -69,7 +72,8 @@ def napari_view(data: DemoData) -> View:
     canvas = window.qt_viewer.canvas._scene_canvas  # the vispy canvas that draws the scene
     count = [0]
     canvas.events.draw.connect(lambda event: count.__setitem__(0, count[0] + 1))
-    return View(window, canvas.native, lambda: count[0], canvas.context.finish)
+    camera = window.viewer.scene.camera
+    return View(window, canvas.native, lambda: count[0], canvas.context.finish, lambda: tuple(camera.angles))
 
 
 def pyvista_view(data: DemoData) -> View:
@@ -79,7 +83,13 @@ def pyvista_view(data: DemoData) -> View:
     plotter = window.plotter
     count = [0]
     plotter.ren_win.AddObserver("EndEvent", lambda *args: count.__setitem__(0, count[0] + 1))
-    return View(window, plotter.interactor, lambda: count[0], plotter.ren_win.WaitForCompletion)
+    return View(
+        window,
+        plotter.interactor,
+        lambda: count[0],
+        plotter.ren_win.WaitForCompletion,
+        lambda: tuple(plotter.camera.position),
+    )
 
 
 def mouse(kind: QEvent.Type, widget: QWidget, position: QPoint, pressed: bool) -> QMouseEvent:
@@ -135,6 +145,15 @@ def memory_mb() -> tuple[float, float]:
     return info.rss / 2**20, getattr(info, "peak_wset", info.rss) / 2**20
 
 
+def plugged_in() -> bool | None:
+    """
+    Whether the computer runs on mains power (None without a battery). On battery a laptop can
+    slow down to save energy, so the runs must be done plugged in.
+    """
+    battery = psutil.sensors_battery()
+    return None if battery is None else battery.power_plugged
+
+
 def run(library: str, data_args: list[str]) -> dict[str, object]:
     """
     Measure one library on one dataset.
@@ -184,6 +203,7 @@ def run(library: str, data_args: list[str]) -> dict[str, object]:
     # rotation as the user does it: a left button drag on the view, one small move per step
     canvas = view.canvas
     center = canvas.rect().center()
+    camera_before = view.camera()
     QApplication.sendEvent(canvas, mouse(QEvent.Type.MouseButtonPress, canvas, center, pressed=True))
     rotation_drawn = 0
     start = time.perf_counter()
@@ -194,6 +214,7 @@ def run(library: str, data_args: list[str]) -> dict[str, object]:
         rotation_drawn += drawn
     rotation_s = time.perf_counter() - start
     QApplication.sendEvent(canvas, mouse(QEvent.Type.MouseButtonRelease, canvas, position, pressed=False))
+    rotated = view.camera() != camera_before
 
     ram_end_mb, ram_peak_mb = memory_mb()
     view.window.close()
@@ -214,6 +235,8 @@ def run(library: str, data_args: list[str]) -> dict[str, object]:
         "ram_peak_mb": ram_peak_mb,
         "frames_drawn": f"{frames_drawn}/{len(frames)}",
         "rotations_drawn": f"{rotation_drawn}/{ROTATION_STEPS}",
+        "rotated": rotated,
+        "plugged_in": plugged_in(),
     }
 
 
@@ -239,6 +262,8 @@ def run_all(out_csv: Path, data_dir: Path) -> None:
     """
     Run every library on every dataset REPEATS times, each run in a new process.
     """
+    if plugged_in() is False:
+        print("warning: the computer is on battery, the times will be slower and less stable", flush=True)
     rows = []
     for name, args in datasets(data_dir).items():
         for repeat in range(REPEATS):
@@ -257,7 +282,8 @@ def run_all(out_csv: Path, data_dir: Path) -> None:
                 rows.append(row)
                 print(
                     f"{name} {library} {repeat}: start {row['process_s']:.1f} s, "
-                    f"frame {row['frame_ms_median']:.0f} ms, {row['rotation_fps']:.0f} fps",
+                    f"frame {row['frame_ms_median']:.0f} ms, {row['rotation_fps']:.0f} fps"
+                    + ("" if row["rotated"] else " (the drag did not rotate: rotation not valid)"),
                     flush=True,
                 )
     with out_csv.open("w", newline="") as file:
@@ -270,17 +296,30 @@ def run_all(out_csv: Path, data_dir: Path) -> None:
 def summary(csv_path: Path) -> None:
     """
     Print the median of every measure for each dataset and library.
+
+    The rotation uses only the runs where the drag really rotated the camera.
     """
     with csv_path.open(newline="") as file:
         rows = list(csv.DictReader(file))
     measures = ("process_s", "window_s", "frame_ms_median", "read_ms_median", "rotation_fps", "ram_end_mb")
-    print(f"{'dataset':12} {'library':8} " + " ".join(f"{m:>15}" for m in measures))
+    print(f"{'dataset':12} {'library':8} " + " ".join(f"{m:>15}" for m in measures) + "  rotated runs")
     for name in dict.fromkeys(row["dataset"] for row in rows):
         for library in LIBRARIES:
             runs = [row for row in rows if row["dataset"] == name and row["library"] == library]
-            if runs:
-                medians = [statistics.median(float(row[m]) for row in runs) for m in measures]
-                print(f"{name:12} {library:8} " + " ".join(f"{v:15.1f}" for v in medians))
+            if not runs:
+                continue
+            rotated = [row for row in runs if row.get("rotated") == "True"]
+            medians = [
+                statistics.median(float(row[m]) for row in (rotated if m == "rotation_fps" else runs))
+                if (rotated or m != "rotation_fps")
+                else float("nan")
+                for m in measures
+            ]
+            print(
+                f"{name:12} {library:8} "
+                + " ".join(f"{v:15.1f}" for v in medians)
+                + f"  {len(rotated)}/{len(runs)}"
+            )
 
 
 def main() -> None:

@@ -12,6 +12,8 @@ Usage:
 """
 
 import sys
+from collections.abc import Generator
+from typing import Any
 
 import dask
 import dask.array as da
@@ -23,11 +25,14 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow
 
 from demos.controls import ControlPanel
-from demos.data import DemoData, from_args
+from demos.data import DemoData, default_contrast, from_args
 
 POINT_SIZE_UM: float = 12.0  # about the size of an alga
 TAIL_FRAMES: int = 20  # how much of the past path of each track is drawn
 ROI_LINE_WIDTH: float = 1.0
+# napari starts looking straight down z, where a MIP looks like a flat image: start oblique instead,
+# like the PyVista demo
+START_CAMERA_ANGLES: tuple[float, float, float] = (-20.0, 35.0, 120.0)
 
 
 def box_edges(z0: int, z1: int, y0: int, y1: int, x0: int, x1: int) -> np.ndarray:
@@ -79,7 +84,7 @@ class NapariDemo(QMainWindow):
 
         # contrast from the first frame, so napari does not read every frame to compute it
         first = data.read_frame(0)
-        low, high = (int(v) for v in np.percentile(first, (1, 99.9)))
+        low, high = default_contrast(first)
         self.image = self.viewer.add_image(
             as_lazy_array(data),
             name="volume",
@@ -106,13 +111,16 @@ class NapariDemo(QMainWindow):
                 face_color="transparent",
                 border_color="yellow",
             )
-            self.points.mode = "select"  # a click on a point selects it
+            # a click without dragging selects the point under the mouse, a drag rotates the view
+            # (the "select" mode of the layer would turn every drag into a box selection)
+            self.points.mouse_drag_callbacks.append(self._on_click)
             self.points.selected_data.events.items_changed.connect(self._on_point_selected)
         self.point_info = data.point_info
 
         self.viewer.dims.axis_labels = ("t", "z", "y", "x")
         self.viewer.dims.ndisplay = 3
         self.viewer.dims.set_current_step(0, 0)  # napari starts from the middle frame otherwise
+        self.viewer.scene.camera.angles = START_CAMERA_ANGLES
         self.qt_viewer.dims.hide()  # the frame slider is in our panel, as in the PyVista demo
 
         self.panel = ControlPanel(
@@ -177,6 +185,20 @@ class NapariDemo(QMainWindow):
 
     def _on_step(self, event: object) -> None:
         self.panel.show_frame(self.viewer.dims.current_step[0])
+
+    def _on_click(self, layer: Points, event: Any) -> Generator[None]:
+        # napari calls this on press, then on every move and on release (the event changes in place)
+        position, direction, displayed = event.position, event.view_direction, event.dims_displayed
+        yield
+        dragged = False
+        while event.type == "mouse_move":
+            dragged = True
+            yield
+        if dragged:
+            return
+        index = layer.get_value(position, view_direction=direction, dims_displayed=displayed, world=True)
+        if index is not None:
+            layer.selected_data = {index}
 
     def _on_point_selected(self, event: object) -> None:
         selected = list(self.points.selected_data) if self.points is not None else []

@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow
 from pyvistaqt import QtInteractor
 
 from demos.controls import ControlPanel
-from demos.data import DemoData, from_args
+from demos.data import DemoData, default_contrast, from_args
 
 POINT_SIZE_PX: float = 24.0
 TAIL_FRAMES: int = 20  # same as the napari demo
@@ -96,7 +96,7 @@ class PyVistaDemo(QMainWindow):
         self.plotter.set_background("black")
 
         first = data.read_frame(0)
-        low, high = (int(v) for v in np.percentile(first, (1, 99.9)))
+        low, high = default_contrast(first)
         nz, ny, nx = data.frame_shape
         grid = pv.ImageData(dimensions=(nx, ny, nz), spacing=data.voxel_um[::-1])
         grid.point_data["intensity"] = first.ravel()  # C order: x changes fastest, as VTK expects
