@@ -2,6 +2,8 @@
 
 This is the GUI part of the research story SCRUM-22 (subtask SCRUM-30). The question is which library should draw the 3D view of the new application: napari, which the legacy code already uses, or PyVista, which the PO suggested.
 
+**Decision**: on 26 October the group chose **PyVista** (see [Decision](#decision)).
+
 ## Context
 
 The PO's main complaint about the current tool is that it is not fluid. Running the legacy code on the sample files (SCRUM-25) showed where the slowness comes from:
@@ -92,7 +94,7 @@ Speed does not decide between the two: on real volumes they are close, and each 
 | room to get faster | not tuned yet | VTK alone is fast, the Qt integration is the limit |
 | who knows it | the legacy code and the researchers use it | suggested by the PO |
 
-Our proposal is **napari, used as a widget (`QtViewer`) inside our own Qt window**, for the work it saves rather than for speed: time series, points of the current frame, tracks and the layer model are ready, so we can spend the time on the analysis features, and the researchers already know it. Its downsides are manageable:
+Before the group discussion our proposal was **napari, used as a widget (`QtViewer`) inside our own Qt window**, for the work it saves rather than for speed: time series, points of the current frame, tracks and the layer model are ready, so we can spend the time on the analysis features, and the researchers already know it. Its downsides are manageable:
 
 - **Startup**: show our window first and create the napari view right after, and import napari only when it is needed (the CLI never imports it).
 - **Memory**: set the size of napari's cache from our settings, depending on the machine.
@@ -100,8 +102,24 @@ Our proposal is **napari, used as a widget (`QtViewer`) inside our own Qt window
 
 PyVista is the better choice if startup time, memory and the PO's preference weigh more than the extra code, or if we are ready to work on the Qt integration to get the speed VTK can give.
 
+## Decision
+
+The group chose **PyVista** on 26 October. On real volumes the two libraries are about equally fast, so the choice came from the other points:
+
+- **control**: with PyVista we write the time handling, the tracks and the picking ourselves, so we decide how every part of the view works and we can change it, instead of adapting to napari's layer model;
+- **a simpler structure to follow**: our window talks to VTK directly, without a second application model in between;
+- **less memory**, and a faster startup;
+- **room to optimize**: VTK alone rotates the real-size volume at 50 fps, so the view can get faster by improving the Qt integration.
+
+The price is more code of our own. The PyVista demo (#8) already shows how to write it.
+
+What this means for the 3D view:
+
+- it uses PyVista through pyvistaqt's `QtInteractor`, as a widget in our Qt window, like the demo;
+- the pitfalls in `gui_qt_integration.md` apply: ask redraws with `update()` and not `render()`, keep a reference to the volume mapper and property, use linear interpolation, close the plotter when the window closes.
+
 ## Limits and next steps
 
 - The numbers are for one laptop with an integrated GPU, plugged in. Absolute values will be different on the lab workstation, and the difference between the two libraries on real volumes is within the variation between runs.
 - The real-size volume is random data with the right size and type. A real large file has not been tested yet: reading 50 MB per frame with czifile from disk will add to the frame change time of both libraries.
-- Next steps after the choice: test a large real file; for napari, measure the startup with the window shown before napari is loaded and choose the cache size; for PyVista, try embedding VTK without pyvistaqt's double draw.
+- Next steps: test a large real file, and try embedding VTK in Qt without pyvistaqt's double draw, to get closer to the 50 fps VTK reaches alone.
