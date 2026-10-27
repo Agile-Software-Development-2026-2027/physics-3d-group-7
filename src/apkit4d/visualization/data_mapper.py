@@ -1,11 +1,11 @@
 import numpy as np
-import pyvista as pv
 import pandas as pd
+import pyvista as pv
 
 
-
-
-def create_volume_grid(img_array: np.ndarray, voxel_size: tuple, offset: tuple = (0, 0, 0)) -> pv.ImageData:
+def create_volume_grid(img_array: np.ndarray, 
+                       voxel_size: tuple[float, float, float], 
+                       offset: tuple[int, int, int] = (0, 0, 0)) -> pv.ImageData:
     """
     Create a PyVista ImageData object from a 3D numpy array.
 
@@ -38,9 +38,11 @@ def create_volume_grid(img_array: np.ndarray, voxel_size: tuple, offset: tuple =
     )
 
     """
-        VTK do not accept 3d numpy array as point data so we need to flatten the array with order='F' (X axe first)
+        VTK do not accept 3d numpy array as point data so we need to flatten the array,
+        with order='F' (X axe first)
 
-        point_data is a dictionary-like object that allows you to store additional data associated with the points of the grid.
+        point_data is a dictionary-like object that allows you to store additional data,
+        associated with the points of the grid.
         we use this to store the flattened image data as point data in the grid
     """
     grid.point_data["values"] = img_xyz.flatten(order="F")
@@ -52,7 +54,8 @@ def create_blob_mesh(df: pd.DataFrame)-> pv.PolyData:
     This function is used to create the blobs that will be visualized in the 3D space.
 
     it creates a PyVista PolyData object from a pandas DataFrame containing blob data.
-    every row in the DataFrame represents a blob, and the columns contain the necessary information to create the mesh.
+    every row in the DataFrame represents a blob, 
+    and the columns contain the necessary information to create the mesh.
     
     Parameters:
         df (pd.DataFrame): DataFrame containing blob data. 
@@ -64,7 +67,8 @@ def create_blob_mesh(df: pd.DataFrame)-> pv.PolyData:
             - volume_um3: physical volume of the blob in cubic micrometers
             - n_voxels: total number of voxels belonging to the segmented blob
             - z_extent: z dimension of the blob
-            - response: number that represents the strenght of the signal (how the algorithm is confident that this is a blob)
+            - response: number that represents the strenght of the signal 
+            (how the algorithm is confident that this is a blob)
             - peak: maximum intensity on the smoothed image within the blob's region
             - mean_intensity: average pixel intensity of the raw image within the blob
             - max_intensity: maximum pixel intensity of the raw image within the blob
