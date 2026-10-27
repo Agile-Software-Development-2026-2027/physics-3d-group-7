@@ -2,6 +2,8 @@
 
 This note answers how napari and PyVista fit inside our Qt application (SCRUM-28). The GUI base (#4) is a PySide6 `QMainWindow`, so the question is how each library puts its 3D view inside it and what that means for the rest of the code.
 
+The group chose PyVista for the 3D view (see `gui_library_choice.md`, SCRUM-30). The napari parts stay here as a reference.
+
 Everything below was tried in the two demos, which have the same features, the same side panel and the same data:
 
 - napari demo: draft PR #7 (`demos/napari_demo.py`)
