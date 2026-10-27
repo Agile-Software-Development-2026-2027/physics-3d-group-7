@@ -5,6 +5,8 @@ Central column of the main window: the 3D view on top, the playback bar at the b
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from apkit4d.gui.playback_bar import PlaybackBar
+
 
 class CenterPanel(QWidget):
     """
@@ -15,15 +17,22 @@ class CenterPanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("central_column")
+        self.setObjectName("center_panel")
 
-        placeholder = QLabel("Open a .czi file to start (File > Open)")
-        placeholder.setObjectName("central_placeholder")
+        placeholder = QLabel("Open a .czi dile to start (File > Open)")
+        placeholder.setObjectName("center_placeholder")
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._view: QWidget = placeholder
+        self._playback_bar = PlaybackBar()
 
         self._layout = QVBoxLayout(self)
         self._layout.addWidget(self._view, stretch=1)
+        self._layout.addWidget(self._playback_bar)
+
+    @property
+    def playback_bar(self) -> PlaybackBar:
+        """The bar at the bottom of the column."""
+        return self._playback_bar
 
     def set_view(self, view: QWidget) -> None:
         """

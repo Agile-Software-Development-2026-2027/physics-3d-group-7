@@ -12,4 +12,4 @@ class RightPanel(SidePanel):
 
     def __init__(self) -> None:
         super().__init__("RIGHT (temp.)")
-        self.add_control(QPushButton("Press"))
+        self.add_control(QPushButton("RIGHT PANEL"))
