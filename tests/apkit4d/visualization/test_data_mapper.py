@@ -21,6 +21,7 @@ from apkit4d.visualization.data_mapper import create_blob_mesh, create_volume_gr
     - None input for create_blob_mesh
 """
 
+
 def test_create_volume_grid_with_valid_input():
     img_array = np.random.rand(10, 20, 30)
     voxel_size = (1, 1, 1)
@@ -37,15 +38,17 @@ def test_create_volume_grid_with_valid_input():
 
 
 def test_create_volume_grid_with_empty_array():
-    grid = create_volume_grid(None, voxel_size=(1,1,1))
+    grid = create_volume_grid(None, voxel_size=(1, 1, 1))
     assert isinstance(grid, pv.ImageData)
     assert grid.n_points == 0
 
+
 def test_create_volume_grid_with_non_3d_array():
-    img_array = np.random.rand(10, 20) 
-    grid = create_volume_grid(img_array, voxel_size=(1,1,1))
+    img_array = np.random.rand(10, 20)
+    grid = create_volume_grid(img_array, voxel_size=(1, 1, 1))
     assert isinstance(grid, pv.ImageData)
     assert grid.n_points == 0
+
 
 def test_create_volume_grid_axes_inversion():
     img_array = np.random.rand(5, 10, 15)
@@ -61,6 +64,7 @@ def test_create_volume_grid_axes_inversion():
     assert "values" in grid.point_data
     assert len(grid.point_data["values"]) == img_array.size
 
+
 def test_create_blob_mesh_with_valid_input():
     data = {
         "x_um": [10.0, 20.0],
@@ -68,7 +72,7 @@ def test_create_blob_mesh_with_valid_input():
         "z_um": [5.0, 8.0],
         "volume_um3": [150.0, 300.0],
         "response": [0.8, 0.95],
-        "label": [1, 2]
+        "label": [1, 2],
     }
     df = pd.DataFrame(data)
 
@@ -83,11 +87,13 @@ def test_create_blob_mesh_with_valid_input():
 
     assert "x_um" not in poly.point_data
 
+
 def test_create_blob_mesh_with_empty_dataframe():
     df = pd.DataFrame()
     poly = create_blob_mesh(df)
     assert isinstance(poly, pv.PolyData)
     assert poly.n_points == 0
+
 
 def test_create_blob_mesh_with_missing_columns():
     data = {
@@ -96,12 +102,13 @@ def test_create_blob_mesh_with_missing_columns():
         # "z_um" column is missing
         "volume_um3": [150.0, 300.0],
         "response": [0.8, 0.95],
-        "label": [1, 2]
+        "label": [1, 2],
     }
     df = pd.DataFrame(data)
 
     with pytest.raises(KeyError):
         create_blob_mesh(df)
+
 
 def test_create_blob_mesh_with_none_input():
     poly = create_blob_mesh(None)
