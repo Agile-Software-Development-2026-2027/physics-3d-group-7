@@ -26,7 +26,7 @@ class Viewport(QWidget):
         self.main_layout.addWidget(self.plotter.interactor)
 
         # set up of some viewport things
-        self.plotter.set_background("black")
+        self.plotter.set_background("gray")
         self.plotter.add_axes()
 
         # TODO: decide how we are going to handle colors and other stuff like axes, grid, coordinates, etc.
@@ -47,6 +47,9 @@ class Viewport(QWidget):
 
         # here we add the volume, that is the blob data
         self.plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume")
+
+        # with this we can see the cube borders
+        self.plotter.add_mesh(grid.outline(), color="white", line_width=2, name="outline")
 
         # since we work with 4D data i've put the reset as an option, we don't want to reset on every frame,
         # but it could be useful in some cases, so we leave it as an option for now.
