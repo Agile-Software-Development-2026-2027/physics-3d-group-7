@@ -8,10 +8,10 @@ Summary
 3. The seeds are the local maxima above the `threshold`. They have a
    reciprocal separation of `split * diameter`. This is determined by building
    an ellipsoidal footprint centered in the seed. The ellipsoid is anisotropic too.
-4. Flood the smoothed image starting from the seeds. Watershed segments the image
-   in labeled regions (the blobs). Each region keeps only the blobs above
-   `grow_frac * its_peak`. This we have a relative rather than absolute boundary:
-   weak and strong cells will have the same shape.
+4. Flood the smoothed image starting from the seeds. Watershedding segments the
+   image in labeled regions (the blobs). Each region keeps only the voxels above
+   `grow_frac * its_peak`. In this way we have a relative rather than absolute
+   boundary: weak and strong cells will have the same shape.
 5. For each region, place a centroid weighted by the intensity of the raw image,
    not the preprocessed one, and compute by-region statistics.
 
@@ -155,7 +155,7 @@ def log_response(
     return smoothed, response
 
 
-def _ellipsoid(radii: tuple[float, float, float]) -> np.ndarray[tuple[int, int, int], np.dtype[np.bool_]]:
+def _ellipsoid(radii: tuple[float, float, float]) -> Image[np.bool_]:
     """Creates an ellipsoid in a space of boolean points.
 
     Args:
