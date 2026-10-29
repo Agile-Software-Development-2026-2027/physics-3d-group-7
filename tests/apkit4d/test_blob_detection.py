@@ -366,7 +366,7 @@ def test_find_blobs_empty_after_stats_filtering():
         diameter_xy_um=3.0,
         diameter_z_um=3.0,
         threshold=0.01,
-        grow_frac=0.9,
+        grow_frac=1.5,  # everything is smoothed, no peak above the others
     )
     voxel_dim = (1.0, 1.0, 1.0)
 
@@ -379,3 +379,56 @@ def test_find_blobs_empty_after_stats_filtering():
     assert isinstance(labels, np.ndarray)
     assert np.all(labels == 0)
     assert len(seed_resp) > 0
+
+
+def test_blob_params_defaults_crystallized():
+    params = BlobParams()
+    assert params.diameter_xy_um == 15.0
+    assert params.diameter_z_um == 70.0
+    assert params.threshold == 0.1
+    assert params.split == 1.0
+    assert params.grow_frac == 0.3
+    assert params.min_volume_um3 == 200.0
+    assert params.max_volume_um3 == 1e6
+
+
+def test_blob_params_to_dict_does_what_it_says():
+    params = BlobParams(threshold=0.5, min_volume_um3=100.0)
+    d = params.to_dict()
+
+    assert isinstance(d, dict)
+    assert d["threshold"] == 0.5
+    assert d["min_volume_um3"] == 100.0
+    assert d["diameter_xy_um"] == 15.0  # default
+
+
+def test_blob_params_from_dict():
+    params = BlobParams.from_dict({"diameter_xy_um": 10.0, "threshold": 0.2, "grow_frac": 0.4})
+
+    assert params.diameter_xy_um == 10.0
+    assert params.threshold == 0.2
+    assert params.grow_frac == 0.4
+    assert params.diameter_z_um == 70.0  # default
+
+
+def test_blob_params_from_dict_ignores_extra_keys():
+    params = BlobParams.from_dict(
+        {
+            "threshold": 0.3,
+            "unknown_parameter": 999,
+            "another_bogus_key": "test",
+        }
+    )
+
+    assert params.threshold == 0.3
+    assert not hasattr(params, "unknown_parameter")
+
+
+def test_blob_params_from_dict_handles_none():
+    params_none = BlobParams.from_dict(None)
+    assert params_none.threshold == 0.1  # default
+
+
+def test_blob_params_from_dict_handles_empty_dict():
+    params_empty = BlobParams.from_dict({})
+    assert params_empty.threshold == 0.1  # default
