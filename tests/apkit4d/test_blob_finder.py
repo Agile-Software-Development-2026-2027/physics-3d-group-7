@@ -1,14 +1,18 @@
 import numpy as np
+import pandas as pd
 from scipy import ndimage
 
 from apkit4d.blob_finder import (
+    DETECTION_COLUMNS,
     BlobParams,
     _ellipsoid,
     _sigmas,
+    find_blobs,
     find_seeds,
     log_response,
     watershed_from_seeds,
 )
+from apkit4d.image import Image
 
 
 def test_sigmas():
@@ -150,13 +154,96 @@ def test_watershed_does_nothing_with_empty_seeds():
 
 def test_watershed_segments_regions_with_multiple_seeds():
     smoothed = np.zeros((30, 30, 30), dtype=np.float32)
-
     smoothed[10, 10, 10] = 1.0
     smoothed[20, 20, 20] = 0.8
-
     seeds = np.array([[10, 10, 10], [20, 20, 20]], dtype=np.int64)
 
     labels = watershed_from_seeds(smoothed, seeds, BlobParams(grow_frac=0.1))
 
     assert labels[10, 10, 10] == 1
     assert labels[20, 20, 20] == 2
+
+
+def test_find_blobs_returns_empty_df_and_seed_response_when_image_is_below_threshold():
+    image = np.zeros((10, 10, 10), dtype=np.float32)
+    image[1, 2, 3] = 0.3
+    image[9, 8, 6] = 0.234
+
+    df, labels, seed_resp = find_blobs(
+        image, BlobParams(threshold=0.5), voxel_dim=(1.0, 1.0, 1.0), return_labels=True
+    )
+
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 0
+    assert list(df.columns) == DETECTION_COLUMNS
+    assert labels is None
+    assert len(seed_resp) == 0
+
+
+def give_me_a_smooth_blob(size: tuple[int, int, int], spread: float) -> Image[np.float32]:
+    z, y, x = size[0] // 2, size[1] // 2, size[2] // 2
+    zz, yy, xx = np.ogrid[-z : z + 1, -y : y + 1, -x : x + 1]
+    blob = np.exp(-(zz**2 + yy**2 + xx**2) / spread).astype(np.float32)  # better not to ask...
+    return blob
+
+
+def test_find_blobs_detects_the_blobs_measures_them_and_returns_the_filled_out_data_frame():
+    shape = (10, 10, 10)
+    image = np.zeros(shape, dtype=np.float32)
+
+    image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 4.0) * 0.9
+
+    params = BlobParams(diameter_xy_um=3.0, diameter_z_um=3.0, threshold=0.01, min_volume_um3=1.0)
+    voxel_dim = (1.0, 1.0, 1.0)
+
+    df, labels, seed_resp = find_blobs(
+        image, params, voxel_dim, frame=2, offset=(3, 3, 3), return_labels=True
+    )
+
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 1
+    assert df.loc[0, "frame"] == 2
+    assert df.loc[0, "z"] == 8.0  # 5 + offset 3
+    assert df.loc[0, "y"] == 8.0
+    assert df.loc[0, "x"] == 8.0
+    assert labels is not None
+    assert labels.shape == shape
+    assert len(seed_resp) == 1
+
+
+def test_find_blobs_removes_from_labels_blobs_that_have_a_volume_smaller_than_the_constraint():
+    image = np.zeros((10, 10, 10), dtype=np.float32)
+
+    image[2:7, 2:7, 2:7] = give_me_a_smooth_blob((5, 5, 5), 4.0) * 0.9
+
+    params = BlobParams(
+        diameter_xy_um=3.0,
+        diameter_z_um=3.0,
+        threshold=0.01,
+        min_volume_um3=10000.0,  # min too big
+    )
+    df, labels, seed_resp = find_blobs(image, params, (1.0, 1.0, 1.0), return_labels=True)
+
+    assert len(df) == 0
+    assert labels is not None
+    assert np.all(labels == 0)
+
+
+def test_find_blobs_removes_from_labels_blobs_that_have_a_volume_bigger_than_the_constraint():
+    shape = (10, 10, 10)
+    image = np.zeros(shape, dtype=np.float32)
+    image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 20.0) * 0.9
+
+    params = BlobParams(
+        diameter_xy_um=15.0,
+        diameter_z_um=15.0,
+        threshold=0.01,
+        min_volume_um3=1.0,
+        max_volume_um3=5.0,  # max too small
+    )
+
+    df, labels, seed_resp = find_blobs(image, params, (1.0, 1.0, 1.0), return_labels=True)
+
+    assert len(df) == 0
+    assert labels is not None
+    assert np.all(labels == 0)

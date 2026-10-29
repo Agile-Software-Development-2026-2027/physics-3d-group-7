@@ -33,9 +33,7 @@ import pandas as pd
 from scipy import ndimage
 from skimage.segmentation import watershed
 
-# The 3d volume read from the CZI. Goes through prepocessing before running blob finding over it
-type Image[T: np.number] = np.ndarray[tuple[int, int, int], np.dtype[T]]
-
+from apkit4d.image import Image
 
 SQRT_3: Final[np.float64] = np.sqrt(3)
 
@@ -73,9 +71,13 @@ class BlobParams:
     # sul file LF4D 10x: a 0.6 il 32% dei blob ha un vicino a
     # meno di 8 µm in XY, a 1.0 il 5%)
 
-    grow_frac: float = 0.3  # confine della regione: frazione del picco del segmento
+    # Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak
+    grow_frac: float = 0.3
 
+    # Min volume of a blob. Blobs with volume under this constraint are filtered out.
     min_volume_um3: float = 200.0
+
+    # Max volume of a blob. Blobs with volume above this constraint are filtered out.
     max_volume_um3: float = 1e6
 
     def to_dict(self):
@@ -289,17 +291,27 @@ def find_blobs(
     frame: int = 0,
     offset=(0, 0, 0),
     return_labels: bool = False,
-) -> tuple[pd.DataFrame, np.ndarray | None, np.ndarray]:
-    """Detection su un volume preprocessato (Z, Y, X) in [0, 1].
+) -> tuple[pd.DataFrame, Image[np.int32] | None, Image[np.float32]]:
+    """Blob detection in a preprocessed 3D image volume, where (z, x, y) in [0, 1].
 
-    intensity: volume grezzo della stessa ROI per il centroide pesato (default: img).
-    offset:    origine della ROI in voxel, per coordinate nel volume intero.
-    Ritorna (df, labels o None, seeds_response) — l'ultimo serve all'istogramma dei
-    candidati nella GUI.
+    Args
+        image: the 3D volume on which to run the blob finding
+        p: the parameters for the blob finding algorithm
+        voxel_dim: size of a voxel in micrometers
+        intensity: raw volume of the region of interest for the weighted centroid (default: image)
+        offset: origin of the region of interest in voxel
+        frame: the id (number) of the frame we are working on
+        return_labels: whether to return the labels assigned via watershedding or not
+
+    Returns:
+        A tuple containing
+            - a dataframe with the results of the search
+            - the labels assigned via watershedding if `return_labels` is True,
+              `None` otherwise
+            - The blob seeds found in the -LoG response
     """
 
     smoothed, response = log_response(image, p, voxel_dim)
-    assert smoothed.shape == image.shape
     seeds = find_seeds(response, p, voxel_dim)
 
     seed_resp = response[tuple(seeds.T)] if len(seeds) else np.array([])
@@ -309,7 +321,7 @@ def find_blobs(
 
     labels = watershed_from_seeds(smoothed, seeds, p)
 
-    # each region keeps the voxels over grow_frac * its peak
+    # each region keeps the voxels over (grow_frac * its peak)
     n_lab = len(seeds) + 1
     peak = _label_max(labels, smoothed, n_lab)
     labels[smoothed < p.grow_frac * peak[labels]] = 0
