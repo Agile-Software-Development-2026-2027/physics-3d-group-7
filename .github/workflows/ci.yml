@@ -41,5 +41,9 @@ jobs:
       - name: Type check with Ty
         run: uv run ty check
 
+      # Qt (PySide6) needs the system graphics libraries, the runner has no screen so they are missing
+      - name: Install Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
+
       - name: Run Pytest with 80% coverage enforcement
         run: uv run pytest
