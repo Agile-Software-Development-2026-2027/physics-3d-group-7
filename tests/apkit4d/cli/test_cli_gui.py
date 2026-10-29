@@ -40,6 +40,7 @@ def test_gui_options_are_flags_with_default_false(option: str):
     opt = get_option(GUI, option)
     assert opt.is_flag
     assert isinstance(opt.type, click.types.BoolParamType)
+    assert opt.default is False
 
 
 def test_czi_is_an_optional_path_argument_with_default_none():
@@ -50,6 +51,7 @@ def test_czi_is_an_optional_path_argument_with_default_none():
     assert arg.type.type is pathlib.Path
     assert arg.type.exists
     assert not arg.type.dir_okay
+    assert arg.default is None
 
 
 # fake_gui is needed only for executing the fixture
