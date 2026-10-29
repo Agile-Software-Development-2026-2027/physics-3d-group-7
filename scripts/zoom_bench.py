@@ -52,7 +52,7 @@ def real_size_volume(seed=0):
 
 def czi_volume(path):
     """Frame 0 of a .czi file with axes T, Z, Y, X."""
-    import czifile
+    import czifile  # ty: ignore[unresolved-import]  # optional, only for --czi
 
     scene = czifile.CziFile(path).scenes[0]
     if scene.dims != ("T", "Z", "Y", "X"):
