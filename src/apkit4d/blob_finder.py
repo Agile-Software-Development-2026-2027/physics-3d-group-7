@@ -109,36 +109,6 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
     )
 
 
-def _label_stats(labels, intensity, n_lab):
-    """Per etichetta: n. voxel, centroide pesato sull'intensita' (geometrico se la somma e'
-    nulla), media, massimo, estensione Z. Tutto con bincount sui soli voxel etichettati."""
-
-    nz = labels > 0
-    zi, yi, xi = np.nonzero(nz)
-    lab = labels[nz]
-    w = intensity[nz].astype(np.float64)
-    n = np.bincount(lab, minlength=n_lab)
-    sw = np.bincount(lab, w, minlength=n_lab)
-    safe_n = np.maximum(n, 1)
-    use_w = sw > 0
-    den = np.where(use_w, sw, safe_n)
-    out = {"n": n, "mean": sw / safe_n}
-    for name, c in (("z", zi), ("y", yi), ("x", xi)):
-        out[name] = (
-            np.where(use_w, np.bincount(lab, w * c, minlength=n_lab), np.bincount(lab, c, minlength=n_lab))
-            / den
-        )
-    mx = np.zeros(n_lab, dtype=np.float64)
-    np.maximum.at(mx, lab, w)
-    zmin = np.full(n_lab, np.iinfo(np.int64).max)
-    zmax = np.full(n_lab, -1)
-    np.minimum.at(zmin, lab, zi)
-    np.maximum.at(zmax, lab, zi)
-    out["max"] = mx
-    out["z_extent"] = np.where(n > 0, zmax - zmin + 1, 0)
-    return out
-
-
 def log_response(
     img: Image[np.float32],
     p: BlobParams,
@@ -296,6 +266,64 @@ def max_by_label(
     return out
 
 
+def stats_by_label(
+    labels: Image[np.int32], intensity: Image[np.float32], n_lab: int
+) -> dict[str, np.ndarray[tuple[int, ...], np.dtype[np.number]]]:
+    """Computes statistics for each region and thus in turn for each blob.
+
+    Args:
+        labels: the labels obtained via watershedding
+        intensity: the original 3D image volume
+        n_lab: number of labels
+
+    Returns:
+        A dictionary containing the keys
+        - "n": number of voxels for each labeled region
+        - "mean": the average intensity for each labeled region
+        - "z", "y", "x": coordinates of the centroid weighted by the
+                         intensity of the voxels inside the region.
+        - "max": maximum intensity within each label
+        - "z_extent": length of each label along the Z axis
+    """
+
+    nonzero_labels_indices = labels > 0
+    zi, yi, xi = np.nonzero(nonzero_labels_indices)
+    nonzero_labels = labels[nonzero_labels_indices]
+    weights = intensity[nonzero_labels_indices].astype(np.float64)
+
+    n = np.bincount(nonzero_labels, minlength=n_lab)
+    sum_of_weights = np.bincount(nonzero_labels, weights, minlength=n_lab)
+
+    safe_n = np.maximum(n, 1)
+    use_w = sum_of_weights > 0
+    density = np.where(use_w, sum_of_weights, safe_n)
+
+    centroids = {
+        ax: np.where(
+            use_w,
+            np.bincount(nonzero_labels, weights * c, minlength=n_lab),
+            np.bincount(nonzero_labels, c, minlength=n_lab),
+        )
+        / density
+        for ax, c in (("z", zi), ("y", yi), ("x", xi))
+    }
+
+    max_by_lab = np.zeros(n_lab, dtype=np.float64)
+    np.maximum.at(max_by_lab, nonzero_labels, weights)
+
+    zmin = np.full(n_lab, np.iinfo(np.int64).max)
+    zmax = np.full(n_lab, -1)
+    np.minimum.at(zmin, nonzero_labels, zi)
+    np.maximum.at(zmax, nonzero_labels, zi)
+
+    return centroids | {
+        "n": n,
+        "mean": sum_of_weights / safe_n,
+        "z_extent": np.where(n > 0, zmax - zmin + 1, 0),
+        "max": max_by_lab,
+    }
+
+
 def find_blobs(
     image: Image[np.float32],
     p: BlobParams,
@@ -342,7 +370,7 @@ def find_blobs(
     labels[smoothed < p.grow_frac * peaks[labels]] = 0
 
     inten = image if intensity is None else intensity
-    st = _label_stats(labels, inten, n_lab)
+    st = stats_by_label(labels, inten, n_lab)
     idx = np.nonzero(st["n"])[0]
     idx = idx[idx > 0]
     if len(idx) == 0:

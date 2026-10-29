@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import ndimage
 
 from apkit4d.blob_finder import (
@@ -11,6 +12,7 @@ from apkit4d.blob_finder import (
     find_seeds,
     log_response,
     max_by_label,
+    stats_by_label,
     watershed_from_seeds,
 )
 from apkit4d.image import Image
@@ -298,3 +300,58 @@ def test_max_by_label_returns_the_peak_in_a_singleton_regions():
     assert out[1] == 5.4
     assert out[2] == 9.6
     assert out[3] == 1.4
+
+
+def test_stats_by_label_gives_stats_for_each_region():
+    shape = (5, 5, 5)
+    labels = np.zeros(shape, dtype=np.int32)
+    intensity = np.zeros(shape, dtype=np.float32)
+
+    labels[1, 2, 3] = 1
+    intensity[1, 2, 3] = 10.0
+
+    labels[3, 1, 1] = 2
+    labels[3, 2, 1] = 2
+    intensity[3, 1, 1] = 5.0
+    intensity[3, 2, 1] = 15.0
+
+    stats = stats_by_label(labels, intensity, n_lab=3)
+
+    expected_keys = {"n", "mean", "z", "y", "x", "max", "z_extent"}
+    assert expected_keys.issubset(stats.keys())
+    for _, arr in stats.items():
+        assert isinstance(arr, np.ndarray)
+        assert arr.shape == (3,)
+
+    assert stats["n"][0] == 0
+    assert stats["max"][0] == 0.0
+    assert stats["z_extent"][0] == 0
+
+    assert stats["n"][1] == 1
+    assert stats["mean"][1] == 10.0
+    assert stats["max"][1] == 10.0
+    assert stats["z"][1] == 1.0
+    assert stats["y"][1] == 2.0
+    assert stats["x"][1] == 3.0
+    assert stats["z_extent"][1] == 1  # z_max - z_min + 1
+
+    assert stats["n"][2] == 2
+    assert stats["mean"][2] == 10.0  # (5.0 + 15.0) / 2 = 10.0
+    assert stats["max"][2] == 15.0
+    assert stats["z"][2] == 3.0  # in region 2 both voxels have z = 3
+    # Intensity-weighted Y centroid: (5.0*1 + 15.0*2) / (5.0 + 15.0) = (5 + 30) / 20 = 35 / 20 = 1.75
+    assert stats["y"][2] == pytest.approx(1.75)
+    assert stats["x"][2] == 1.0
+    assert stats["z_extent"][2] == 1  # both voxels at z=3, z_extent = 3 - 3 + 1 = 1
+
+
+def test_stats_by_label_returns_everything_empty_on_empty_volume():
+    labels = np.zeros((4, 4, 4), dtype=np.int32)
+    intensity = np.random.rand(4, 4, 4).astype(np.float32)
+
+    stats = stats_by_label(labels, intensity, n_lab=2)
+
+    assert stats["n"].tolist() == [0, 0]
+    assert stats["mean"].tolist() == [0.0, 0.0]
+    assert stats["max"].tolist() == [0.0, 0.0]
+    assert stats["z_extent"].tolist() == [0, 0]
