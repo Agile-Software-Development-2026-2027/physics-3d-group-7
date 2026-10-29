@@ -16,5 +16,7 @@ htmlcov/
 
 # Private materrials
 *.czi
-legacy*
-local_tmp*
+legacy/
+local_tmp/
+.vscode/
+uv.toml
