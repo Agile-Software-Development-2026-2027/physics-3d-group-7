@@ -9,6 +9,8 @@ It starts disabled, and the controller enables it when there is something to pla
 from PySide6.QtCore import Qt, Signal, SignalInstance
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QVBoxLayout, QWidget
 
+from apkit4d.gui import constants
+
 
 class PlaybackBar(QWidget):
     """
@@ -30,19 +32,25 @@ class PlaybackBar(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("playback_bar")
+        self.setObjectName(constants.NAME_PLAYBACK_BAR)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setObjectName("frame_slider")
+        self._slider.setObjectName(constants.NAME_FRAME_SLIDER)
         self._slider.valueChanged.connect(self.frame_requested)
 
-        # TODO: in the future we could add more things, like labels telling exactly what frame is being
-        # diplayed
-
         buttons = QHBoxLayout()
-        buttons.addWidget(self._make_button("previous_button", "<", self.previous_requested))
-        buttons.addWidget(self._make_button("play_button", "Play", self.play_toggled))
-        buttons.addWidget(self._make_button("next_button", ">", self.next_requested))
+
+        buttons.addWidget(
+            self._make_button(
+                constants.NAME_PREVIOUS_BUTTON, constants.TEXT_BUTTON_PREVIOUS, self.previous_requested
+            )
+        )
+        buttons.addWidget(
+            self._make_button(constants.NAME_PLAY_BUTTON, constants.TEXT_BUTTON_PLAY, self.play_toggled)
+        )
+        buttons.addWidget(
+            self._make_button(constants.NAME_NEXT_BUTTON, constants.TEXT_BUTTON_NEXT, self.next_requested)
+        )
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._slider, stretch=1)

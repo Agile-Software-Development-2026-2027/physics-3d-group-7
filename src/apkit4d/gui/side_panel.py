@@ -4,6 +4,8 @@ Base class of the side columns of the main window.
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from apkit4d.gui import constants
+
 
 class SidePanel(QWidget):
     """
@@ -19,7 +21,7 @@ class SidePanel(QWidget):
     def __init__(self, object_name: str) -> None:
         super().__init__()
         self.setObjectName(object_name)
-        self.setMinimumWidth(120)  # SIDE_PANEL_MIN_WIDTH
+        self.setMinimumWidth(constants.SIDE_PANEL_MIN_WIDTH)
         self._layout = QVBoxLayout(self)
         self._layout.addStretch()
 
