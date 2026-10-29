@@ -36,13 +36,13 @@ def test_apkit4d_gui_has_params_defined(param: str):
 
 
 @pytest.mark.parametrize("option", ["--software-gl", "--diagnostic"])
-def test_gui_options_are_flags(option: str):
+def test_gui_options_are_flags_with_default_false(option: str):
     opt = get_option(GUI, option)
     assert opt.is_flag
     assert isinstance(opt.type, click.types.BoolParamType)
 
 
-def test_czi_is_an_optional_path_argument():
+def test_czi_is_an_optional_path_argument_with_default_none():
     arg = get_argument(GUI, "czi")
     assert not arg.required
     assert arg.nargs == 1

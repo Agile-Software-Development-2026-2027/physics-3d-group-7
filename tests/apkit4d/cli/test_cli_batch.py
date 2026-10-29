@@ -2,6 +2,7 @@ import pathlib
 
 import click
 import pytest
+from click._utils import UNSET
 from click.testing import CliRunner
 
 from apkit4d.cli.cli import cli
@@ -40,11 +41,13 @@ def test_czi_is_a_path_and_an_obligatory_argument():
 def test_t0_is_an_option_and_an_int():
     opt = get_option(BATCH, "--t0")
     assert isinstance(opt.type, click.types.IntParamType)
+    assert opt.default is UNSET
 
 
 def test_t1_is_an_option_and_an_int():
     opt = get_option(BATCH, "--t1")
     assert isinstance(opt.type, click.types.IntParamType)
+    assert opt.default is UNSET
 
 
 def test_out_is_an_option_and_a_dir():
@@ -53,24 +56,29 @@ def test_out_is_an_option_and_a_dir():
     assert opt.type.type is pathlib.Path
     assert opt.type.dir_okay
     assert not opt.type.file_okay
+    assert opt.default is UNSET
 
 
-def test_workers_is_an_option_and_an_int():
+def test_workers_is_an_option_and_an_int_with_default_16():
     opt = get_option(BATCH, "--workers")
     assert isinstance(opt.type, click.types.IntParamType)
+    assert opt.default == 16
 
 
-def test_chunk_is_an_option_and_an_int():
+def test_chunk_is_an_option_and_an_int_with_default_10():
     opt = get_option(BATCH, "--chunk")
     assert isinstance(opt.type, click.types.IntParamType)
+    assert opt.default == 10
 
 
-def test_format_is_an_option_and_an_choice():
+def test_format_is_an_option_and_an_choice_with_default_parquet():
     opt = get_option(BATCH, "--format")
     assert isinstance(opt.type, click.Choice)
     assert list(opt.type.choices) == ["parquet", "csv"]
+    assert opt.default == "parquet"
 
 
 def test_params_is_an_option_and_a_string():
     opt = get_option(BATCH, "--params")
     assert isinstance(opt.type, click.types.StringParamType)
+    assert opt.default is UNSET
