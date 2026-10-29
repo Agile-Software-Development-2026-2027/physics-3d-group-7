@@ -1,28 +1,24 @@
 """Detect blobs in an already preprocessed 3D image volume.
 
+Summary
+
+1. Anisothropic Gaussian smoothing at the scale of the single blob
+2. Scale-normalized -LoG response along each axis: maximum closer to the center
+   of an object, almost 0 in the flat background
+3. The seeds are the local maxima above the `threshold`. They have a
+   reciprocal separation of `split * diameter`. This is determined by building
+   an ellipsoidal footprint centered in the seed. The ellipsoid is anisotropic too.
+4. Flood the smoothed image starting from the seeds. Watershed segments the image
+   in labeled regions (the blobs). Each region keeps only the blobs above
+   `grow_frac * its_peak`. This we have a relative rather than absolute boundary:
+   weak and strong cells will have the same shape.
+5. For each region, place a centroid weighted by the intensity of the raw image,
+   not the preprocessed one, and compute by-region statistics.
+
 Voxel: 3-dimensional pixel.
 
-Seeds are the centers of the blobs. Blobs are ellipsoids.
-
 Something is _anisotropic_ if it has properties that depend on the direction of
-measurement.
-
-Detection 3D a semi LoG e crescita watershed, senza trackpy.
-
-  1. smoothing gaussiano anisotropo alla scala del blob atteso
-  2. risposta -LoG normalizzata di scala (sigma_i² ∂²/∂i² per ogni asse): massima al
-     centro di un oggetto di diametro ~d, quasi nulla sul fondo piatto
-  3. semi = massimi locali della risposta sopra `threshold`, separati da almeno
-     `split` x diametro (footprint ellissoidale, anisotropo come il voxel)
-  4. crescita: watershed sullo smoothing a partire dai semi, poi ogni regione tiene solo
-     i voxel sopra `grow_frac` x il suo picco (confine relativo, come la
-     confine relativo e non soglia globale: cellule deboli e forti hanno la stessa forma)
-  5. per ogni segmento: centroide pesato sull'intensita' grezza (non quella preprocessata,
-     che la finestra e la gamma deformerebbero), volume, estensione Z, picco
-
-Il diametro Z va dato separatamente da quello XY: nel lightfield 10x/0.45 la PSF assiale
-allunga ogni cellula su ~70 µm (~4 slice), molto piu' dei suoi ~10 µm reali.
-Per un blob gaussiano in 3D la risposta LoG normalizzata e' massima a sigma = r/√3.
+measurement. In this case, voxels are elongated along the Z axis w.r.t. X and Y.
 """
 
 from dataclasses import asdict, dataclass, fields
@@ -63,13 +59,14 @@ class BlobParams:
     diameter_xy_um: float = 15.0
     diameter_z_um: float = 70.0  # structures are usually elongated on the Z axis
 
-    # soglia risposta log
-    threshold: float = 0.1  # sulla risposta -LoG del volume preprocessato [0, 1]
+    # -LoG response threshold over the preprocessed volume in [0, 1]
+    threshold: float = 0.1
 
-    split: float = 1.0  # distanza minima fra semi, in frazioni del diametro: sotto 1
-    # la stessa cellula si spezza in piu' blob lungo Z (misurato
-    # sul file LF4D 10x: a 0.6 il 32% dei blob ha un vicino a
-    # meno di 8 µm in XY, a 1.0 il 5%)
+    # Minimum tolerated distance between the seeds, expressed as a fraction
+    # of the diameter. Below 1.0 the cell breaks down in more cells in the
+    # direction of Z. (misurato sul file LF4D 10x: a 0.6 il 32% dei blob ha un
+    # vicino a meno di 8 µm in XY, a 1.0 il 5%)
+    split: float = 1.0
 
     # Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak
     grow_frac: float = 0.3
@@ -356,10 +353,10 @@ def find_blobs(
     smoothed, response = log_response(image, p, voxel_dim)
     seeds = find_seeds(response, p, voxel_dim)
 
-    seed_resp = response[tuple(seeds.T)] if len(seeds) else np.array([])
+    seeds_of_log_response = response[tuple(seeds.T)] if len(seeds) else np.array([])
     del response  # without this we crash and burn
     if len(seeds) == 0:
-        return pd.DataFrame(columns=DETECTION_COLUMNS), None, seed_resp
+        return pd.DataFrame(columns=DETECTION_COLUMNS), None, seeds_of_log_response
 
     # `labels` has the same shape as `smoothed`
     labels = watershed_from_seeds(smoothed, seeds, p)
@@ -369,28 +366,31 @@ def find_blobs(
     # each region keeps the voxels over (grow_frac * its peak)
     labels[smoothed < p.grow_frac * peaks[labels]] = 0
 
-    inten = image if intensity is None else intensity
-    st = stats_by_label(labels, inten, n_lab)
-    idx = np.nonzero(st["n"])[0]
-    idx = idx[idx > 0]
-    if len(idx) == 0:
-        return pd.DataFrame(columns=DETECTION_COLUMNS), (labels if return_labels else None), seed_resp
+    stats = stats_by_label(labels, image if intensity is None else intensity, n_lab)
+    nonzero_blob_indices = np.nonzero(stats["n"])[0]
+    nonzero_blob_indices = nonzero_blob_indices[nonzero_blob_indices > 0]  # remove bg
+    if len(nonzero_blob_indices) == 0:
+        return (
+            pd.DataFrame(columns=DETECTION_COLUMNS),
+            (labels if return_labels else None),
+            seeds_of_log_response,
+        )
 
-    vox_vol = float(np.prod(voxel_dim))
+    voxel_volume = float(np.prod(voxel_dim))
     df = pd.DataFrame(
         {
             "frame": frame,
-            "label": idx,
-            "z": st["z"][idx] + offset[0],
-            "y": st["y"][idx] + offset[1],
-            "x": st["x"][idx] + offset[2],
-            "volume_um3": st["n"][idx] * vox_vol,
-            "n_voxels": st["n"][idx],
-            "z_extent": st["z_extent"][idx],
-            "response": seed_resp[idx - 1],
-            "peak": peaks[idx],
-            "mean_intensity": st["mean"][idx],
-            "max_intensity": st["max"][idx],
+            "label": nonzero_blob_indices,
+            "z": stats["z"][nonzero_blob_indices] + offset[0],
+            "y": stats["y"][nonzero_blob_indices] + offset[1],
+            "x": stats["x"][nonzero_blob_indices] + offset[2],
+            "volume_um3": stats["n"][nonzero_blob_indices] * voxel_volume,
+            "n_voxels": stats["n"][nonzero_blob_indices],
+            "z_extent": stats["z_extent"][nonzero_blob_indices],
+            "response": seeds_of_log_response[nonzero_blob_indices - 1],
+            "peak": peaks[nonzero_blob_indices],
+            "mean_intensity": stats["mean"][nonzero_blob_indices],
+            "max_intensity": stats["max"][nonzero_blob_indices],
         }
     )
     df["z_um"], df["y_um"], df["x_um"] = (
@@ -398,11 +398,12 @@ def find_blobs(
         df["y"] * voxel_dim[1],
         df["x"] * voxel_dim[2],
     )
+
     ok = (df["volume_um3"] >= p.min_volume_um3) & (df["volume_um3"] <= p.max_volume_um3)
     if return_labels:
         labels[np.isin(labels, df.loc[~ok, "label"].values)] = 0
     return (
         df.loc[ok, DETECTION_COLUMNS].reset_index(drop=True),
         (labels if return_labels else None),
-        seed_resp,
+        seeds_of_log_response,
     )

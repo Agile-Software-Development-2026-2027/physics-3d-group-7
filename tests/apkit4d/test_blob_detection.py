@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from scipy import ndimage
 
-from apkit4d.blob_finder import (
+from apkit4d.blob_detection import (
     DETECTION_COLUMNS,
     BlobParams,
     _ellipsoid,
@@ -355,3 +355,27 @@ def test_stats_by_label_returns_everything_empty_on_empty_volume():
     assert stats["mean"].tolist() == [0.0, 0.0]
     assert stats["max"].tolist() == [0.0, 0.0]
     assert stats["z_extent"].tolist() == [0, 0]
+
+
+def test_find_blobs_empty_after_stats_filtering():
+    image = np.zeros((10, 10, 10), dtype=np.float32)
+
+    image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 4.0) * 0.9
+
+    params = BlobParams(
+        diameter_xy_um=3.0,
+        diameter_z_um=3.0,
+        threshold=0.01,
+        grow_frac=0.9,
+    )
+    voxel_dim = (1.0, 1.0, 1.0)
+
+    df, labels, seed_resp = find_blobs(image, params, voxel_dim, return_labels=True)
+
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 0
+    assert list(df.columns) == list(DETECTION_COLUMNS)
+    assert labels is not None
+    assert isinstance(labels, np.ndarray)
+    assert np.all(labels == 0)
+    assert len(seed_resp) > 0
