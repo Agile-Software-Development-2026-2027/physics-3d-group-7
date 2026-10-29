@@ -10,6 +10,7 @@ from apkit4d.blob_finder import (
     find_blobs,
     find_seeds,
     log_response,
+    max_by_label,
     watershed_from_seeds,
 )
 from apkit4d.image import Image
@@ -247,3 +248,53 @@ def test_find_blobs_removes_from_labels_blobs_that_have_a_volume_bigger_than_the
     assert len(df) == 0
     assert labels is not None
     assert np.all(labels == 0)
+
+
+def test_max_by_label_believe_it_or_not_finds_the_max_for_each_label():
+    shape = (3, 3, 3)
+    labels = np.zeros(shape, dtype=np.int32)
+    values = np.zeros(shape, dtype=np.float32)
+
+    labels[0, 0, 0] = 1
+    labels[0, 0, 1] = 1
+    values[0, 0, 0] = 2.5
+    values[0, 0, 1] = 5.0
+
+    labels[2, 2, 2] = 2
+    labels[2, 2, 1] = 2
+    values[2, 2, 2] = 10.2
+    values[2, 2, 1] = 4.1
+
+    labels[1, 1, 1] = 0  # labeled as background, so should be ignored
+    values[1, 1, 1] = 99.0
+
+    out = max_by_label(labels, values, n_lab=3)
+
+    assert isinstance(out, np.ndarray)
+    assert out.shape == (3,)
+    assert out[0] == 0.0  # background is 0
+    assert out[1] == 5.0
+    assert out[2] == 10.2
+
+
+def test_max_by_label_finds_nothing_if_there_is_only_background():
+    shape = (3, 3, 3)
+    labels = np.zeros(shape, dtype=np.int32)
+    values = np.ones(shape, dtype=np.float32) * 5.0
+
+    out = max_by_label(labels, values, n_lab=2)
+
+    assert out.shape == (2,)
+    assert np.all(out == 0.0)
+
+
+def test_max_by_label_returns_the_peak_in_a_singleton_regions():
+    labels = np.array([[[1, 2], [0, 0]], [[0, 0], [3, 0]]], dtype=np.int32)
+    values = np.array([[[5.4, 9.6], [0.0, 0.0]], [[0.0, 0.0], [1.4, 0.0]]], dtype=np.float32)
+
+    out = max_by_label(labels, values, n_lab=4)
+
+    assert out[0] == 0.0  # background is zeroed
+    assert out[1] == 5.4
+    assert out[2] == 9.6
+    assert out[3] == 1.4

@@ -109,15 +109,6 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
     )
 
 
-def _label_max(labels, values, n_lab):
-    """Massimo di `values` per etichetta (0 = fondo). Solo sui voxel etichettati:
-    ndimage.maximum per indice costa ~4 s su un volume 95x512x512, questo ~0.05 s."""
-    out = np.zeros(n_lab, dtype=np.float32)
-    nz = labels > 0
-    np.maximum.at(out, labels[nz], values[nz])
-    return out
-
-
 def _label_stats(labels, intensity, n_lab):
     """Per etichetta: n. voxel, centroide pesato sull'intensita' (geometrico se la somma e'
     nulla), media, massimo, estensione Z. Tutto con bincount sui soli voxel etichettati."""
@@ -279,8 +270,30 @@ def watershed_from_seeds(
     seed_val = smoothed[tuple(seeds.T)]
     mask = smoothed > p.grow_frac * float(seed_val.min())
     labels = watershed(-smoothed, markers, mask=mask)
-    # del markers, mask
+    # del markers, mask # should be deallocated when they go out of scope
     return labels
+
+
+def max_by_label(
+    labels: Image[np.int32], values: Image[np.float32], n_lab: int
+) -> np.ndarray[tuple[int, ...], np.dtype[np.float32]]:
+    """Finds the maximum intensity for each labelled region. 0 is the background.
+
+    Args:
+        labels: original image segmented via watershedding
+        values: the original image, smoothed
+        n_lab: the number of labels
+
+
+    Returns:
+        1D array of size `n_lab` where the `i`th element contains the peak
+        intensity in the region labeled with `i`.
+    """
+
+    out = np.zeros(n_lab, dtype=np.float32)
+    nonzero = labels > 0  # mask for the non zero points in the image
+    np.maximum.at(out, labels[nonzero], values[nonzero])  # much faster than ndimage.maximum
+    return out
 
 
 def find_blobs(
@@ -298,7 +311,8 @@ def find_blobs(
         image: the 3D volume on which to run the blob finding
         p: the parameters for the blob finding algorithm
         voxel_dim: size of a voxel in micrometers
-        intensity: raw volume of the region of interest for the weighted centroid (default: image)
+        intensity: 3D image volume defined by the region of interest, if
+                   different than `image`
         offset: origin of the region of interest in voxel
         frame: the id (number) of the frame we are working on
         return_labels: whether to return the labels assigned via watershedding or not
@@ -319,12 +333,13 @@ def find_blobs(
     if len(seeds) == 0:
         return pd.DataFrame(columns=DETECTION_COLUMNS), None, seed_resp
 
+    # `labels` has the same shape as `smoothed`
     labels = watershed_from_seeds(smoothed, seeds, p)
 
-    # each region keeps the voxels over (grow_frac * its peak)
     n_lab = len(seeds) + 1
-    peak = _label_max(labels, smoothed, n_lab)
-    labels[smoothed < p.grow_frac * peak[labels]] = 0
+    peaks = max_by_label(labels, smoothed, n_lab)
+    # each region keeps the voxels over (grow_frac * its peak)
+    labels[smoothed < p.grow_frac * peaks[labels]] = 0
 
     inten = image if intensity is None else intensity
     st = _label_stats(labels, inten, n_lab)
@@ -345,7 +360,7 @@ def find_blobs(
             "n_voxels": st["n"][idx],
             "z_extent": st["z_extent"][idx],
             "response": seed_resp[idx - 1],
-            "peak": peak[idx],
+            "peak": peaks[idx],
             "mean_intensity": st["mean"][idx],
             "max_intensity": st["max"][idx],
         }
