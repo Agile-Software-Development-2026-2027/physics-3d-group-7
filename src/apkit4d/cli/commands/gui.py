@@ -2,8 +2,6 @@ from pathlib import Path
 
 import click
 
-from apkit4d.cli.constants import OPTIONAL_CZI_METAVAR
-
 
 @click.command(help="Open the ApKit4D window. If CZI is given, the file is loaded at startup.")
 @click.argument(
@@ -11,7 +9,6 @@ from apkit4d.cli.constants import OPTIONAL_CZI_METAVAR
     required=False,
     default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    metavar=OPTIONAL_CZI_METAVAR,
 )
 @click.option(
     "--software-gl",
