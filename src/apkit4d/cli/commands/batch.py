@@ -2,8 +2,6 @@ import pathlib
 
 import click
 
-from apkit4d.cli.constants import CZI_METAVAR
-
 
 @click.command(
     help="Detect blobs on a range of frames of a CZI file, without the GUI. "
@@ -12,7 +10,6 @@ from apkit4d.cli.constants import CZI_METAVAR
 @click.argument(
     "czi",
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-    metavar=CZI_METAVAR,
 )
 @click.option(
     "--t0",
