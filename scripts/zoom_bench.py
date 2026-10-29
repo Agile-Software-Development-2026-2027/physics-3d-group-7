@@ -13,6 +13,7 @@ at zoom x1 (whole volume in view), x2, x4 and x8.
 """
 
 import argparse
+import importlib
 import platform
 import statistics
 import time
@@ -52,7 +53,8 @@ def real_size_volume(seed=0):
 
 def czi_volume(path):
     """Frame 0 of a .czi file with axes T, Z, Y, X."""
-    import czifile  # ty: ignore[unresolved-import]  # optional, only for --czi
+    # optional, not a dependency of the project: uv run --with czifile ...
+    czifile = importlib.import_module("czifile")
 
     scene = czifile.CziFile(path).scenes[0]
     if scene.dims != ("T", "Z", "Y", "X"):
