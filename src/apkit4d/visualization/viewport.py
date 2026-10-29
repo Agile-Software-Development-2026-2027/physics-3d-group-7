@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import pyvista as pv
 from PySide6.QtWidgets import QVBoxLayout, QWidget
@@ -33,7 +35,13 @@ class Viewport(QWidget):
         self.min_zoom_dist = 0.0
         self.max_zoom_dist = float("inf")
 
+        self.last_zoom_time = 0.0
+        self.current_zoom_factor = 0.03
+
         iren = self.plotter.iren.interactor  # vtkRenderWindowInteractor
+
+        for event in ("MouseWheelForwardEvent", "MouseWheelBackwardEvent"):
+            iren.AddObserver(event, self._update_zoom_acceleration, 10.0)
 
         for event in (
             "InteractionEvent",
@@ -169,3 +177,32 @@ class Viewport(QWidget):
             camera.SetPosition(*new_pos)
             self.plotter.renderer.ResetCameraClippingRange()
             self.plotter.render()
+
+    def _update_zoom_acceleration(self, obj, event):
+        """
+        This function is used to update the zoom acceleration of the camera.
+        it is called when the user zooms in or out and checks the time between
+        the last zoom event and the current zoom event, and updates the zoom factor
+
+        Parameters:
+            obj: the object that called the event
+            event: the event that was called
+        Returns:
+            None
+        """
+
+        now = time.perf_counter()
+        dt = now - self.last_zoom_time
+        self.last_zoom_time = now
+
+        # if the user is scrolling quickly, we increase the zoom factor
+        if dt < 0.12:
+            # increase the zoom factor by 50% but clamp it to a maximum of 0.35
+            self.current_zoom_factor = min(self.current_zoom_factor * 1.5, 0.35)
+        else:
+            # factor reset
+            self.current_zoom_factor = 0.03
+
+        style = self.plotter.iren.interactor.GetInteractorStyle()
+        if style is not None:
+            style.SetMouseWheelMotionFactor(self.current_zoom_factor)
