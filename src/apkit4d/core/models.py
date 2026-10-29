@@ -1,5 +1,5 @@
 """
-Data models and configurations for ApKit4D tracking pipeline.
+Data models and configurations for apkit4d tracking pipeline.
 """
 
 from pydantic import BaseModel, ConfigDict, Field

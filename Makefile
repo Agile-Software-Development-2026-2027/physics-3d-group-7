@@ -1,4 +1,4 @@
-.PHONY: setup test lint format check
+.PHONY: setup test lint format check pre-commit pre-push
 
 setup:
 	uv sync
@@ -19,6 +19,12 @@ pre-commit:
 
 pre-push:
 	uv run pre-commit run --hook-stage pre-push --all-files
+
+gui:
+	uv run python -m legacy.gui
+
+cli:
+	uv run python -m legacy.cli
 
 check: lint test
 
