@@ -126,3 +126,19 @@ class TestViewport:
         viewport.clear()
         viewport.show_volume(make_grid(), reset_camera=False)
         assert "volume" in viewport.plotter.actors
+
+    def test_clamp_too_close(self, viewport):
+        pos = viewport.clamp_camera_position([0, 0, 1], [0, 0, 0], 5.0, 20.0)
+        assert np.allclose(pos, [0, 0, 5])
+
+    def test_clamp_too_far(self, viewport):
+        pos = viewport.clamp_camera_position([0, 0, 100], [0, 0, 0], 5.0, 20.0)
+        assert np.allclose(pos, [0, 0, 20])
+
+    def test_clamp_inside_range(self, viewport):
+        pos = viewport.clamp_camera_position([0, 0, 10], [0, 0, 0], 5.0, 20.0)
+        assert np.allclose(pos, [0, 0, 10])
+
+    def test_clamp_with_distance_equal_to_zero(self, viewport):
+        pos = viewport.clamp_camera_position([0, 0, 10], [0, 0, 10], 5.0, 20.0)
+        assert np.allclose(pos, [0, 0, 10])
