@@ -1,5 +1,8 @@
+import re
 import threading
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import czifile
@@ -28,20 +31,20 @@ class CziInfo:
         dt_source: Source of the time interval.
     """
 
-    path: str  # CZI file path
-    n_t: int  # Time points
-    n_z: int  # Z slices
-    n_y: int  # Image height
-    n_x: int  # Image width
-    n_c: int  # Channels
-    dtype: str  # Pixel data type
+    path: str
+    n_t: int
+    n_z: int
+    n_y: int
+    n_x: int
+    n_c: int
+    dtype: str
 
-    px_size_x: float  # X pixel size (µm)
-    px_size_y: float  # Y pixel size (µm)
-    px_size_z: float  # Z pixel size (µm)
+    px_size_x: float
+    px_size_y: float
+    px_size_z: float
 
-    dt_s: float | None  # Time step (s)
-    dt_source: str  # Time step source (so far always "unknown")
+    dt_s: float | None
+    dt_source: str
 
     @property
     def voxel(self) -> tuple[float, float, float]:
@@ -52,6 +55,24 @@ class CziInfo:
             Voxel size (Z, Y, X) in micrometers.
         """
         return self.px_size_z, self.px_size_y, self.px_size_x
+
+
+def _parse_iso(value: str) -> datetime:
+    """Parse a Zeiss ISO timestamp with seven fractional digits.
+
+    Args:
+        value: Timestamp stored in CZI metadata.
+
+    Returns:
+        Parsed acquisition timestamp.
+    """
+    value = value.strip().rstrip("Z")
+
+    if "." in value:
+        head, fraction = value.split(".")
+        value = f"{head}.{fraction[:6]}"
+
+    return datetime.fromisoformat(value)
 
 
 class CziSource:
@@ -85,10 +106,12 @@ class CziSource:
             scene = self._czi.scenes[0]
             sizes = scene.sizes
 
-            # Reject unsupported raw lightfield data.
-
-            if "H" in sizes:
-                raise ValueError("Unsupported CZI data: H axis detected. Expected a reconstructed 3D volume.")
+            # Reject raw lightfield data without a reconstructed Z axis.
+            if "Z" not in sizes and "H" in sizes:
+                raise ValueError(
+                    "Unsupported CZI data: H axis detected without Z axis. "
+                    "Expected a reconstructed 3D volume."
+                )
 
             # Store axis dimensions for selecting time points and channels.
             self._dims = sizes
@@ -110,10 +133,13 @@ class CziSource:
             # Convert it to micrometers, as expected by CziInfo.
             meters_to_um = 1e6
 
-            # Use 1 µm as a fallback when spatial calibration is missing.
-            default_scale = 1e-6
-
             scales = scene.coord_scales
+
+            # Z calibration must be finite.
+            if not np.isfinite(scales.get("Z", np.nan)):
+                raise ValueError("CZI file is missing valid Z spatial calibration.")
+
+            time_interval, time_source = self._read_dt(sizes.get("T", 1))
 
             self.info = CziInfo(
                 path=str(self.path),
@@ -123,16 +149,122 @@ class CziSource:
                 n_x=sizes["X"],
                 n_c=n_channels,
                 dtype=str(scene.dtype),
-                px_size_x=scales.get("X", default_scale) * meters_to_um,
-                px_size_y=scales.get("Y", default_scale) * meters_to_um,
-                px_size_z=scales.get("Z", default_scale) * meters_to_um,
-                dt_s=None,
-                dt_source="unknown",
+                px_size_x=scales.get("X", np.nan) * meters_to_um,
+                px_size_y=scales.get("Y", np.nan) * meters_to_um,
+                px_size_z=scales["Z"] * meters_to_um,
+                dt_s=time_interval,
+                dt_source=time_source,
             )
 
         except Exception:
             self.close()
             raise
+
+    def _read_dt_increment(self) -> float | None:
+        """Read the fixed time increment from CZI metadata."""
+        try:
+            root = ET.fromstring(self._czi.metadata())
+
+            increment = root.find(".//Information/Image/Dimensions/T/Positions/Interval/Increment")
+
+            if increment is not None and increment.text is not None:
+                dt_s = float(increment.text)
+
+                if dt_s > 0:
+                    return dt_s
+
+        except ET.ParseError, ValueError, TypeError:
+            pass
+
+        return None
+
+    def _read_dt_timestamps(self) -> float | None:
+        """Read the median time interval from the TimeStamps attachment."""
+        try:
+            for attachment in self._czi.attachments():
+                if attachment.attachment_entry.name == "TimeStamps":
+                    timestamps = np.asarray(attachment.data(), dtype=float)
+
+                    if len(timestamps) > 1:
+                        return float(np.median(np.diff(timestamps)))
+
+        except Exception:
+            pass
+
+        return None
+
+    def _read_dt_acquisition(self, n_t: int) -> float | None:
+        """Calculate the time interval from acquisition timestamps.
+
+        Args:
+            n_t: Number of time frames.
+
+        Returns:
+            Average time interval in seconds, if available.
+        """
+        try:
+            acquisition_times = {}
+
+            for subblock in self._czi.subblocks():
+                entry = subblock.directory_entry
+                coordinates = dict(zip(entry.dims, entry.start, strict=True))
+
+                if coordinates.get("Z") != 0:
+                    continue
+
+                if coordinates.get("C", 0) != self.channel:
+                    continue
+
+                t = coordinates.get("T", 0)
+
+                if t not in (0, n_t - 1):
+                    continue
+
+                metadata = subblock.metadata()
+                match = re.search(r"<AcquisitionTime>([^<]+)", metadata)
+
+                if match is not None:
+                    acquisition_times[t] = _parse_iso(match.group(1))
+
+                if len(acquisition_times) == 2:
+                    break
+
+            if len(acquisition_times) == 2:
+                span = (acquisition_times[n_t - 1] - acquisition_times[0]).total_seconds()
+
+                if span > 0:
+                    return span / (n_t - 1)
+
+        except Exception:
+            pass
+
+        return None
+
+    def _read_dt(self, n_t: int) -> tuple[float | None, str]:
+        """Read the time interval between consecutive frames.
+
+        Args:
+            n_t: Number of time frames.
+
+        Returns:
+            Time interval in seconds and its metadata source.
+        """
+        if n_t < 2:
+            return None, "single frame"
+
+        increment = self._read_dt_increment()
+        if increment is not None:
+            return increment, "metadata (T Increment)"
+
+        timestamps = self._read_dt_timestamps()
+        if timestamps is not None:
+            return timestamps, "TimeStamps attachment"
+
+        acquisition = self._read_dt_acquisition(n_t)
+        if acquisition is not None:
+            return acquisition, "AcquisitionTime of volumes"
+
+        return None, "not found"
 
     def read(self, t: int = 0) -> np.ndarray:
         """
