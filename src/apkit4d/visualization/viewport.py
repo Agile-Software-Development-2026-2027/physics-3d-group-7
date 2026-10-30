@@ -35,11 +35,11 @@ class Viewport(QWidget):
         self.min_zoom_dist = 0.0
         self.max_zoom_dist = float("inf")
 
-        # we store the center and bounds 
+        # we store the center and bounds
         self.volume_center: np.ndarray | None = None
         self.volume_bounds: tuple[float, float, float, float, float, float] | None = None
 
-        #they are used in the zoom acceleration function
+        # they are used in the zoom acceleration function
         self.last_zoom_time = 0.0
         self.current_zoom_factor = 0.01
 
@@ -53,8 +53,8 @@ class Viewport(QWidget):
         for event in ("MouseWheelForwardEvent", "MouseWheelBackwardEvent"):
             iren.AddObserver(event, self._update_zoom_acceleration, 10.0)
 
-        # observers for the zoom events with a lower priority than acceleration, so that 
-        # the acceleration is updated first 
+        # observers for the zoom events with a lower priority than acceleration, so that
+        # the acceleration is updated first
         iren.AddObserver("MouseWheelForwardEvent", self._on_mouse_wheel_forward, 5.0)
         iren.AddObserver("MouseWheelBackwardEvent", self._on_mouse_wheel_backward, 5.0)
 
@@ -156,8 +156,8 @@ class Viewport(QWidget):
         """
         point = np.asarray(point, dtype=float)
 
-        # if the bounds are not set, we return the point as it is, 
-        # since we don't have any bounds to clamp 
+        # if the bounds are not set, we return the point as it is,
+        # since we don't have any bounds to clamp
         if bounds is None or len(bounds) != 6:
             return point
 
@@ -255,26 +255,35 @@ class Viewport(QWidget):
         if style is not None:
             style.SetMouseWheelMotionFactor(0.0)
 
-    def compute_local_zoom_step(self, position, focal_point, target_point, volume_center,
-                                direction: int, zoom_factor: float, min_dist, max_dist: float,
-                                bounds=None)->tuple[np.ndarray, np.ndarray]:
+    def compute_local_zoom_step(
+        self,
+        position,
+        focal_point,
+        target_point,
+        volume_center,
+        direction: int,
+        zoom_factor: float,
+        min_dist,
+        max_dist: float,
+        bounds=None,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
-            This function is used to compute the new camera position and focal point
-            for cursor-based zooming, and re-centering zoom out
+        This function is used to compute the new camera position and focal point
+        for cursor-based zooming, and re-centering zoom out
 
-            Parameters:
-                position: the current position of the camera
-                focal_point: the current focal point of the camera
-                target_point: the point under the cursor
-                volume_center: the center of the volume
-                direction: 1 for zoom in, -1 for zoom out
-                zoom_factor: the zoom factor to be applied for the dynamic acceleration
-                min_dist: the minimum distance from the focal point
-                max_dist: the maximum distance from the focal point
-                bounds: optional bounds to clamp the focal point
+        Parameters:
+            position: the current position of the camera
+            focal_point: the current focal point of the camera
+            target_point: the point under the cursor
+            volume_center: the center of the volume
+            direction: 1 for zoom in, -1 for zoom out
+            zoom_factor: the zoom factor to be applied for the dynamic acceleration
+            min_dist: the minimum distance from the focal point
+            max_dist: the maximum distance from the focal point
+            bounds: optional bounds to clamp the focal point
 
-            Returns:
-                tuple containing the new camera position and focal point as numpy arrays
+        Returns:
+            tuple containing the new camera position and focal point as numpy arrays
         """
 
         pos = np.asarray(position, dtype=float)
@@ -289,7 +298,7 @@ class Viewport(QWidget):
             return pos, focal
 
         # the direction vector from the focal point to the camera position (versor)
-        view_dir_from_focal = vec / dist  
+        view_dir_from_focal = vec / dist
 
         # calculate the step based on the zoom factor clamped between a range
         step = float(np.clip(zoom_factor, 0.01, 0.35))
@@ -313,10 +322,7 @@ class Viewport(QWidget):
 
 
             """
-            if dist > 0:
-                effective_alpha = (dist - new_dist) / dist
-            else:
-                effective_alpha = 0.0
+            effective_alpha = (dist - new_dist) / dist if dist > 0 else 0.0
 
             # adjust the focal point
             new_focal = focal + effective_alpha * (target - focal)
@@ -331,10 +337,13 @@ class Viewport(QWidget):
             if np.isfinite(max_dist) and max_dist > min_dist:
                 # global_ref_dist is the distance at which the volume is visible in its entirety
                 global_ref_dist = min_dist + 0.45 * (max_dist - min_dist)
-                #a value between 0 and 1 that represents how close we are to the global view
-                homing_progress = np.clip((new_dist - min_dist) / max(global_ref_dist - min_dist, 1e-6), 0.0, 1.0)
+                # a value between 0 and 1 that represents how close we are to the global view
+                homing_progress = np.clip(
+                    (new_dist - min_dist) / max(global_ref_dist - min_dist, 1e-6), 0.0, 1.0
+                )
                 """
-                    when we are close to the global view we want to move the focal point faster towards the center of the volume
+                    when we are close to the global view we want to move the focal point 
+                    faster towards the center of the volume
                     so we increase the weightbased on the homing progress (how close we are), but we clamp it 
                     so that we don't move too fast neither too slow
                 """
@@ -351,24 +360,23 @@ class Viewport(QWidget):
         # new focal + new distance multiplied by the versor
         new_pos = new_focal + view_dir_from_focal * new_dist
 
-        #clamping just to be sure, i think it could be deleted 
+        # clamping just to be sure, i think it could be deleted
         # but since i'm not sure i'll leave it for now
         new_pos = self.clamp_camera_position(new_pos, new_focal, min_dist, max_dist)
 
         return new_pos, new_focal
 
-
     def _get_cursor_target_3d(self) -> np.ndarray:
         """
-            this function projects the current 2D mouse cursor position onto the 3D plane orthogonal
-            to the camera passing through the current focal point (we take is z), clamped to volume bounds.
+        this function projects the current 2D mouse cursor position onto the 3D plane orthogonal
+        to the camera passing through the current focal point (we take is z), clamped to volume bounds.
 
-            Parameters:
-                None
+        Parameters:
+            None
 
-            Returns:
-                the 3D coordinates of the target point under the cursor, clamped,
-                as a numpy array of shape (3,)
+        Returns:
+            the 3D coordinates of the target point under the cursor, clamped,
+            as a numpy array of shape (3,)
         """
         camera = self.plotter.camera
         focal = np.array(camera.GetFocalPoint(), dtype=float)
@@ -423,7 +431,7 @@ class Viewport(QWidget):
         focal_depth = renderer.GetDisplayPoint()[2]
 
         # now we set the display point to the cursor position with the depth of the focal point,
-        # and we call DisplayToWorld to get the world coordinates of the cursor position at that 
+        # and we call DisplayToWorld to get the world coordinates of the cursor position at that
         # depth, which is the point on the plane orthogonal to the camera passing through the focal point.
         renderer.SetDisplayPoint(float(x), float(y), float(focal_depth))
         renderer.DisplayToWorld()
@@ -433,7 +441,8 @@ class Viewport(QWidget):
         if world_pt[3] == 0.0:
             return focal
 
-        # to get the 3D coordinates of the target point, we divide the first three coordinates by the 4th coordinate
+        # to get the 3D coordinates of the target point, 
+        # we divide the first three coordinates by the 4th coordinate
         target_3d = np.array(world_pt[:3], dtype=float) / world_pt[3]
 
         # clamp the target just in case it is outside bounds
@@ -442,15 +451,14 @@ class Viewport(QWidget):
 
         return target_3d
 
-
     def _apply_wheel_zoom(self, direction: int):
         """
-            this function executes a single zoom step toward the cursor.
+        this function executes a single zoom step toward the cursor.
 
-            Parameters:
-                direction: 1 for zoom in, -1 for zoom out
-            Returns:
-                None
+        Parameters:
+            direction: 1 for zoom in, -1 for zoom out
+        Returns:
+            None
         """
         camera = self.plotter.camera
         position = np.array(camera.GetPosition(), dtype=float)
@@ -458,10 +466,7 @@ class Viewport(QWidget):
 
         target_3d = self._get_cursor_target_3d()
 
-        if self.volume_center is not None:
-            vol_center = self.volume_center
-        else:
-            vol_center = focal_point
+        vol_center = self.volume_center if self.volume_center is not None else focal_point
 
         new_pos, new_focal = self.compute_local_zoom_step(
             position=position,
@@ -481,7 +486,6 @@ class Viewport(QWidget):
             camera.SetPosition(*new_pos)
             self.plotter.renderer.ResetCameraClippingRange()
             self.plotter.render()
-
 
     def _on_mouse_wheel_forward(self, obj, event):
         self._apply_wheel_zoom(direction=1)
