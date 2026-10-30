@@ -2,9 +2,12 @@
 Constants shared by the GUI.
 
 Every value that more than one file needs, or that someone may want to change, lives here:
-sizes, texts, shortcuts and object names. The object names are how the tests find the
+sizes, texts, shortcuts, colors and object names. The object names are how the tests find the
 components with `findChild`.
 """
+
+from dataclasses import dataclass
+from enum import Enum
 
 # application
 APP_NAME: str = "ApKit4D"
@@ -25,6 +28,88 @@ COLUMN_SIZES: tuple[int, int, int] = (
 COLUMN_COLLAPSIBLE: tuple[bool, bool, bool] = (True, False, True)  # the 3D view never disappears
 COLUMN_STRETCH: tuple[int, int, int] = (0, 1, 0)  # when the window is resized, only the center changes
 
+# playback
+FRAME_INTERVAL_MS: int = 100  # time between two frames while the recording is playing
+
+
+# themes
+class Theme(Enum):
+    """The looks the application can have."""
+
+    LIGHT = "light"
+    DARK = "dark"
+
+    @property
+    def opposite(self) -> Theme:
+        """The other theme, the one the switch button goes to."""
+        return Theme.DARK if self is Theme.LIGHT else Theme.LIGHT
+
+
+@dataclass(frozen=True)
+class ThemeColors:
+    """Colors of a theme, as hex strings. Each field feeds one role of the Qt palette."""
+
+    window: str
+    window_text: str
+    base: str
+    alternate_base: str
+    text: str
+    placeholder_text: str
+    button: str
+    button_text: str
+    highlight: str
+    highlighted_text: str
+    link: str
+    tool_tip_base: str
+    tool_tip_text: str
+    disabled_text: str
+
+
+LIGHT_COLORS: ThemeColors = ThemeColors(
+    window="#f2f3f5",
+    window_text="#1f2328",
+    base="#ffffff",
+    alternate_base="#f6f8fa",
+    text="#1f2328",
+    placeholder_text="#8b949e",
+    button="#e6e8eb",
+    button_text="#1f2328",
+    highlight="#3b6ea5",
+    highlighted_text="#ffffff",
+    link="#2a5d9f",
+    tool_tip_base="#fbfbfb",
+    tool_tip_text="#1f2328",
+    disabled_text="#9aa1a9",
+)
+
+DARK_COLORS: ThemeColors = ThemeColors(
+    window="#2b2d31",
+    window_text="#dcdfe4",
+    base="#1f2023",
+    alternate_base="#26282c",
+    text="#dcdfe4",
+    placeholder_text="#7d838c",
+    button="#383b41",
+    button_text="#dcdfe4",
+    highlight="#4b7fb8",
+    highlighted_text="#ffffff",
+    link="#6ea8e0",
+    tool_tip_base="#383b41",
+    tool_tip_text="#dcdfe4",
+    disabled_text="#707680",
+)
+
+THEME_COLORS: dict[Theme, ThemeColors] = {Theme.LIGHT: LIGHT_COLORS, Theme.DARK: DARK_COLORS}
+DEFAULT_THEME: Theme = Theme.DARK  # dark theme is the default one because I like it better
+STYLE_NAME: str = "Fusion"  # looks the same on every operating system and follows the palette
+
+# style sheet shared by all the themes: it only uses colors of the current palette
+STYLESHEET: str = """
+QSplitter::handle { background-color: palette(mid); }
+QSplitter::handle:horizontal { width: 4px; }
+QSplitter::handle:hover { background-color: palette(highlight); }
+"""
+
 # texts shown to the user
 TEXT_PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 TEXT_WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
@@ -40,6 +125,7 @@ TEXT_BUTTON_PREVIOUS: str = "<"
 TEXT_BUTTON_PLAY: str = "Play"
 TEXT_BUTTON_PAUSE: str = "Pause"
 TEXT_BUTTON_NEXT: str = ">"
+TEXT_BUTTON_THEME: str = "Switch theme"
 
 # keyboard shortcuts
 SHORTCUT_OPEN: str = "Ctrl+O"
@@ -60,6 +146,4 @@ NAME_PREVIOUS_BUTTON: str = "previous_button"
 NAME_PLAY_BUTTON: str = "play_button"
 NAME_NEXT_BUTTON: str = "next_button"
 NAME_FRAME_SLIDER: str = "frame_slider"
-
-# playback
-FRAME_INTERVAL_MS: int = 100  # time between two frames while the recording is playing
+NAME_THEME_BUTTON: str = "theme_button"
