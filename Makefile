@@ -14,5 +14,11 @@ lint:
 format:
 	uv run ruff format
 
+pre-commit:
+	uv run pre-commit run --all-files
+
+pre-push:
+	uv run pre-commit run --hook-stage pre-push --all-files
+
 check: lint test
 
