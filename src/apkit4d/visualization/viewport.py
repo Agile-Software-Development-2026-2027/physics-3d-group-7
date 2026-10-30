@@ -441,7 +441,7 @@ class Viewport(QWidget):
         if world_pt[3] == 0.0:
             return focal
 
-        # to get the 3D coordinates of the target point, 
+        # to get the 3D coordinates of the target point,
         # we divide the first three coordinates by the 4th coordinate
         target_3d = np.array(world_pt[:3], dtype=float) / world_pt[3]
 
