@@ -97,12 +97,11 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
     Cfr: <https://pydocs.github.io/p/skimage/0.17.2/api/skimage.feature.blob.blob_log.html>
     """
 
-    dz, dy, dx = p.diameter_z_um, p.diameter_xy_um, p.diameter_xy_um
     vz, vy, vx = voxel_dims
     return (
-        max(0.5, (dz / 2) / SQRT_3 / vz),
-        max(0.5, (dy / 2) / SQRT_3 / vy),
-        max(0.5, (dx / 2) / SQRT_3 / vx),
+        max(0.5, (p.diameter_z_um / 2) / SQRT_3 / vz),
+        max(0.5, (p.diameter_xy_um / 2) / SQRT_3 / vy),
+        max(0.5, (p.diameter_xy_um / 2) / SQRT_3 / vx),
     )
 
 
