@@ -377,13 +377,17 @@ def find_blobs(
         )
 
     voxel_volume = float(np.prod(voxel_dim))
+    z = stats["z"][nonzero_blob_indices] + offset[0]
+    y = stats["y"][nonzero_blob_indices] + offset[1]
+    x = stats["x"][nonzero_blob_indices] + offset[2]
+
     df = pd.DataFrame(
         {
             "frame": frame,
             "label": nonzero_blob_indices,
-            "z": stats["z"][nonzero_blob_indices] + offset[0],
-            "y": stats["y"][nonzero_blob_indices] + offset[1],
-            "x": stats["x"][nonzero_blob_indices] + offset[2],
+            "z": z,
+            "y": y,
+            "x": x,
             "volume_um3": stats["n"][nonzero_blob_indices] * voxel_volume,
             "n_voxels": stats["n"][nonzero_blob_indices],
             "z_extent": stats["z_extent"][nonzero_blob_indices],
@@ -391,12 +395,10 @@ def find_blobs(
             "peak": peaks[nonzero_blob_indices],
             "mean_intensity": stats["mean"][nonzero_blob_indices],
             "max_intensity": stats["max"][nonzero_blob_indices],
+            "z_um": z * voxel_dim[0],
+            "y_um": y * voxel_dim[1],
+            "x_um": x * voxel_dim[2],
         }
-    )
-    df["z_um"], df["y_um"], df["x_um"] = (
-        df["z"] * voxel_dim[0],
-        df["y"] * voxel_dim[1],
-        df["x"] * voxel_dim[2],
     )
 
     ok = (df["volume_um3"] >= p.min_volume_um3) & (df["volume_um3"] <= p.max_volume_um3)
