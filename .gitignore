@@ -16,7 +16,11 @@ htmlcov/
 
 # Private materrials
 *.czi
+
 legacy/
 local_tmp/
 .vscode/
 uv.toml
+
+# Runtime artifacts produced by the app
+data/
