@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from src.apkit4d.gui.main_window import MainWindow
+from apkit4d.gui.main_window import MainWindow
 
 
 def run(path: Path | None = None) -> int:
