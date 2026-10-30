@@ -7,7 +7,16 @@ requires-python = ">=3.14"
 dependencies = [
     "czifile>=2026.10.14",
     "dask[array]>=2026.8.0",
+    "click==8.5.0",
+    "clirunner==0.2.0",
     "pyside6-essentials>=6.12.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "pydantic>=2.14.1",
+    "scipy>=1.18.1",
+    "pyvista>=0.49.1",
+    "pyvistaqt>=0.13.1",
 ]
 
 [build-system]
@@ -15,7 +24,7 @@ requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [project.scripts]
-apkit4d = "apkit4d:main"
+apkit4d = "apkit4d.cli.cli:main"
 
 [dependency-groups]
 dev = [
