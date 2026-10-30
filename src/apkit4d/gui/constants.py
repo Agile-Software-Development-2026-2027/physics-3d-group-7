@@ -38,6 +38,7 @@ TEXT_ACTION_OPEN: str = "&Open..."
 TEXT_ACTION_QUIT: str = "&Quit"
 TEXT_BUTTON_PREVIOUS: str = "<"
 TEXT_BUTTON_PLAY: str = "Play"
+TEXT_BUTTON_PAUSE: str = "Pause"
 TEXT_BUTTON_NEXT: str = ">"
 
 # keyboard shortcuts
@@ -59,3 +60,6 @@ NAME_PREVIOUS_BUTTON: str = "previous_button"
 NAME_PLAY_BUTTON: str = "play_button"
 NAME_NEXT_BUTTON: str = "next_button"
 NAME_FRAME_SLIDER: str = "frame_slider"
+
+# playback
+FRAME_INTERVAL_MS: int = 100  # time between two frames while the recording is playing
