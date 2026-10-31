@@ -8,9 +8,7 @@ The 3D view and any other component that draws by itself (graphs, for example) c
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
-from apkit4d.gui import constants
-from apkit4d.gui.constants import Theme
-from apkit4d.gui.theme import apply_theme
+from apkit4d.gui.theme import DEFAULT_THEME, Theme, apply_theme
 
 
 class ThemeController(QObject):
@@ -32,7 +30,7 @@ class ThemeController(QObject):
     def __init__(self, app: QApplication, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._app = app
-        self._theme = constants.DEFAULT_THEME
+        self._theme = DEFAULT_THEME
         apply_theme(app, self._theme)
 
     @property
