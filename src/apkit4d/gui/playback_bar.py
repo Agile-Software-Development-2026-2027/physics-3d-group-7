@@ -9,10 +9,12 @@ It starts disabled, and the controller enables it when there is something to pla
 from PySide6.QtCore import Qt, Signal, SignalInstance
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QVBoxLayout, QWidget
 
+from apkit4d.gui import constants
+
 
 class PlaybackBar(QWidget):
     """
-    Bar with previous, play and next buttons and a frame slider.
+    Bar with a frame slider and, below it, previous, play and next buttons.
 
     The signals and methods use frame indices starting from 0.
 
@@ -30,22 +32,29 @@ class PlaybackBar(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("playback_bar")
+        self.setObjectName(constants.NAME_PLAYBACK_BAR)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setObjectName("frame_slider")
+        self._slider.setObjectName(constants.NAME_FRAME_SLIDER)
         self._slider.valueChanged.connect(self.frame_requested)
 
-        # TODO: in the future we could add more things, like labels telling exactly what frame is being
-        # diplayed
+        self._play_button = self._make_button(
+            constants.NAME_PLAY_BUTTON, constants.TEXT_BUTTON_PLAY, self.play_toggled
+        )
 
         buttons = QHBoxLayout()
-        buttons.addWidget(self._make_button("previous_button", "<", self.previous_requested))
-        buttons.addWidget(self._make_button("play_button", "Play", self.play_toggled))
-        buttons.addWidget(self._make_button("next_button", ">", self.next_requested))
+        buttons.addWidget(
+            self._make_button(
+                constants.NAME_PREVIOUS_BUTTON, constants.TEXT_BUTTON_PREVIOUS, self.previous_requested
+            )
+        )
+        buttons.addWidget(self._play_button)
+        buttons.addWidget(
+            self._make_button(constants.NAME_NEXT_BUTTON, constants.TEXT_BUTTON_NEXT, self.next_requested)
+        )
 
         layout = QVBoxLayout(self)
-        layout.addWidget(self._slider, stretch=1)
+        layout.addWidget(self._slider)
         layout.addLayout(buttons)
 
         self.setEnabled(False)  # nothing to play until a file is open
@@ -71,6 +80,15 @@ class PlaybackBar(QWidget):
         self._slider.blockSignals(True)
         self._slider.setValue(frame)
         self._slider.blockSignals(False)
+
+    def set_playing(self, playing: bool) -> None:
+        """
+        Show the play button as "Pause" while the recording is playing, as "Play" otherwise.
+
+        Args:
+            playing: True while the playback is running.
+        """
+        self._play_button.setText(constants.TEXT_BUTTON_PAUSE if playing else constants.TEXT_BUTTON_PLAY)
 
     @staticmethod
     def _make_button(name: str, text: str, signal: SignalInstance) -> QPushButton:
