@@ -1,5 +1,5 @@
 """
-Data models and configurations for apkit4d tracking pipeline.
+Data models and configurations for apkit4d tracking and batching pipeline.
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -74,4 +74,49 @@ class TrackingConfig(BaseModel):
         default=250.0,
         gt=0.0,
         description="Maximum expected physical swimming speed in micrometers/second.",
+    )
+
+
+class BatchConfig(BaseModel):
+    """Configuration parameters for batch blob detection across frames.
+
+    Attributes:
+        workers: Number of parallel worker processes.
+        chunk_size: Number of frames assigned to each worker task chunk.
+        output_format: Storage table format ('parquet' or 'csv').
+        ram_per_worker_gb: Estimated RAM per worker in gigabytes for memory capping.
+        ram_cap_fraction: Maximum fraction of available RAM allowed for workers.
+
+    RefactorNote:
+        Pydantic BaseModel configuration following the TrackingConfig architecture.
+        Replaces hardcoded worker counts and chunk sizes from legacy `batch.py`.
+        Frozen model ensures immutable settings during batch execution.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    workers: int = Field(
+        default=16,
+        ge=1,
+        description="Number of parallel worker processes to use.",
+    )
+    chunk_size: int = Field(
+        default=10,
+        ge=1,
+        description="Number of frames assigned to each worker task chunk.",
+    )
+    output_format: str = Field(
+        default="parquet",
+        description="Format of the output table ('parquet' or 'csv').",
+    )
+    ram_per_worker_gb: float = Field(
+        default=1.2,
+        gt=0.0,
+        description="Estimated RAM consumption per worker in gigabytes.",
+    )
+    ram_cap_fraction: float = Field(
+        default=0.6,
+        gt=0.0,
+        le=1.0,
+        description="Fraction of available system RAM allowed for worker processes.",
     )

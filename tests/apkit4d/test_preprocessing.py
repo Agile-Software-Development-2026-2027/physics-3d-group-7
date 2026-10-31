@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 
@@ -89,6 +91,19 @@ def test_preproc_params_from_dict():
     assert params.bg_mode == BgMode.WIDE_GAUSSIAN
     assert params.bg_percentile == 38.1
     assert params.bg_sigma_xy_um == 1.0
+
+
+def test_preproc_params_from_dict_string_bg_mode_and_json():
+    """Verify parsing bg_mode from string representation and JSON roundtrip."""
+    params = PreprocParams.from_dict({"bg_mode": "Percentile per slice"})
+    assert params.bg_mode == BgMode.PERCENTILE_PER_SLICE
+
+    dumped = json.dumps(params.to_dict())
+    loaded = json.loads(dumped)
+    assert loaded["bg_mode"] == "Percentile per slice"
+
+    restored = PreprocParams.from_dict(loaded)
+    assert restored.bg_mode == BgMode.PERCENTILE_PER_SLICE
 
 
 def test_preproc_params_from_dict_ignores_extra_keys():
