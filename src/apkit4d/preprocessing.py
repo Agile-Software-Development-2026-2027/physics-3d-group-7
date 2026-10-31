@@ -1,6 +1,8 @@
 """Preprocess a raw 3D image volume.
 
-AU: arbitrary units (?)
+See the `preprocess` function for more details.
+
+Memory copies and allocations are avoided as much as possible during the pipeline.
 """
 
 from dataclasses import asdict, dataclass, fields
@@ -8,6 +10,7 @@ from enum import Enum
 
 import numpy as np
 from scipy import ndimage
+from skimage.exposure import equalize_adapthist
 
 from apkit4d.image import Image
 
@@ -37,6 +40,22 @@ class PreprocParams:
     # Sigma scale for the Gaussing smoothing applied when BgMode.WIDE_GAUSSIAN
     bg_sigma_xy_um: float = 60.0
 
+    # Intensity window for normalization. Narrower -> more contrast
+    lowest_intensity: float = 0.0
+    highest_intensity: float = 1000.0
+
+    logarithmic_compression_enabled: bool = False
+
+    gamma_correction_to_apply: float = 1.0
+
+    clahe_enabled: bool = False
+
+    # Controls noise amplification
+    clahe_clip: float = 0.01
+
+    # Size micrometers of the local neighborhood (tile) used in CLAHE.
+    clahe_kernel_xy_um: float = 150.0
+
     def to_dict(self):
         return asdict(self)
 
@@ -57,7 +76,7 @@ def sigmas_to_voxels(
 
 
 def denoise(
-    vol: Image[np.uint16], p: PreprocParams, voxel_dim: tuple[float, float, float]
+    vol: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
 ) -> Image[np.float32]:
     """Smooths out `vol` via Gaussian filtering. Averages the noise.
 
@@ -70,13 +89,12 @@ def denoise(
         the denoised image
     """
 
-    volume = vol.astype(np.float32, copy=True)
     if p.denoise_xy_scale_um > 0 or p.denoise_z_scale_um > 0:
         sigmas = sigmas_to_voxels(
             (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
         )
-        volume = ndimage.gaussian_filter(volume, sigmas)
-    return volume
+        vol = ndimage.gaussian_filter(vol, sigmas, output=vol)
+    return vol
 
 
 def subtract_background(
@@ -103,11 +121,87 @@ def subtract_background(
 
         case BgMode.PERCENTILE_PER_SLICE:
             bg = np.percentile(smoothed.reshape(smoothed.shape[0], -1), p.bg_percentile, axis=1)
-            smoothed = smoothed - bg[:, None, None]
+            smoothed -= bg[:, None, None]
 
         case BgMode.WIDE_GAUSSIAN:
             # We don't touch the Z axis as it is already elongated and would distort the cell
             sigmas = sigmas_to_voxels((0.0, p.bg_sigma_xy_um, p.bg_sigma_xy_um), voxel_dim)
-            smoothed = smoothed - ndimage.gaussian_filter(smoothed, sigmas)
+            smoothed -= ndimage.gaussian_filter(smoothed, sigmas)
 
     return np.clip(smoothed, 0, None, out=smoothed)  # no allocation
+
+
+def normalize_intensity(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
+    """Normalizes intensities in [0.0, 1.0]"""
+
+    span = max(p.highest_intensity - p.lowest_intensity, 1e-6)
+    volume -= p.lowest_intensity
+    volume /= span
+    return np.clip(volume, 0.0, 1.0, dtype=np.float32, out=volume)
+
+
+def logarithmic_compression(volume: Image[np.float32]) -> Image[np.float32]:
+    """Highlights dim details and dims bright peaks."""
+
+    k = 1000.0
+    np.multiply(volume, k, out=volume)
+    np.log1p(volume, out=volume)
+    volume /= np.log1p(k)
+    return volume
+
+
+def gamma_correction(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
+    """Applies non-linear gamma correction if gamma != 1.0."""
+
+    if p.gamma_correction_to_apply == 1.0:
+        return volume
+    return np.power(volume, p.gamma_correction_to_apply, dtype=np.float32, out=volume)
+
+
+def clahe(
+    volume: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+) -> Image[np.float32]:
+    """Applies Contrast Limited Adaptive Histogram Equalization (CLAHE).
+
+    CLAHE is an algorithm for local contrast enhancement.
+    """
+
+    kz = max(2, volume.shape[0] // 4)  # at least 2 Z slices
+    kxy = max(8, int(round(p.clahe_kernel_xy_um / voxel_dim[1])))
+
+    return equalize_adapthist(volume, kernel_size=(kz, kxy, kxy), clip_limit=float(p.clahe_clip)).astype(
+        np.float32
+    )
+
+
+def preprocess(
+    vol_roi: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+) -> Image[np.float32]:
+    """Applies a preprocessing pipeline on a raw but sliced volume.
+
+    Most of these steps are carried out in arbitrary units (AU).
+
+    Steps:
+        1. smooth out high-frequency noise via Gaussian smoothing;
+        2. remove background given a strategy;
+        3. normalize the intensity of the voxels in the volume so that they are in [0.0, 1.1];
+        4. optional logarithmic compression, to lift dim voxels and dim bright ones;
+        5. adjust the gamma;
+        6. optional CLAHE to maximize local contrast.
+
+    Args:
+        vol_roi: a volume already sliced via region of interest (ROI) selection
+        p: configuration of the preprocessing
+        voxel_dim: size of a voxel in micrometers
+    """
+
+    volume = vol_roi.astype(np.float32, copy=True)
+    out = denoise(volume, p, voxel_dim)
+    out = subtract_background(out, p, voxel_dim)
+    out = normalize_intensity(out, p)
+    if p.logarithmic_compression_enabled:
+        out = logarithmic_compression(out)
+    out = gamma_correction(out, p)
+    if p.clahe_enabled:
+        out = clahe(out, p, voxel_dim)
+    return out

@@ -1,11 +1,21 @@
 import numpy as np
 
-from apkit4d.preprocessing import BgMode, PreprocParams, denoise, subtract_background
+from apkit4d.preprocessing import (
+    BgMode,
+    PreprocParams,
+    clahe,
+    denoise,
+    gamma_correction,
+    logarithmic_compression,
+    normalize_intensity,
+    preprocess,
+    subtract_background,
+)
 
 
 def test_denoise_does_no_filter_when_scales_are_set_to_zero():
     shape = (10, 10, 10)
-    vol = np.full(shape, 1000, dtype=np.uint16)
+    vol = np.full(shape, 1000, dtype=np.float32)
     params = PreprocParams(denoise_xy_scale_um=0.0, denoise_z_scale_um=0.0)
 
     result = denoise(vol, params, (1.0, 1.0, 1.0))
@@ -17,7 +27,7 @@ def test_denoise_does_no_filter_when_scales_are_set_to_zero():
 
 def test_denoise_blurs_sharp_points_with_gaussian_smoothing_when_scales_are_positive():
     shape = (15, 15, 15)
-    vol = np.zeros(shape, dtype=np.uint16)
+    vol = np.zeros(shape, dtype=np.float32)
 
     vol[7, 7, 7] = 60_000  # peak
 
@@ -158,3 +168,170 @@ def test_subtract_background_produces_clips_value_above_zero():
 
     result = subtract_background(vol, p, voxel_dim=(1.0, 1.0, 1.0))
     assert result.min() >= 0.0
+
+
+def test_normalize_intensity():
+    vol = np.array([10.0, 60.0, 110.0], dtype=np.float32)
+    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+
+    result = normalize_intensity(vol, p)
+
+    assert result.dtype == np.float32
+    np.testing.assert_almost_equal(result, np.array([0.0, 0.5, 1.0], dtype=np.float32))
+
+
+def test_normalize_intensity_clips_values_below_lowest_intensity():
+    vol = np.array([-5.0, 0.0, 10.0, 50.0], dtype=np.float32)
+    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+
+    result = normalize_intensity(vol, p)
+
+    assert result[0] == 0.0
+    assert result[1] == 0.0
+    assert result[2] == 0.0
+
+
+def test_normalize_intensity_clips_values_above_highest_intensity():
+    vol = np.array([50.0, 110.0, 150.0, 300.0], dtype=np.float32)
+    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+
+    result = normalize_intensity(vol, p)
+
+    assert result[1] == 1.0
+    assert result[2] == 1.0
+    assert result[3] == 1.0
+
+
+def test_normalize_intensity_zero_span_is_handled():
+    vol = np.array([50.0, 55.0], dtype=np.float32)
+    p = PreprocParams(lowest_intensity=50.0, highest_intensity=50.0)
+
+    result = normalize_intensity(vol, p)
+
+    assert result.dtype == np.float32
+    assert not np.any(np.isnan(result))
+    assert not np.any(np.isinf(result))
+
+
+def test_logarithmic_compression_maps_zero_to_zero_and_one_to_one():
+    vol = np.array([0.0, 1.0], dtype=np.float32)
+    result = logarithmic_compression(vol)
+
+    expected = np.array([0.0, 1.0], dtype=np.float32)
+    np.testing.assert_almost_equal(result, expected)
+
+
+def test_logarithmic_compression_mid_range_are_boosted():
+    vol = np.array([0.1], dtype=np.float32)
+    result = logarithmic_compression(vol)
+
+    # log1p(1000 * 0.1) / log1p(1000) = 4.615 / 6.909 = 0.668
+    assert 0.65 < result[0] < 0.70
+
+
+def test_gamma_correction_does_nothing_if_gamma_is_one():
+    vol = np.array([0.0, 0.5, 1.0], dtype=np.float32)
+
+    result = gamma_correction(vol, PreprocParams(gamma_correction_to_apply=1.0))
+
+    np.testing.assert_array_equal(result, vol)
+    assert result is vol  # same reference
+
+
+def test_gamma_correction_less_than_one_lifts_mid_tones():
+    vol = np.array([0.0, 0.25, 1.0], dtype=np.float32)
+
+    result = gamma_correction(vol, PreprocParams(gamma_correction_to_apply=0.5))
+
+    expected = np.array([0.0, 0.5, 1.0], dtype=np.float32)  # 0.25 ^ 0.5 = 0.5
+    np.testing.assert_almost_equal(result, expected)
+    assert result.dtype == np.float32
+
+
+def test_gamma_correction_greater_than_one_darkens_mid_tones():
+    vol = np.array([0.0, 0.5, 1.0], dtype=np.float32)
+    p = PreprocParams(gamma_correction_to_apply=2.0)
+
+    result = gamma_correction(vol, p)
+
+    expected = np.array([0.0, 0.25, 1.0], dtype=np.float32)  # 0.5 ^ 2.0 = 0.25
+    np.testing.assert_allclose(result, expected, atol=1e-5)
+    assert result.dtype == np.float32
+
+
+def test_clahe():
+    vol = np.random.rand(4, 32, 32).astype(np.float32)  # 4 slices 32x32
+    p = PreprocParams(clahe_clip=0.01, clahe_kernel_xy_um=4.0)
+    voxel_dim = (1.0, 0.5, 0.5)  # kxy = max(8, int(round(4.0 / 0.5))) = 8
+
+    result = clahe(vol, p, voxel_dim)
+
+    assert result.shape == (4, 32, 32)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
+
+
+def test_clahe_clamps_kz_kxy_to_boundaries():
+    vol = np.random.rand(2, 16, 16).astype(np.float32)  # volume.shape[0] // 4 = 0, kz becomes max(2, 0) = 2
+    p = PreprocParams(clahe_clip=0.01, clahe_kernel_xy_um=0.01)  # small kernel, kxy becomse 8
+
+    result = clahe(vol, p, (1.0, 1.0, 1.0))
+
+    assert result.shape == (2, 16, 16)
+    assert result.dtype == np.float32
+    assert not np.any(np.isnan(result))
+
+
+def test_preprocess_pipeline():
+    vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=False,
+        clahe_enabled=False,
+    )
+
+    result = preprocess(vol, p, (1.0, 1.0, 1.0))
+
+    assert result.shape == (2, 10, 16)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
+
+
+def test_preprocess_pipeline_with_clache():
+    vol = np.random.rand(4, 32, 32).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=False,
+        clahe_enabled=True,
+    )
+    voxel_dim = (1.0, 1.0, 1.0)
+
+    result = preprocess(vol, p, voxel_dim)
+
+    assert result.shape == (4, 32, 32)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
+
+
+def test_preprocess_logarithmic_compression():
+    vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=True,
+    )
+
+    result = preprocess(vol, p, (1.0, 1.0, 1.0))
+
+    assert result.shape == (2, 10, 16)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
