@@ -104,7 +104,7 @@ class Viewport(QWidget):
             return
 
         self._volume_grid = grid.copy()
-        
+
         # here we add the volume, that is the blob data
         self.plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume")
 
