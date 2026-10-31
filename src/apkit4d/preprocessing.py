@@ -23,10 +23,10 @@ class PreprocParams:
     """User specified configuration for image preprocessing"""
 
     # Scale of the Gaussian smoothing denoise along the x, y axes
-    denoise_xy_um: float = 0.0
+    denoise_xy_scale_um: float = 0.0
 
     # Scale of the Gaussian smoothing denoise along the z axis (anisotropic)
-    denoise_z_um: float = 0.0
+    denoise_z_scale_um: float = 0.0
 
     # Background removal strategy
     bg_mode: BgMode = BgMode.NONE
@@ -71,8 +71,10 @@ def denoise(
     """
 
     volume = vol.astype(np.float32, copy=True)
-    if p.denoise_xy_um > 0 or p.denoise_z_um > 0:
-        sigmas = sigmas_to_voxels((p.denoise_z_um, p.denoise_xy_um, p.denoise_xy_um), voxel_dim)
+    if p.denoise_xy_scale_um > 0 or p.denoise_z_scale_um > 0:
+        sigmas = sigmas_to_voxels(
+            (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
+        )
         volume = ndimage.gaussian_filter(volume, sigmas)
     return volume
 
