@@ -3,17 +3,16 @@ Time the 3D volume view when zooming in, with the settings we can change.
 
 Run it from the repo folder, no window opens and it takes a few minutes:
     uv run python scripts/zoom_bench.py
-    uv run --with czifile python scripts/zoom_bench.py --czi Experiment-933-Crop-01.czi
+    uv run python scripts/zoom_bench.py --czi Experiment-933-Crop-01.czi
 
 For each volume and setting it prints the milliseconds of:
     still   one frame at full quality, what is drawn when the view stops
     moving  one frame while the mouse drags the view
-    wheel   one mouse wheel step, which draws a moving frame and then a still one
+    wheel   one step of the default VTK wheel zoom, which draws a moving frame and then a still one
 at zoom x1 (whole volume in view), x2, x4 and x8.
 """
 
 import argparse
-import importlib
 import platform
 import statistics
 import time
@@ -22,6 +21,8 @@ from pathlib import Path
 import numpy as np
 import pyvista as pv
 import vtk
+
+from apkit4d.io.czi import CziSource
 
 ZOOMS = (1, 2, 4, 8)
 VOXEL_UM = (18.1, 2.8, 2.8)  # z, y, x of the sample files
@@ -52,16 +53,12 @@ def real_size_volume(seed=0):
 
 
 def czi_volume(path):
-    """Frame 0 of a .czi file with axes T, Z, Y, X."""
-    # optional, not a dependency of the project: uv run --with czifile ...
-    czifile = importlib.import_module("czifile")
-
-    scene = czifile.CziFile(path).scenes[0]
-    if scene.dims != ("T", "Z", "Y", "X"):
-        raise ValueError(f"expected axes T, Z, Y, X, got {scene.dims}")
-    scales = scene.coord_scales  # meters
-    voxel = (scales["Z"] * 1e6, scales["Y"] * 1e6, scales["X"] * 1e6)
-    return path.stem, scene(T=0).asarray(), voxel
+    """Frame 0 of a .czi file, read with the project loader."""
+    source = CziSource(path)
+    try:
+        return path.stem, source.read(0), source.info.voxel
+    finally:
+        source.close()
 
 
 def to_grid(img, voxel):
@@ -71,14 +68,14 @@ def to_grid(img, voxel):
     return grid
 
 
-def add_now(plotter, grid):
-    """What Viewport.show_volume does today: PyVista defaults, the quality is never lowered."""
+def add_default(plotter, grid):
+    """PyVista defaults, the quality is never lowered (what the viewport did before SCRUM-41)."""
     return plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume")
 
 
 def add_adaptive(plotter, grid):
-    """Same, but VTK lowers the quality while the view moves (on in plain VTK, off in PyVista)."""
-    actor = add_now(plotter, grid)
+    """Same, but VTK lowers the quality while the view moves, as the viewport does now."""
+    actor = add_default(plotter, grid)
     actor.mapper.InteractiveAdjustSampleDistancesOn()
     return actor
 
@@ -96,7 +93,7 @@ def add_half_res(plotter, grid):
     return actor
 
 
-SETTINGS = {"now": add_now, "adaptive": add_adaptive, "half res": add_half_res}
+SETTINGS = {"default": add_default, "adaptive": add_adaptive, "half res": add_half_res}
 
 
 def median_ms(win, step, rate, n):
