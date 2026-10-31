@@ -32,6 +32,11 @@ def step(viewport, direction, **overrides):
         bounds=None,
     )
     kwargs.update(overrides)
+
+    for key in ("position", "focal_point", "target_point", "volume_center"):
+        if kwargs[key] is not None:
+            kwargs[key] = np.asarray(kwargs[key], dtype=float)
+
     return viewport.compute_local_zoom_step(**kwargs)
 
 

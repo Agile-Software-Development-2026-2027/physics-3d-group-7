@@ -13,6 +13,9 @@ from pyvistaqt import QtInteractor
 
 """
 
+type Vec3D = np.ndarray[tuple[int], np.dtype[np.float64]]
+type Bounds6D = tuple[float, float, float, float, float, float]
+
 
 class Viewport(QWidget):
     def __init__(self, parent=None):
@@ -31,17 +34,16 @@ class Viewport(QWidget):
         # set up of some viewport things
         self.plotter.set_background("gray")
         self.plotter.add_axes()
-
-        self.min_zoom_dist = 0.0
-        self.max_zoom_dist = float("inf")
+        self.min_zoom_dist: float = 0.0
+        self.max_zoom_dist: float = float("inf")
 
         # we store the center and bounds
-        self.volume_center: np.ndarray | None = None
-        self.volume_bounds: tuple[float, float, float, float, float, float] | None = None
+        self.volume_center: np.ndarray[tuple[int], np.dtype[np.float64]] | None = None
+        self.volume_bounds: Bounds6D | None = None
 
         # they are used in the zoom acceleration function
-        self.last_zoom_time = 0.0
-        self.current_zoom_factor = 0.01
+        self.last_zoom_time: float = 0.0
+        self.current_zoom_factor: float = 0.01
 
         iren = self.plotter.iren.interactor  # vtkRenderWindowInteractor
 
@@ -70,7 +72,7 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
-    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True):
+    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True) -> None:
         """
         This function is used to visualize the 3D data in the viewport.
 
@@ -91,7 +93,7 @@ class Viewport(QWidget):
         self.plotter.add_mesh(grid.outline(), color="white", line_width=2, name="outline")
 
         # store the center and bounds
-        self.volume_center = np.array(grid.center, dtype=float)
+        self.volume_center = np.array(grid.center, dtype=np.float64)
         self.volume_bounds = grid.bounds
 
         # i think setting max and min zoom only the first time we show the volume or when we reset
@@ -109,7 +111,7 @@ class Viewport(QWidget):
         # TODO: here we will need to handle the color map and the opacity
         # but for now we will use default values to try
 
-    def show_blobs(self, poly: pv.PolyData):
+    def show_blobs(self, poly: pv.PolyData) -> None:
         """
         This function is used to visualize the real blobs after the blob detection
 
@@ -142,7 +144,7 @@ class Viewport(QWidget):
         self.plotter.clear()
         self.plotter.reset_camera()
 
-    def clamp_point_to_bounds(self, point, bounds):
+    def clamp_point_to_bounds(self, point: Vec3D, bounds: Bounds6D | None) -> Vec3D:
         """
         This function is used to clamp a point to the 3d bounds of the volume, to ensure that
         the focal point of the zoom is always inside
@@ -154,18 +156,20 @@ class Viewport(QWidget):
         Returns:
             the clamped point
         """
-        point = np.asarray(point, dtype=float)
+        point = np.asarray(point, dtype=np.float64)
 
         # if the bounds are not set, we return the point as it is,
         # since we don't have any bounds to clamp
         if bounds is None or len(bounds) != 6:
             return point
 
-        mins = np.array([bounds[0], bounds[2], bounds[4]], dtype=float)
-        maxs = np.array([bounds[1], bounds[3], bounds[5]], dtype=float)
+        mins = np.array([bounds[0], bounds[2], bounds[4]], dtype=np.float64)
+        maxs = np.array([bounds[1], bounds[3], bounds[5]], dtype=np.float64)
         return np.clip(point, mins, maxs)
 
-    def clamp_camera_position(self, position, focal_point, min_dist, max_dist):
+    def clamp_camera_position(
+        self, position: Vec3D, focal_point: Vec3D, min_dist: float, max_dist: float
+    ) -> Vec3D:
         """
         This function is used to clamp the camera position to a certain distance
         from the focal point.
@@ -185,8 +189,8 @@ class Viewport(QWidget):
         # i'll leave the conversion also here
         # i could also take min dist and max dist from the class but for the same reason
         # i'll leave them as parameters
-        position = np.asarray(position, dtype=float)
-        focal_point = np.asarray(focal_point, dtype=float)
+        position = np.asarray(position, dtype=np.float64)
+        focal_point = np.asarray(focal_point, dtype=np.float64)
 
         vec = position - focal_point
         dist = np.linalg.norm(vec)
@@ -198,7 +202,7 @@ class Viewport(QWidget):
         new_dist = np.clip(dist, min_dist, max_dist)
         return focal_point + (vec / dist) * new_dist
 
-    def _limit_zoom(self, obj, event):
+    def _limit_zoom(self, _obj: object, _event: str) -> None:
         """
         This function is used to limit the zoom of the camera.
 
@@ -207,16 +211,16 @@ class Viewport(QWidget):
         the camera position if needed.
 
         Parameters:
-            obj: the object that called the event
-            event: the event that was called
+            _obj: the object that called the event
+            _event: the event that was called
 
         Returns:
             None
         """
 
         camera = self.plotter.camera
-        position = np.array(camera.GetPosition())
-        focal_point = np.array(camera.GetFocalPoint())
+        position = np.array(camera.GetPosition(), dtype=np.float64)
+        focal_point = np.array(camera.GetFocalPoint(), dtype=np.float64)
 
         new_pos = self.clamp_camera_position(position, focal_point, self.min_zoom_dist, self.max_zoom_dist)
 
@@ -226,15 +230,15 @@ class Viewport(QWidget):
             self.plotter.renderer.ResetCameraClippingRange()
             self.plotter.render()
 
-    def _update_zoom_acceleration(self, obj, event):
+    def _update_zoom_acceleration(self, _obj: object, _event: str) -> None:
         """
         This function is used to update the zoom acceleration of the camera.
         it is called when the user zooms in or out and checks the time between
         the last zoom event and the current zoom event, and updates the zoom factor
 
         Parameters:
-            obj: the object that called the event
-            event: the event that was called
+            _obj: the object that called the event
+            _event: the event that was called
         Returns:
             None
         """
@@ -257,16 +261,16 @@ class Viewport(QWidget):
 
     def compute_local_zoom_step(
         self,
-        position,
-        focal_point,
-        target_point,
-        volume_center,
-        direction: int,
-        zoom_factor: float,
-        min_dist,
-        max_dist: float,
-        bounds=None,
-    ) -> tuple[np.ndarray, np.ndarray]:
+        position: Vec3D,
+        focal_point: Vec3D,
+        target_point: Vec3D,
+        volume_center: Vec3D | None = None,
+        direction: int = 1,
+        zoom_factor: float | None = None,
+        min_dist: float | None = None,
+        max_dist: float | None = None,
+        bounds: Bounds6D | None = None,
+    ) -> tuple[Vec3D, Vec3D]:
         """
         This function is used to compute the new camera position and focal point
         for cursor-based zooming, and re-centering zoom out
@@ -286,16 +290,19 @@ class Viewport(QWidget):
             tuple containing the new camera position and focal point as numpy arrays
         """
 
-        pos = np.asarray(position, dtype=float)
-        focal = np.asarray(focal_point, dtype=float)
-        target = np.asarray(target_point, dtype=float)
         # if the volume center is not provided, we use the focal point as the center
-        center = np.asarray(volume_center, dtype=float) if volume_center is not None else focal.copy()
+        center = volume_center if volume_center is not None else focal_point
 
-        vec = pos - focal
+        # use self values if they are not provided
+        zoom_factor = self.current_zoom_factor if zoom_factor is None else zoom_factor
+        min_dist = self.min_zoom_dist if min_dist is None else min_dist
+        max_dist = self.max_zoom_dist if max_dist is None else max_dist
+        bounds = self.volume_bounds if bounds is None else bounds
+
+        vec = position - focal_point
         dist = float(np.linalg.norm(vec))
         if dist == 0.0:
-            return pos, focal
+            return position, focal_point
 
         # the direction vector from the focal point to the camera position (versor)
         view_dir_from_focal = vec / dist
@@ -325,7 +332,7 @@ class Viewport(QWidget):
             effective_alpha = (dist - new_dist) / dist if dist > 0 else 0.0
 
             # adjust the focal point
-            new_focal = focal + effective_alpha * (target - focal)
+            new_focal = focal_point + effective_alpha * (target_point - focal_point)
             if bounds is not None:
                 new_focal = self.clamp_point_to_bounds(new_focal, bounds)
         else:
@@ -338,8 +345,8 @@ class Viewport(QWidget):
                 # global_ref_dist is the distance at which the volume is visible in its entirety
                 global_ref_dist = min_dist + 0.45 * (max_dist - min_dist)
                 # a value between 0 and 1 that represents how close we are to the global view
-                homing_progress = np.clip(
-                    (new_dist - min_dist) / max(global_ref_dist - min_dist, 1e-6), 0.0, 1.0
+                homing_progress = float(
+                    np.clip((new_dist - min_dist) / max(global_ref_dist - min_dist, 1e-6), 0.0, 1.0)
                 )
                 """
                     when we are close to the global view we want to move the focal point 
@@ -347,12 +354,12 @@ class Viewport(QWidget):
                     so we increase the weightbased on the homing progress (how close we are), but we clamp it 
                     so that we don't move too fast neither too slow
                 """
-                homing_weight = float(np.clip(step + 0.25 * homing_progress, 0.10, 0.65))
+                homing_weight = float(np.clip(step + 0.25 * homing_progress, 0.05, 0.65))
             else:
                 homing_weight = float(np.clip(step * 1.5, 0.10, 0.50))
 
             # adjust the focal point
-            new_focal = focal + homing_weight * (center - focal)
+            new_focal = focal_point + homing_weight * (center - focal_point)
             if bounds is not None:
                 new_focal = self.clamp_point_to_bounds(new_focal, bounds)
 
@@ -366,7 +373,7 @@ class Viewport(QWidget):
 
         return new_pos, new_focal
 
-    def _get_cursor_target_3d(self) -> np.ndarray:
+    def _get_cursor_target_3d(self) -> Vec3D:
         """
         this function projects the current 2D mouse cursor position onto the 3D plane orthogonal
         to the camera passing through the current focal point (we take is z), clamped to volume bounds.
@@ -379,7 +386,7 @@ class Viewport(QWidget):
             as a numpy array of shape (3,)
         """
         camera = self.plotter.camera
-        focal = np.array(camera.GetFocalPoint(), dtype=float)
+        focal = np.array(camera.GetFocalPoint(), dtype=np.float64)
 
         iren = self.plotter.iren.interactor
         if iren is None:
@@ -443,7 +450,7 @@ class Viewport(QWidget):
 
         # to get the 3D coordinates of the target point,
         # we divide the first three coordinates by the 4th coordinate
-        target_3d = np.array(world_pt[:3], dtype=float) / world_pt[3]
+        target_3d = np.array(world_pt[:3], dtype=np.float64) / world_pt[3]
 
         # clamp the target just in case it is outside bounds
         if self.volume_bounds is not None:
@@ -451,7 +458,7 @@ class Viewport(QWidget):
 
         return target_3d
 
-    def _apply_wheel_zoom(self, direction: int):
+    def _apply_wheel_zoom(self, direction: int) -> None:
         """
         this function executes a single zoom step toward the cursor.
 
@@ -461,8 +468,8 @@ class Viewport(QWidget):
             None
         """
         camera = self.plotter.camera
-        position = np.array(camera.GetPosition(), dtype=float)
-        focal_point = np.array(camera.GetFocalPoint(), dtype=float)
+        position = np.array(camera.GetPosition(), dtype=np.float64)
+        focal_point = np.array(camera.GetFocalPoint(), dtype=np.float64)
 
         target_3d = self._get_cursor_target_3d()
 
@@ -474,10 +481,6 @@ class Viewport(QWidget):
             target_point=target_3d,
             volume_center=vol_center,
             direction=direction,
-            zoom_factor=self.current_zoom_factor,
-            min_dist=self.min_zoom_dist,
-            max_dist=self.max_zoom_dist,
-            bounds=self.volume_bounds,
         )
 
         # avoid waste of rendering again as in the limit zoom
@@ -487,8 +490,8 @@ class Viewport(QWidget):
             self.plotter.renderer.ResetCameraClippingRange()
             self.plotter.render()
 
-    def _on_mouse_wheel_forward(self, obj, event):
+    def _on_mouse_wheel_forward(self, _obj: object, _event: str):
         self._apply_wheel_zoom(direction=1)
 
-    def _on_mouse_wheel_backward(self, obj, event):
+    def _on_mouse_wheel_backward(self, _obj: object, _event: str):
         self._apply_wheel_zoom(direction=-1)
