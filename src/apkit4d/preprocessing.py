@@ -104,7 +104,7 @@ def denoise(
         sigmas = sigmas_to_voxels(
             (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
         )
-        vol = ndimage.gaussian_filter(vol, sigmas, output=vol)
+        ndimage.gaussian_filter(vol, sigmas, output=vol)
     return vol
 
 

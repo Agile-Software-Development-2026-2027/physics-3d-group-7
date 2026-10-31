@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 import czifile
-import dask
 import dask.array as da
+import dask.delayed as dl
 import numpy as np
 
 
@@ -304,10 +304,9 @@ class CziSource:
         """
         info = self.info
         shape = (info.n_z, info.n_y, info.n_x)
-
         frames = [
             da.from_delayed(
-                dask.delayed(self.read)(t),
+                dl.delayed(self.read)(t),
                 shape=shape,
                 dtype=info.dtype,
             )
