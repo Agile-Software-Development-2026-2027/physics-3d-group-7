@@ -347,3 +347,54 @@ class TestComputeLocalZoomStep:
         p1, f1 = step(viewport, 1, position=pos, focal_point=focal, target_point=focal, zoom_factor=0.2)
         p2, f2 = step(viewport, -1, position=p1, focal_point=f1, volume_center=f1, zoom_factor=0.2)
         assert dist(p2, f2) == pytest.approx(10.0)
+
+
+class TestWheelRendering:
+    def test_no_automatic_redraw(self, viewport):
+        assert not viewport.plotter.render_timer.isActive()
+
+    def test_volume_quality_is_lowered_while_moving(self, viewport):
+        viewport.show_volume(make_grid())
+        assert viewport.plotter.actors["volume"].mapper.GetInteractiveAdjustSampleDistances() == 1
+
+    def test_wheel_step_uses_moving_quality(self, viewport):
+        viewport.show_volume(make_grid())
+        viewport._apply_wheel_zoom(direction=1)
+        iren = viewport.plotter.iren.interactor
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetDesiredUpdateRate()
+        assert viewport._full_quality_timer.isActive()
+
+    def test_full_quality_when_the_wheel_stops(self, viewport):
+        viewport.show_volume(make_grid())
+        viewport._apply_wheel_zoom(direction=1)
+        assert viewport._full_quality_timer.isSingleShot()
+        # this is what the timer calls when it fires, called directly so the test does not wait
+        viewport._render_full_quality()
+        iren = viewport.plotter.iren.interactor
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetStillUpdateRate()
+
+    def test_no_full_quality_redraw_during_a_drag(self, viewport):
+        viewport.show_volume(make_grid())
+        iren = viewport.plotter.iren.interactor
+        style = iren.GetInteractorStyle()
+        style.StartRotate()
+        viewport._render_full_quality()
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetDesiredUpdateRate()
+        style.EndRotate()
+
+    def test_full_quality_after_close_does_nothing(self, viewport):
+        viewport.plotter.close()
+        viewport._render_full_quality()
+
+    def test_wheel_event_does_not_reach_the_default_zoom(self, viewport):
+        viewport.show_volume(make_grid())
+        iren = viewport.plotter.iren.interactor
+        calls = []
+        # the default VTK zoom listens with priority 0, below our observers
+        iren.AddObserver("MouseWheelForwardEvent", lambda *_: calls.append("forward"), 0.0)
+        iren.AddObserver("MouseWheelBackwardEvent", lambda *_: calls.append("backward"), 0.0)
+        before = viewport.plotter.camera.position
+        iren.MouseWheelForwardEvent()
+        assert viewport.plotter.camera.position != before
+        iren.MouseWheelBackwardEvent()
+        assert calls == []

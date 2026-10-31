@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 import pyvista as pv
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 
@@ -28,7 +29,9 @@ class Viewport(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
         # that's the interactor we were talking about and here we add it to the layout
-        self.plotter = QtInteractor(self)
+        # auto_update is off: by default pyvistaqt redraws the view 5 times a second even when
+        # nothing changes, which keeps a weak GPU always busy. we ask for a redraw when something changes
+        self.plotter = QtInteractor(self, auto_update=False)
         self.main_layout.addWidget(self.plotter.interactor)
 
         # set up of some viewport things
@@ -57,8 +60,19 @@ class Viewport(QWidget):
 
         # observers for the zoom events with a lower priority than acceleration, so that
         # the acceleration is updated first
-        iren.AddObserver("MouseWheelForwardEvent", self._on_mouse_wheel_forward, 5.0)
-        iren.AddObserver("MouseWheelBackwardEvent", self._on_mouse_wheel_backward, 5.0)
+        self._wheel_forward_tag = iren.AddObserver(
+            "MouseWheelForwardEvent", self._on_mouse_wheel_forward, 5.0
+        )
+        self._wheel_backward_tag = iren.AddObserver(
+            "MouseWheelBackwardEvent", self._on_mouse_wheel_backward, 5.0
+        )
+
+        # while the wheel turns the view is drawn at the lower quality VTK uses for moving cameras,
+        # when it stops for a moment it is drawn once at full quality
+        self._full_quality_timer = QTimer(self)
+        self._full_quality_timer.setSingleShot(True)
+        self._full_quality_timer.setInterval(200)
+        self._full_quality_timer.timeout.connect(self._render_full_quality)
 
         for event in (
             "InteractionEvent",
@@ -87,7 +101,11 @@ class Viewport(QWidget):
             return
 
         # here we add the volume, that is the blob data
-        self.plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume")
+        actor = self.plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume", mapper="smart")
+
+        # VTK draws the volume at a lower quality while the camera moves and at full quality when it
+        # stops, but PyVista turns this off, so every frame was drawn at full quality
+        actor.mapper.InteractiveAdjustSampleDistancesOn()
 
         # with this we can see the cube borders
         self.plotter.add_mesh(grid.outline(), color="white", line_width=2, name="outline")
@@ -488,10 +506,56 @@ class Viewport(QWidget):
             camera.SetFocalPoint(*new_focal)
             camera.SetPosition(*new_pos)
             self.plotter.renderer.ResetCameraClippingRange()
-            self.plotter.render()
+            self._render_moving()
+
+    def _render_moving(self) -> None:
+        """
+        This function asks for a redraw of the view at the lower quality used while the camera moves,
+        and starts the timer that redraws it at full quality when the wheel stops.
+        """
+        render_window = self.plotter.render_window
+        if render_window is None:
+            return
+        render_window.SetDesiredUpdateRate(self.plotter.iren.interactor.GetDesiredUpdateRate())
+
+        # update() asks Qt to repaint the widget, and the repaint draws the view once.
+        # render() would draw it now and then the repaint would draw it a second time
+        self.plotter.update()
+        self._full_quality_timer.start()
+
+    def _render_full_quality(self) -> None:
+        """
+        This function redraws the view at full quality, it is called by the timer when the wheel stops.
+        """
+        # the timer can fire after the plotter has been closed
+        render_window = self.plotter.render_window
+        if render_window is None or self.plotter.iren is None:
+            return
+
+        # if the user started dragging the view in the meantime, VTK draws it at full quality itself
+        # when the drag ends (state 0 means no interaction)
+        style = self.plotter.iren.interactor.GetInteractorStyle()
+        if style is not None and style.GetState() != 0:
+            return
+
+        render_window.SetDesiredUpdateRate(self.plotter.iren.interactor.GetStillUpdateRate())
+        self.plotter.update()
+
+    def _stop_wheel_event(self, tag: int) -> None:
+        """
+        This function stops the wheel event after our zoom, so it does not reach the default VTK zoom.
+        with the wheel factor at 0 the default zoom does not move the camera, but it still draws
+        the view two more times, once at full quality.
+
+        Parameters:
+            tag: the tag returned by AddObserver for our wheel observer
+        """
+        self.plotter.iren.interactor.GetCommand(tag).SetAbortFlag(1)
 
     def _on_mouse_wheel_forward(self, _obj: object, _event: str):
         self._apply_wheel_zoom(direction=1)
+        self._stop_wheel_event(self._wheel_forward_tag)
 
     def _on_mouse_wheel_backward(self, _obj: object, _event: str):
         self._apply_wheel_zoom(direction=-1)
+        self._stop_wheel_event(self._wheel_backward_tag)
