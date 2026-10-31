@@ -4,10 +4,7 @@ This module provides the core per-frame blob detection pipeline and worker task 
 executed across parallel processes.
 
 RefactorNote:
-    Modernized replacement for `detect_frame`, `_work`, and `cap_workers`
-    from legacy `batch.py` (lines 37-75).
-    Uses `RegionOfInterest` from `apkit4d.roi` for volume slicing and offset calculation.
-    All single-letter variables replaced with clear (hpefully) names.
+    Refactored `batch.py`.
     And yeah apparently they tought about making some sort of worker system, pretty sus.
 """
 

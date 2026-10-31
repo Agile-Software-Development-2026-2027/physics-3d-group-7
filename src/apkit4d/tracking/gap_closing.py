@@ -1,5 +1,4 @@
-"""
-Multi-frame gap closing and trajectory segment stitching.
+"""Multi-frame gap closing and trajectory segment stitching.
 
 This module bridges temporary missing detections by extrapolating trajectory endpoints
 using estimated tail velocities, finding compatible segment start points across gaps

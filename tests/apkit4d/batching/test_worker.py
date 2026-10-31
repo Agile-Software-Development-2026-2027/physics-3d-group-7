@@ -1,7 +1,12 @@
 """Unit tests for worker-level batching functions, process resource management, and detect_frame.
 
 RefactorNode:
-
+    Monkeypatching (`pytest.MonkeyPatch` / `monkeypatch.setattr`) is used to dynamically
+    replace dependencies, specifically `psutil` in `apkit4d.batching.worker` during test execution.
+    This simulates runtime environments (such as low system memory, large free memory pools,
+    or unexpected system-level exceptions) without altering host machine resources, and ensures
+    all mocks are automatically torn down after each test.
+    This way we can ensure each machine is able to test for different scenarios.
 """
 
 from pathlib import Path
