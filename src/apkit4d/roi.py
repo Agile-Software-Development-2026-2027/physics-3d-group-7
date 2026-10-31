@@ -1,6 +1,12 @@
 from dataclasses import asdict, dataclass, fields
 
 
+def clamp(a: int | None, lo: int, hi: int) -> int:
+    """Clamps optional integer within [lo, hi]"""
+
+    return min(hi, max(lo, lo if a is None else int(a)))
+
+
 @dataclass
 class RegionOfInterest:
     """Start-end coordinates of the region of interest (ROI) along each axis.
@@ -23,27 +29,23 @@ class RegionOfInterest:
         names = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in (d or {}).items() if k in names})
 
+    def slices(self, shape: tuple[int, int, int]) -> tuple[slice, slice, slice]:
+        """Slices (z, y, x) of the ROI, bounds included."""
 
-def clamp(a: int | None, lo: int, hi: int) -> int:
-    """Clamps optional integer within [lo, hi]"""
+        def slice_from(start: int | None, end: int | None, n: int) -> slice:
+            lo = clamp(start, 0, n - 1)
+            hi = n - 1 if end is None else max(lo, min(int(end), n - 1))
+            return slice(lo, hi + 1)
 
-    return min(hi, max(lo, lo if a is None else int(a)))
+        z, y, x = shape
+        return (
+            slice_from(self.z0, self.z1, z),
+            slice_from(self.y0, self.y1, y),
+            slice_from(self.x0, self.x1, x),
+        )
 
+    def offset(self, shape: tuple[int, int, int]) -> tuple[int, int, int]:
+        """Origin of the ROI in voxels (z, y, x)"""
 
-def roi_slices(roi: RegionOfInterest, shape: tuple[int, int, int]) -> tuple[slice, slice, slice]:
-    """Slices (z, y, x) of the ROI, bounds included."""
-
-    def slice_from(start: int | None, end: int | None, n: int) -> slice:
-        lo = clamp(start, 0, n - 1)
-        hi = n - 1 if end is None else max(lo, min(int(end), n - 1))
-        return slice(lo, hi + 1)
-
-    z, y, x = shape
-    return slice_from(roi.z0, roi.z1, z), slice_from(roi.y0, roi.y1, y), slice_from(roi.x0, roi.x1, x)
-
-
-def roi_offset(roi: RegionOfInterest, shape: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Origin of the ROI in voxels (z, y, x)"""
-
-    z, y, x = shape
-    return clamp(roi.z0, 0, z - 1), clamp(roi.y0, 0, y - 1), clamp(roi.x0, 0, x - 1)
+        z, y, x = shape
+        return clamp(self.z0, 0, z - 1), clamp(self.y0, 0, y - 1), clamp(self.x0, 0, x - 1)
