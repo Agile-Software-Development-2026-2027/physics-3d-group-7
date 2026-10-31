@@ -12,12 +12,13 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QSplitter, QWidget
+from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QWidget
 
 from apkit4d.gui.constants import appearance, application, names, shortcuts, texts
 from apkit4d.gui.views.panels.center_panel import CenterPanel
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.gui.views.panels.right_panel import RightPanel
+from apkit4d.gui.views.widgets.grip_splitter import GripSplitter
 from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
 
 
@@ -93,7 +94,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _build_columns(self) -> None:
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter = GripSplitter(Qt.Orientation.Horizontal)
         splitter.setObjectName(names.COLUMNS_SPLITTER)
 
         columns = (self._left, self._center, self._right)
