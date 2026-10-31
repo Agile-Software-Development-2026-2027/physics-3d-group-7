@@ -57,6 +57,8 @@ def denoise(
 
     volume = vol.astype(np.float32, copy=True)
     if p.denoise_xy_scale_um > 0 or p.denoise_z_scale_um > 0:
-        sigmas = sigmas_to_voxels((p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim)
+        sigmas = sigmas_to_voxels(
+            (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
+        )
         volume = ndimage.gaussian_filter(volume, sigmas)
     return volume
