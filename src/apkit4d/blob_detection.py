@@ -208,8 +208,7 @@ def find_seeds(
 def watershed_from_seeds(
     smoothed: Image[np.float32], seeds: np.ndarray[tuple[int, int], np.dtype[np.int64]], p: BlobParams
 ) -> Image[np.int32]:
-    """
-    Flood the Gaussian smoothed image from the seeds.
+    """Flood the Gaussian smoothed image from the seeds.
 
     A watershed algorithm performs a segmentation of the image; it discerns
     the boundaries of the blobs.
