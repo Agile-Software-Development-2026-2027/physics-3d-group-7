@@ -1,6 +1,8 @@
 """Preprocess a raw 3D image volume.
 
 See the `preprocess` function for more details.
+
+Memory copies and allocations are avoided as much as possible during the pipeline.
 """
 
 from dataclasses import asdict, dataclass, fields
@@ -47,7 +49,11 @@ class PreprocParams:
     gamma_correction_to_apply: float = 1.0
 
     clahe_enabled: bool = False
+
+    # Controls noise amplification
     clahe_clip: float = 0.01
+
+    # Size micrometers of the local neighborhood (tile) used in CLAHE.
     clahe_kernel_xy_um: float = 150.0
 
     def to_dict(self):
@@ -87,7 +93,7 @@ def denoise(
         sigmas = sigmas_to_voxels(
             (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
         )
-        vol = ndimage.gaussian_filter(vol, sigmas)
+        vol = ndimage.gaussian_filter(vol, sigmas, output=vol)
     return vol
 
 
@@ -129,14 +135,19 @@ def normalize_intensity(volume: Image[np.float32], p: PreprocParams) -> Image[np
     """Normalizes intensities in [0.0, 1.0]"""
 
     span = max(p.highest_intensity - p.lowest_intensity, 1e-6)
-    return np.clip((volume - p.lowest_intensity) / span, 0.0, 1.0, dtype=np.float32)
+    volume -= p.lowest_intensity
+    volume /= span
+    return np.clip(volume, 0.0, 1.0, dtype=np.float32, out=volume)
 
 
 def logarithmic_compression(volume: Image[np.float32]) -> Image[np.float32]:
     """Highlights dim details and dims bright peaks."""
 
     k = 1000.0
-    return (np.log1p(k * volume) / np.log1p(k)).astype(np.float32)
+    np.multiply(volume, k, out=volume)
+    np.log1p(volume, out=volume)
+    volume /= np.log1p(k)
+    return volume
 
 
 def gamma_correction(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
@@ -144,7 +155,7 @@ def gamma_correction(volume: Image[np.float32], p: PreprocParams) -> Image[np.fl
 
     if p.gamma_correction_to_apply == 1.0:
         return volume
-    return np.power(volume, p.gamma_correction_to_apply, dtype=np.float32)
+    return np.power(volume, p.gamma_correction_to_apply, dtype=np.float32, out=volume)
 
 
 def clahe(
@@ -182,7 +193,6 @@ def preprocess(
         vol_roi: a volume already sliced via region of interest (ROI) selection
         p: configuration of the preprocessing
         voxel_dim: size of a voxel in micrometers
-
     """
 
     volume = vol_roi.astype(np.float32, copy=True)

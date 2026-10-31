@@ -8,6 +8,7 @@ from apkit4d.preprocessing import (
     gamma_correction,
     logarithmic_compression,
     normalize_intensity,
+    preprocess,
     subtract_background,
 )
 
@@ -280,3 +281,57 @@ def test_clahe_clamps_kz_kxy_to_boundaries():
     assert result.shape == (2, 16, 16)
     assert result.dtype == np.float32
     assert not np.any(np.isnan(result))
+
+
+def test_preprocess_pipeline():
+    vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=False,
+        clahe_enabled=False,
+    )
+
+    result = preprocess(vol, p, (1.0, 1.0, 1.0))
+
+    assert result.shape == (2, 10, 16)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
+
+
+def test_preprocess_pipeline_with_clache():
+    vol = np.random.rand(4, 32, 32).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=False,
+        clahe_enabled=True,
+    )
+    voxel_dim = (1.0, 1.0, 1.0)
+
+    result = preprocess(vol, p, voxel_dim)
+
+    assert result.shape == (4, 32, 32)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
+
+
+def test_preprocess_logarithmic_compression():
+    vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
+
+    p = PreprocParams(
+        lowest_intensity=0.0,
+        highest_intensity=100.0,
+        logarithmic_compression_enabled=True,
+    )
+
+    result = preprocess(vol, p, (1.0, 1.0, 1.0))
+
+    assert result.shape == (2, 10, 16)
+    assert result.dtype == np.float32
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
