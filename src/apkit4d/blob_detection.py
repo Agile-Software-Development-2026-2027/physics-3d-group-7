@@ -22,7 +22,7 @@ measurement. In this case, voxels are elongated along the Z axis w.r.t. X and Y.
 """
 
 from dataclasses import asdict, dataclass, fields
-from typing import Final
+from typing import Final, cast
 
 import numpy as np
 import pandas as pd
@@ -142,7 +142,7 @@ def log_response(
     # noise and moves everything to the scale of the sigmas, which are in turn
     # influenced by the radii.
     sigmas = _sigmas(p, voxel_dim)
-    smoothed = ndimage.gaussian_filter(img.astype(np.float32, copy=False), sigmas)
+    smoothed = cast(Image[np.float32], ndimage.gaussian_filter(img.astype(np.float32, copy=False), sigmas))
 
     # Convolution via Gaussian kernel, plus scale-normalization (mul by σ²).
     # The kernel is symmetric so cross-correlation and convolution are the same here.
@@ -150,7 +150,9 @@ def log_response(
     response = np.zeros_like(smoothed)
     kernel = [1.0, -2.0, 1.0]  # second-derivative kernel
     for ax, sigma in enumerate(sigmas):
-        response -= (sigma**2) * ndimage.correlate1d(smoothed, weights=kernel, axis=ax, mode="nearest")
+        response -= (sigma**2) * cast(
+            Image[np.float32], ndimage.correlate1d(smoothed, weights=kernel, axis=ax, mode="nearest")
+        )
     return smoothed, response
 
 
@@ -264,6 +266,8 @@ def max_by_label(
 def stats_by_label(
     labels: Image[np.int32], intensity: Image[np.float32], n_lab: int
 ) -> dict[str, np.ndarray[tuple[int, ...], np.dtype[np.number]]]:
+    # tuple[int, ...], np.dtype[np.number] should become Any, Any
+    # to fix Pylance complaining aroung line 318 (comments will move it)
     """Computes statistics for each region and thus in turn for each blob.
 
     Args:
@@ -401,7 +405,7 @@ def find_blobs(
 
     ok = (df["volume_um3"] >= p.min_volume_um3) & (df["volume_um3"] <= p.max_volume_um3)
     if return_labels:
-        labels[np.isin(labels, df.loc[~ok, "label"].values)] = 0
+        labels[np.isin(labels, df.loc[~ok, "label"].to_numpy())] = 0
     return (
         df.loc[ok, DETECTION_COLUMNS].reset_index(drop=True),
         (labels if return_labels else None),
