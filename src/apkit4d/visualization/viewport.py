@@ -25,7 +25,6 @@ class Viewport(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         self._volume_grid: pv.ImageData | None = None
-        self._volume_actor = None
 
         # Set the margins to 0 so that we use the entire space
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -104,6 +103,8 @@ class Viewport(QWidget):
                 self.plotter.render()
             return
 
+        self._volume_grid = grid.copy()
+        
         # here we add the volume, that is the blob data
         self.plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume")
 
@@ -161,6 +162,7 @@ class Viewport(QWidget):
         self.max_zoom_dist = float("inf")
         self.plotter.clear()
         self.plotter.reset_camera()
+        self._volume_grid = None
 
     def clamp_point_to_bounds(self, point: Vec3D, bounds: Bounds6D | None) -> Vec3D:
         """
