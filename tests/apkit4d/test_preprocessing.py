@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from apkit4d.preprocessing import (
     BgMode,
@@ -10,6 +11,7 @@ from apkit4d.preprocessing import (
     normalize_intensity,
     preprocess,
     subtract_background,
+    suggest_window,
 )
 
 
@@ -335,3 +337,46 @@ def test_preprocess_logarithmic_compression():
     assert result.dtype == np.float32
     assert result.min() >= 0.0
     assert result.max() <= 1.0
+
+
+def test_suggest_window_basic():
+    """Verify that percentiles are correctly calculated on a controlled array."""
+    v = np.arange(1, 101, dtype=np.float32).reshape(10, 10)
+
+    lo, hi = suggest_window(v, 10.0, 90.0, ignore_zeros=False)
+
+    # 10th and 90th percentiles of 1..100 should be close to 10.9 and 90.1
+    assert 10.0 <= lo <= 12.0
+    assert 89.0 <= hi <= 91.0
+
+
+def test_suggest_window_ignore_zeros_filters_them_out():
+    vol = np.array([0, 0, 0, 0, 0, 10, 20, 30, 40, 50], dtype=np.float32)
+
+    lo_filtered, hi_filtered = suggest_window(vol, 0.0, 100.0, ignore_zeros=True)
+    assert lo_filtered == 10.0
+    assert hi_filtered == 50.0
+
+    lo_unfiltered, hi_unfiltered = suggest_window(vol, 0.0, 100.0, ignore_zeros=False)
+    assert lo_unfiltered == 0.0
+
+
+def test_suggest_window_handles_empty_arr():
+    assert suggest_window(np.zeros((5, 5), dtype=np.float32), ignore_zeros=True) == (0.0, 1.0)
+
+
+def test_suggest_window_handles_constant_non_zero_arrays():
+    vol = np.full((10, 10), 42.0, dtype=np.float32)
+
+    lo, hi = suggest_window(vol, 50.0, 50.0, ignore_zeros=False)
+
+    assert lo == 42.0
+    assert hi == pytest.approx(42.0 + 1e-3)  # max(hi, lo + 1e-3)
+    assert hi > lo
+
+
+def test_suggest_window_large_array_subsampling():
+    vol = np.random.default_rng(42).uniform(1.0, 100.0, size=(2_005_000,)).astype(np.float32)
+
+    lo, hi = suggest_window(vol, 5.0, 95.0, ignore_zeros=False)
+    assert lo < hi

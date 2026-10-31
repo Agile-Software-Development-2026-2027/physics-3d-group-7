@@ -1,8 +1,11 @@
 """Preprocess a raw 3D image volume.
 
-See the `preprocess` function for more details.
+This happens after ROI slicing and before blob detection.
 
-Memory copies and allocations are avoided as much as possible during the pipeline.
+See the `preprocess` function for more details on the pipeline.
+
+Memory copies and allocations are avoided as much as possible during the
+preprocessing sub-pipeline.
 """
 
 from dataclasses import asdict, dataclass, fields
@@ -46,6 +49,7 @@ class PreprocParams:
 
     logarithmic_compression_enabled: bool = False
 
+    # If equal to 1.0, has no effect
     gamma_correction_to_apply: float = 1.0
 
     clahe_enabled: bool = False
@@ -193,6 +197,9 @@ def preprocess(
         vol_roi: a volume already sliced via region of interest (ROI) selection
         p: configuration of the preprocessing
         voxel_dim: size of a voxel in micrometers
+
+    Returns:
+        the preprocessed image withe the intensity values in [0, 1]
     """
 
     volume = vol_roi.astype(np.float32, copy=True)
@@ -205,3 +212,37 @@ def preprocess(
     if p.clahe_enabled:
         out = clahe(out, p, voxel_dim)
     return out
+
+
+def suggest_window(
+    volume: Image[np.float32],
+    low_percentile: float = 1.0,
+    high_percentile: float = 99.9,
+    ignore_zeros: bool = True,
+) -> tuple[float, float]:
+    """Proposes [lowest_intensity, highest_intensity] from the percentiles of a volume.
+    This is the intensity windows used for normalization. Its breadth controls contrast.
+
+    I dati lightfield sono zero-inflated (mediana 0 su interi volumi): con gli zeri
+    dentro, qualunque percentile basso vale 0 e quelli alti sono spostati in basso.
+
+    Args:
+        volume: raw image volume
+        low_percentile: bottom of the intensity scale
+        high_percentile: top of the itnensity scale
+        ignore_zeroes: whether to ignore the nil voxels in `volume`
+
+    Returns:
+        the range (lowest_intensity, highest_intensity) in arbitrary units
+    """
+
+    x = volume[volume > 0] if ignore_zeros else volume.ravel()
+    if x.size == 0:
+        return 0.0, 1.0
+
+    # percentile estimate on a subsample if x is too big
+    if x.size > 2_000_000:
+        x = np.random.default_rng(0).choice(x, 2_000_000, replace=False)
+
+    lo, hi = np.percentile(x, [low_percentile, high_percentile])
+    return lo, max(hi, lo + 1e-3)
