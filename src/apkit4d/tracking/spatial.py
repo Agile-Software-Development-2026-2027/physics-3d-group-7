@@ -13,7 +13,6 @@ RefactorNote:
     I will avoid addinmore comments
 """
 
-from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
@@ -31,7 +30,7 @@ class SpatialIndex(Protocol):
     Out hate for python interfaces is storng but love for interfaces is storngest.
     """
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """Query indices of stored points within a given radius from each query point.
 
         Args:
@@ -39,7 +38,7 @@ class SpatialIndex(Protocol):
             radius: Search radius distance threshold.
 
         Returns:
-            A sequence of length M, where element i is a sequence of integer indices
+            A list of length M, where element i is a list of integer indices
             of points within radius from query_points[i].
         """
         ...
@@ -60,7 +59,7 @@ class KDTreeSpatialIndex:
         self._points = np.asarray(points, dtype=np.float32)
         self._tree = cKDTree(self._points) if len(self._points) > 0 else None
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """
         Find neighbor indices within radius.
 
@@ -93,7 +92,7 @@ class GPUAcceleratedSpatialIndex:
         """
         raise NotImplementedError("GPUAcceleratedSpatialIndex is not yet implemented.")
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """
         Query neighbor indices within radius on GPU.
 
