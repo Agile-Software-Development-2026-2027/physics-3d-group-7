@@ -6,7 +6,7 @@ from apkit4d.preprocessing import PreprocParams, denoise
 def test_denoise_does_no_filter_when_scales_are_set_to_zero():
     shape = (10, 10, 10)
     vol = np.full(shape, 1000, dtype=np.uint16)
-    params = PreprocParams(denoise_xy_um=0.0, denoise_z_um=0.0)
+    params = PreprocParams(denoise_xy_scale_um=0.0, denoise_z_scale_um=0.0)
 
     result = denoise(vol, params, (1.0, 1.0, 1.0))
 
@@ -21,7 +21,7 @@ def test_denoise_blurs_sharp_points_with_gaussian_smoothing_when_scales_are_posi
 
     vol[7, 7, 7] = 60_000  # peak
 
-    params = PreprocParams(denoise_xy_um=10.5, denoise_z_um=10.5)
+    params = PreprocParams(denoise_xy_scale_um=10.5, denoise_z_scale_um=10.5)
 
     result = denoise(vol, params, (1.0, 1.0, 1.0))
 
@@ -36,48 +36,48 @@ def test_denoise_blurs_sharp_points_with_gaussian_smoothing_when_scales_are_posi
 
 def test_preproc_params_defaults_crystallized():
     params = PreprocParams()
-    assert params.denoise_xy_um == 0.0
-    assert params.denoise_z_um == 0.0
+    assert params.denoise_xy_scale_um == 0.0
+    assert params.denoise_z_scale_um == 0.0
 
 
 def test_preproc_params_to_dict():
-    params = PreprocParams(denoise_xy_um=1.5, denoise_z_um=3.0)
+    params = PreprocParams(denoise_xy_scale_um=1.5, denoise_z_scale_um=3.0)
     d = params.to_dict()
 
     assert isinstance(d, dict)
-    assert d["denoise_xy_um"] == 1.5
-    assert d["denoise_z_um"] == 3.0
+    assert d["denoise_xy_scale_um"] == 1.5
+    assert d["denoise_z_scale_um"] == 3.0
 
 
 def test_preproc_params_from_dict():
-    params = PreprocParams.from_dict({"denoise_xy_um": 2.0, "denoise_z_um": 4.5})
+    params = PreprocParams.from_dict({"denoise_xy_scale_um": 2.0, "denoise_z_scale_um": 4.5})
 
-    assert params.denoise_xy_um == 2.0
-    assert params.denoise_z_um == 4.5
+    assert params.denoise_xy_scale_um == 2.0
+    assert params.denoise_z_scale_um == 4.5
 
 
 def test_preproc_params_from_dict_ignores_extra_keys():
     params = PreprocParams.from_dict(
         {
-            "denoise_xy_um": 1.0,
+            "denoise_xy_scale_um": 1.0,
             "lalalalal": 1324,
             "bububububu": "test",
         }
     )
 
-    assert params.denoise_xy_um == 1.0
+    assert params.denoise_xy_scale_um == 1.0
     assert not hasattr(params, "unknown_parameter")
 
 
 def test_preproc_params_from_dict_handles_empty():
     params = PreprocParams.from_dict({})
 
-    assert params.denoise_xy_um == 0.0  # default
-    assert params.denoise_z_um == 0.0
+    assert params.denoise_xy_scale_um == 0.0  # default
+    assert params.denoise_z_scale_um == 0.0
 
 
 def test_preproc_params_from_dict_handles_none():
     params = PreprocParams.from_dict(None)
 
-    assert params.denoise_xy_um == 0.0  # defaults
-    assert params.denoise_z_um == 0.0
+    assert params.denoise_xy_scale_um == 0.0  # defaults
+    assert params.denoise_z_scale_um == 0.0
