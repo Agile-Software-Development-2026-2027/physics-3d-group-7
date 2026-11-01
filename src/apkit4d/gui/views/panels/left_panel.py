@@ -5,8 +5,8 @@ Left column of the main window.
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QPushButton
 
-from apkit4d.gui import constants
-from apkit4d.gui.side_panel import SidePanel
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.views.panels.side_panel import SidePanel
 
 
 class LeftPanel(SidePanel):
@@ -20,8 +20,8 @@ class LeftPanel(SidePanel):
     theme_switch_requested = Signal()
 
     def __init__(self) -> None:
-        super().__init__(constants.NAME_LEFT_PANEL)
-        theme_button = QPushButton(constants.TEXT_BUTTON_THEME)
-        theme_button.setObjectName(constants.NAME_THEME_BUTTON)
+        super().__init__(names.LEFT_PANEL)
+        theme_button = QPushButton(texts.BUTTON_THEME)
+        theme_button.setObjectName(names.THEME_BUTTON)
         theme_button.clicked.connect(self.theme_switch_requested)
         self.add_control(theme_button)
