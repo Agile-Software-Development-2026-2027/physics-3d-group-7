@@ -1,5 +1,4 @@
-"""
-Linear Assignment Problem (LAP) solvers for bipartite tracking graphs.
+"""Linear Assignment Problem (LAP) solvers for bipartite tracking graphs.
 
 This module decomposes large bipartite candidate matchings into connected components
 using sparse graph traversal. Trivial 1-to-1 components are solved immediately, while

@@ -1,5 +1,4 @@
-"""
-Frame-to-frame Linear Assignment Problem (LAP) particle tracking.
+"""Frame-to-frame Linear Assignment Problem (LAP) particle tracking.
 
 This module matches active trajectories to candidate detections in consecutive time frames
 using minimum-cost bipartite matching, Monte Carlo prediction perturbation stability
