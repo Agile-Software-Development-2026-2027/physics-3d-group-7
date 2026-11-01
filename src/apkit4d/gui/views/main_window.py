@@ -1,5 +1,5 @@
 """
-Main window of the ApKit4D desktop application.
+Main window of the apkit4d desktop application.
 
 The window has three columns, resizable with a splitter: controls on the left, the 3D view with its
 playback bar in the center, controls on the right. It only lets the user choose a .czi file and
