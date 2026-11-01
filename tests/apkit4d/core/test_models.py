@@ -8,7 +8,7 @@ I remembered teh final `.` here :) not gonna happen often.
 import pytest
 from pydantic import ValidationError
 
-from apkit4d.core.models import TrackingConfig
+from apkit4d.core.models import BatchConfig, TrackingConfig
 
 
 def test_tracking_config_defaults() -> None:
@@ -77,3 +77,62 @@ def test_tracking_config_frozen() -> None:
     cfg = TrackingConfig()
     with pytest.raises(ValidationError):
         cfg.max_dist_um = 30.0
+
+
+def test_batch_config_defaults() -> None:
+    """
+    Verify default parameters of BatchConfig.
+    """
+    cfg = BatchConfig()
+    assert cfg.workers == 16
+    assert cfg.chunk_size == 10
+    assert cfg.output_format == "parquet"
+    assert cfg.ram_per_worker_gb == 1.2
+    assert cfg.ram_cap_fraction == 0.6
+
+
+def test_batch_config_custom_values() -> None:
+    """
+    Verify custom initialization of BatchConfig.
+    """
+    cfg = BatchConfig(
+        workers=8,
+        chunk_size=5,
+        output_format="csv",
+        ram_per_worker_gb=2.0,
+        ram_cap_fraction=0.8,
+    )
+    assert cfg.workers == 8
+    assert cfg.chunk_size == 5
+    assert cfg.output_format == "csv"
+    assert cfg.ram_per_worker_gb == 2.0
+    assert cfg.ram_cap_fraction == 0.8
+
+
+def test_batch_config_validation_errors() -> None:
+    """
+    Verify constraint validation on BatchConfig.
+    """
+    with pytest.raises(ValidationError):
+        BatchConfig(workers=0)
+
+    with pytest.raises(ValidationError):
+        BatchConfig(chunk_size=0)
+
+    with pytest.raises(ValidationError):
+        BatchConfig(ram_per_worker_gb=0.0)
+
+    with pytest.raises(ValidationError):
+        BatchConfig(ram_cap_fraction=-0.1)
+
+    with pytest.raises(ValidationError):
+        BatchConfig(ram_cap_fraction=1.5)
+
+
+def test_batch_config_frozen() -> None:
+    """
+    Verify that BatchConfig instances are immutable.
+    """
+    cfg = BatchConfig()
+    with pytest.raises(ValidationError):
+        cfg.workers = 4

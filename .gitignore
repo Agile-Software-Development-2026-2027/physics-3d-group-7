@@ -24,3 +24,4 @@ uv.toml
 
 # Runtime artifacts produced by the app
 data/
+.vscode/settings.json
