@@ -1,12 +1,12 @@
 """
-Central column of the main window: the 3D view on top, the playback bar at the bottom.
+Center column of the main window: the 3D view on top, the playback bar at the bottom.
 """
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from apkit4d.gui import constants
-from apkit4d.gui.playback_bar import PlaybackBar
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
 
 
 class CenterPanel(QWidget):
@@ -18,10 +18,10 @@ class CenterPanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName(constants.NAME_CENTRAL_COLUMN)
+        self.setObjectName(names.CENTER_PANEL)
 
-        placeholder = QLabel(constants.TEXT_PLACEHOLDER)
-        placeholder.setObjectName(constants.NAME_CENTRAL_PLACEHOLDER)
+        placeholder = QLabel(texts.PLACEHOLDER)
+        placeholder.setObjectName(names.CENTER_PLACEHOLDER)
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._view: QWidget = placeholder
         self._playback_bar = PlaybackBar()

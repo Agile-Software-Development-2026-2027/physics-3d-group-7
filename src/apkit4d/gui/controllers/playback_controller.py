@@ -1,27 +1,27 @@
 """
 Controller of the playback: moves through the frames of a recording.
 
-It connects the playback bar (view) to the position in the recording. It knows how many frames
-there are only because someone tells it with `set_frame_count`, and announces every change of
-the current frame with `frame_changed`: the 3D view connects to that signal to show the frame.
+It connects the playback bar (view) to the position in the recording. It knows how many frames there
+are only because someone tells it with `set_frame_count`, and announces every change of the current
+frame with `frame_changed`: the 3D view connects to that signal to show the frame.
 """
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from apkit4d.gui import constants
-from apkit4d.gui.playback_bar import PlaybackBar
+from apkit4d.gui.constants import playback
+from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
 
 
 class PlaybackController(QObject):
     """
     Keeps the current frame and moves it when the user or the playback asks for it.
 
-    Frames are indices starting from 0. Requests outside the recording are limited to
-    the first or the last frame.
+    Frames are indices starting from 0. Requests outside the recording are limited to the first or
+    the last frame.
 
     Args:
         bar: The playback bar to control.
-        parent: Qt parent, so the controller lives as long as the bar.
+        parent: Qt parent, so the controller lives as long as its owner.
 
     Signals:
         frame_changed: Emitted with the new frame every time the current frame changes.
@@ -36,7 +36,7 @@ class PlaybackController(QObject):
         self._frame_count = 0
 
         self._timer = QTimer(self)
-        self._timer.setInterval(constants.FRAME_INTERVAL_MS)
+        self._timer.setInterval(playback.FRAME_INTERVAL_MS)
         self._timer.timeout.connect(self._on_tick)
 
         bar.frame_requested.connect(self.go_to_frame)
@@ -63,8 +63,8 @@ class PlaybackController(QObject):
         """
         Tell the controller how many frames the recording has.
 
-        The slider range follows, the current frame is brought back inside the new range,
-        and the playback stops if there is nothing left to play.
+        The slider range follows, the current frame is brought back inside the new range, and the
+        playback stops if there is nothing left to play.
 
         Args:
             count: Number of frames, negative values are treated as 0.
