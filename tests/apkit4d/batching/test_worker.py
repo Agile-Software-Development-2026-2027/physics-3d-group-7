@@ -246,6 +246,55 @@ class TestDetectFrame:
             assert len(results) == 1
             mock_source.close.assert_called_once()
 
+    def test_detect_frames_worker_with_dataclasses(self) -> None:
+        """Verify _detect_frames_worker accepts direct PreprocParams and BlobParams objects."""
+        mock_source = MagicMock(spec=CziSource)
+        mock_source.info = CziInfo(
+            path="dummy.czi",
+            n_t=2,
+            n_z=5,
+            n_y=10,
+            n_x=10,
+            n_c=1,
+            dtype="uint16",
+            px_size_x=1.0,
+            px_size_y=1.0,
+            px_size_z=1.0,
+            dt_s=0.5,
+            dt_source="test",
+        )
+        mock_source.read.return_value = np.zeros((5, 10, 10), dtype=np.uint16)
+        pp = PreprocParams(denoise_xy_scale_um=1.0)
+        bp = BlobParams(threshold=0.2)
+        roi = RegionOfInterest(x0=0, x1=5)
+
+        with patch("apkit4d.batching.worker.CziSource", return_value=mock_source):
+            results = _detect_frames_worker(
+                czi_path="dummy.czi",
+                channel=0,
+                pp=pp,
+                bp=bp,
+                frames=[0],
+                roi=roi,
+            )
+            assert len(results) == 1
+            mock_source.close.assert_called_once()
+
+    def test_parameter_dataclasses_pickle_roundtrip(self) -> None:
+        """Verify parameter dataclasses are natively picklable across ProcessPoolExecutor boundaries."""
+        import pickle
+
+        pp = PreprocParams(denoise_xy_scale_um=1.5, denoise_z_scale_um=2.0)
+        bp = BlobParams(threshold=0.15, min_volume_um3=100.0)
+        roi = RegionOfInterest(z0=2, z1=10, y0=5, y1=25, x0=4, x1=30)
+
+        payload = pickle.dumps((pp, bp, roi))
+        pp_out, bp_out, roi_out = pickle.loads(payload)
+
+        assert pp_out == pp
+        assert bp_out == bp
+        assert roi_out == roi
+
     def test_batching_package_imported(self) -> None:
         """Verify apkit4d.batching package is importable."""
         assert batching_pkg.__doc__ is not None

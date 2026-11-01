@@ -17,7 +17,7 @@ import psutil
 
 from apkit4d.blob_detection import BlobParams, find_blobs
 from apkit4d.io.czi import CziSource
-from apkit4d.preprocessing import PreprocParams, denoise
+from apkit4d.preprocessing import PreprocParams, preprocess
 from apkit4d.roi import RegionOfInterest
 
 # Estimated memory peak per worker process on a typical 3D volume (in gigabytes)
@@ -105,9 +105,8 @@ def detect_frame(
             x1=getattr(roi, "x1", None),
         )
 
-    vol_shape = (volume.shape[0], volume.shape[1], volume.shape[2])
-    slices = roi_obj.slices(vol_shape)
-    offset = roi_obj.offset(vol_shape)
+    slices = roi_obj.slices(volume.shape)
+    offset = roi_obj.offset(volume.shape)
     vol_roi = volume[slices]
 
     preproc_obj: PreprocParams
@@ -118,7 +117,7 @@ def detect_frame(
     else:
         preproc_obj = pp
 
-    preprocessed_img = denoise(vol_roi, preproc_obj, src.info.voxel)
+    preprocessed_img = preprocess(vol_roi, preproc_obj, src.info.voxel)
 
     blob_obj: BlobParams
     if bp is None:
@@ -148,38 +147,73 @@ def detect_frame(
 def _detect_frames_worker(
     czi_path: str | Path,
     channel: int,
-    pp_dict: dict[str, Any] | None,
-    bp_dict: dict[str, Any] | None,
-    frames: list[int],
+    pp: PreprocParams | dict[str, Any] | None = None,
+    bp: BlobParams | dict[str, Any] | None = None,
+    frames: list[int] | None = None,
     roi: RegionOfInterest | dict[str, Any] | Any | None = None,
+    *,
+    pp_dict: dict[str, Any] | None = None,
+    bp_dict: dict[str, Any] | None = None,
 ) -> list[pd.DataFrame]:
     """Execute blob detection across a chunk of frames inside a worker process.
 
     Each worker instantiates its own CziSource since native file handles cannot be
-    safely shared across processes.
+    safely shared across processes. Parameter dataclasses (PreprocParams, BlobParams,
+    RegionOfInterest) are pickled directly across processes by ProcessPoolExecutor.
 
     Args:
         czi_path: Path to CZI microscopy acquisition file.
         channel: Channel index to process.
-        pp_dict: Serialized preprocessing configuration dict.
-        bp_dict: Serialized blob detection configuration dict.
+        pp: Preprocessing configuration (PreprocParams or dict).
+        bp: Blob detection configuration (BlobParams or dict).
         frames: List of frame indices to process.
-        roi: Optional RegionOfInterest bounds specification.
+        roi: Optional RegionOfInterest bounds specification or dict.
+        pp_dict: Backward-compatible alias for pp.
+        bp_dict: Backward-compatible alias for bp.
 
     Returns:
         List of detection DataFrames, one per frame.
 
     RefactorNote:
         Refactored from `batch.py`, function `_work`.
-        This function existfor mostly because we're porting nearly 1-1 legacy code,the worker system may
-        change in the future.
+        Accepts direct dataclasses natively pickled by ProcessPoolExecutor while
+        retaining dict/duck-typing compatibility.
     """
+    if pp is None and pp_dict is not None:
+        pp = pp_dict
+    if bp is None and bp_dict is not None:
+        bp = bp_dict
+
+    preproc_params: PreprocParams
+    if isinstance(pp, PreprocParams):
+        preproc_params = pp
+    elif isinstance(pp, dict):
+        preproc_params = PreprocParams.from_dict(pp)
+    else:
+        preproc_params = PreprocParams()
+
+    blob_params: BlobParams
+    if isinstance(bp, BlobParams):
+        blob_params = bp
+    elif isinstance(bp, dict):
+        blob_params = BlobParams.from_dict(bp)
+    else:
+        blob_params = BlobParams()
+
+    roi_params: RegionOfInterest | dict[str, Any] | Any | None
+    if isinstance(roi, RegionOfInterest) or roi is None:
+        roi_params = roi
+    elif isinstance(roi, dict):
+        roi_params = RegionOfInterest.from_dict(roi)
+    else:
+        roi_params = roi
+
+    frame_list = frames if frames is not None else []
     src = CziSource(Path(czi_path), channel=channel)
     try:
-        preproc_params = PreprocParams.from_dict(pp_dict) if pp_dict is not None else PreprocParams()
-        blob_params = BlobParams.from_dict(bp_dict) if bp_dict is not None else BlobParams()
         return [
-            detect_frame(src, frame_idx, pp=preproc_params, bp=blob_params, roi=roi) for frame_idx in frames
+            detect_frame(src, frame_idx, pp=preproc_params, bp=blob_params, roi=roi_params)
+            for frame_idx in frame_list
         ]
     finally:
         src.close()
