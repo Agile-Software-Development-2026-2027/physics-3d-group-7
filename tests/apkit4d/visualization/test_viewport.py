@@ -2,7 +2,12 @@ import numpy as np
 import pytest
 import pyvista as pv
 
-from apkit4d.visualization.viewport import FAST_SCROLL_THRESHOLD, FULL_QUALITY_DELAY, Viewport
+from apkit4d.visualization.viewport import (
+    FAST_SCROLL_THRESHOLD,
+    FULL_QUALITY_DELAY,
+    MOVING_IMAGE_SAMPLE_DISTANCE,
+    Viewport,
+)
 
 
 def make_grid(n: int = 5) -> pv.ImageData:
@@ -353,9 +358,27 @@ class TestWheelRendering:
     def test_no_automatic_redraw(self, viewport):
         assert not viewport.plotter.render_timer.isActive()
 
-    def test_volume_quality_is_lowered_while_moving(self, viewport):
+    def test_volume_resolution_is_lowered_while_moving(self, viewport):
         viewport.show_volume(make_grid())
-        assert viewport.plotter.actors["volume"].mapper.GetInteractiveAdjustSampleDistances() == 1
+        mapper = viewport.plotter.actors["volume"].mapper
+        window = viewport.plotter.render_window
+        iren = viewport.plotter.iren.interactor
+        # StartEvent is what VTK sends before every redraw
+        window.SetDesiredUpdateRate(iren.GetDesiredUpdateRate())
+        window.InvokeEvent("StartEvent")
+        assert mapper.GetImageSampleDistance() == MOVING_IMAGE_SAMPLE_DISTANCE
+        window.SetDesiredUpdateRate(iren.GetStillUpdateRate())
+        window.InvokeEvent("StartEvent")
+        assert mapper.GetImageSampleDistance() == 1.0
+
+    def test_volume_sampling_follows_the_voxel_spacing(self, viewport):
+        viewport.show_volume(make_grid())
+        assert viewport.plotter.actors["volume"].mapper.GetLockSampleDistanceToInputSpacing() == 1
+
+    def test_volume_quality_without_volume_does_nothing(self, viewport):
+        viewport.plotter.render_window.InvokeEvent("StartEvent")
+        viewport.plotter.close()
+        viewport._set_volume_quality(None, "StartEvent")
 
     def test_wheel_step_uses_moving_quality(self, viewport):
         viewport.show_volume(make_grid())

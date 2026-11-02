@@ -25,6 +25,10 @@ FAST_SCROLL_THRESHOLD = 0.12
 # could be drawn between two steps
 FULL_QUALITY_DELAY = 0.2
 
+# while the view moves the volume is drawn with one ray every 2x2 pixels, scaled up to the whole view.
+# it is about 2 times faster when zoomed in and the blobs keep their shape, only a bit softer
+MOVING_IMAGE_SAMPLE_DISTANCE = 2.0
+
 
 class Viewport(QWidget):
     def __init__(self, parent=None):
@@ -80,12 +84,17 @@ class Viewport(QWidget):
             "MouseWheelBackwardEvent", self._on_mouse_wheel_backward, 5.0
         )
 
-        # while the wheel turns the view is drawn at the lower quality VTK uses for moving cameras,
+        # while the wheel turns the view is drawn at the lower quality used for moving cameras,
         # when it stops for FULL_QUALITY_DELAY it is drawn once at full quality
         self._full_quality_timer = QTimer(self)
         self._full_quality_timer.setSingleShot(True)
         self._full_quality_timer.setInterval(round(FULL_QUALITY_DELAY * 1000))
         self._full_quality_timer.timeout.connect(self._request_full_quality_render)
+
+        # before every redraw the quality of the volume is chosen, see _set_volume_quality
+        render_window = self.plotter.render_window
+        if render_window is not None:
+            render_window.AddObserver("StartEvent", self._set_volume_quality)
 
         # the wheel events are not here: _stop_wheel_event stops them before they get to this observer,
         # so the wheel zoom is kept inside the limits by the clamp in compute_local_zoom_step
@@ -118,14 +127,15 @@ class Viewport(QWidget):
             cmap="magma",
             opacity="linear",
             name="volume",
-            mapper="smart",
+            mapper="gpu",
             render=False,
             scalar_bar_args={"render": False},
         )
 
-        # VTK draws the volume at a lower quality while the camera moves and at full quality when it
-        # stops, but PyVista turns this off, so every frame was drawn at full quality
-        actor.mapper.InteractiveAdjustSampleDistancesOn()
+        # the gpu mapper lets us draw the moving frames at a lower resolution (see _set_volume_quality),
+        # the smart one (PyVista's default) does not. with the sample distance taken from the voxel
+        # spacing, as the smart mapper does, the still image is the same as before
+        actor.mapper.LockSampleDistanceToInputSpacingOn()
 
         # with this we can see the cube borders
         self.plotter.add_mesh(grid.outline(), color="white", line_width=2, name="outline", render=False)
@@ -595,6 +605,30 @@ class Viewport(QWidget):
 
         render_window.SetDesiredUpdateRate(self.plotter.iren.interactor.GetStillUpdateRate())
         self._request_render()
+
+    def _set_volume_quality(self, _obj: object, _event: str) -> None:
+        """
+        This function is called by VTK before every redraw: while the view moves the volume is drawn
+        at a lower resolution, when it is still at full resolution.
+        the view moves when the render window asks for more frames per second than the still rate:
+        VTK does it while the user drags the view, _request_moving_render does it for the wheel.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        render_window = self.plotter.render_window
+        if render_window is None or self.plotter.iren is None:
+            return
+        actor = self.plotter.actors.get("volume")
+        if actor is None:
+            return
+
+        moving = render_window.GetDesiredUpdateRate() > self.plotter.iren.interactor.GetStillUpdateRate()
+        actor.mapper.SetImageSampleDistance(MOVING_IMAGE_SAMPLE_DISTANCE if moving else 1.0)
 
     def _stop_wheel_event(self, tag: int) -> None:
         """

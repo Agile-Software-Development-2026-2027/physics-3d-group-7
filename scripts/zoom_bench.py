@@ -23,6 +23,7 @@ import pyvista as pv
 import vtk
 
 from apkit4d.io.czi import CziSource
+from apkit4d.visualization.viewport import MOVING_IMAGE_SAMPLE_DISTANCE
 
 ZOOMS = (1, 2, 4, 8)
 VOXEL_UM = (18.1, 2.8, 2.8)  # z, y, x of the sample files
@@ -74,7 +75,11 @@ def add_default(plotter, grid):
 
 
 def add_adaptive(plotter, grid):
-    """Same, but VTK lowers the quality while the view moves, as the viewport does now."""
+    """
+    Same, but VTK samples the rays less while the view moves.
+
+    It is fast but the blobs change shape while moving (they look faceted), so the viewport does not use it.
+    """
     actor = add_default(plotter, grid)
     actor.mapper.InteractiveAdjustSampleDistancesOn()
     return actor
@@ -82,14 +87,21 @@ def add_adaptive(plotter, grid):
 
 def add_half_res(plotter, grid):
     """
-    One ray every 2x2 pixels, also when still.
+    One ray every 2x2 pixels while the view moves, one ray per pixel when still: what the viewport does now.
 
     The smart mapper does not expose this, so it uses the GPU mapper directly, with the
-    sample distance taken from the voxel spacing as the smart mapper does (same times at full res).
+    sample distance taken from the voxel spacing as the smart mapper does (same still image).
     """
     actor = plotter.add_volume(grid, cmap="magma", opacity="linear", name="volume", mapper="gpu")
     actor.mapper.LockSampleDistanceToInputSpacingOn()
-    actor.mapper.SetImageSampleDistance(2.0)
+    win = plotter.render_window
+    assert win is not None
+
+    def set_quality(*_):
+        moving = win.GetDesiredUpdateRate() > STILL_RATE
+        actor.mapper.SetImageSampleDistance(MOVING_IMAGE_SAMPLE_DISTANCE if moving else 1.0)
+
+    win.AddObserver("StartEvent", set_quality)
     return actor
 
 
