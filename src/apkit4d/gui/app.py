@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.main_window import MainWindow
+from apkit4d.gui.views.main_window import MainWindow
 
 
 def _get_application() -> QApplication:

@@ -4,7 +4,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QFileDialog
 
 from apkit4d.gui.app import run
-from apkit4d.gui.main_window import MainWindow
+from apkit4d.gui.views.main_window import MainWindow
 
 
 @pytest.fixture

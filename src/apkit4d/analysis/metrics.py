@@ -1,5 +1,4 @@
-"""
-Quantitative trajectory metrics calculation for particle tracking.
+"""Quantitative trajectory metrics calculation for particle tracking.
 
 This module computes per-track metrics like displacement, path length,
 median velocity/step size, turn angle, connection reliability and number of gaps.
@@ -32,8 +31,7 @@ STATS_COLUMNS: Final[list[str]] = [
 
 
 def compute_track_statistics(tracks: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute per-trajectory summary statistics.
+    """Compute per-trajectory summary statistics.
 
     Args:
         tracks: DataFrame of tracked particle positions. Must contain 'track_id', 'frame',

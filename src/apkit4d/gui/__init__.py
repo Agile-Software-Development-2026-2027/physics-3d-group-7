@@ -1,3 +1,3 @@
 """
-Desktop GUI of ApKit4D, built on Qt (PySide6).
+Desktop GUI of apkit4d, built on Qt (PySide6).
 """

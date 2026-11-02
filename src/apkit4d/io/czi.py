@@ -6,15 +6,14 @@ from datetime import datetime
 from pathlib import Path
 
 import czifile
-import dask
 import dask.array as da
 import numpy as np
+from dask import delayed
 
 
 @dataclass
 class CziInfo:
-    """
-    Stores metadata of a CZI microscopy acquisition.
+    """Stores metadata of a CZI microscopy acquisition.
 
     Attributes:
         path: Path to the CZI file.
@@ -48,8 +47,7 @@ class CziInfo:
 
     @property
     def voxel(self) -> tuple[float, float, float]:
-        """
-        Returns the physical voxel size.
+        """Returns the physical voxel size.
 
         Returns:
             Voxel size (Z, Y, X) in micrometers.
@@ -81,8 +79,7 @@ class CziSource:
     """
 
     def __init__(self, path: str | Path, channel: int = 0):
-        """
-        Opens a CZI file and loads its metadata.
+        """Opens a CZI file and loads its metadata.
 
         Args:
             path: Path to the CZI file.
@@ -267,8 +264,7 @@ class CziSource:
         return None, "not found"
 
     def read(self, t: int = 0) -> np.ndarray:
-        """
-        Read a single 3D volume at the specified time point.
+        """Read a single 3D volume at the specified time point.
 
         Args:
             t: Time point index. Defaults to 0.
@@ -301,18 +297,16 @@ class CziSource:
             return self._czi.asarray()
 
     def as_dask(self) -> da.Array:
-        """
-        Create a lazy 4D array of the CZI acquisition.
+        """Create a lazy 4D array of the CZI acquisition.
 
         Returns:
             Dask array with shape (T, Z, Y, X).
         """
         info = self.info
         shape = (info.n_z, info.n_y, info.n_x)
-
         frames = [
             da.from_delayed(
-                dask.delayed(self.read)(t),
+                delayed(self.read)(t),
                 shape=shape,
                 dtype=info.dtype,
             )
@@ -322,9 +316,7 @@ class CziSource:
         return da.stack(frames)
 
     def close(self) -> None:
-        """
-        Close the CZI file and release its resources.
-        """
+        """Close the CZI file and release its resources."""
         with self._lock:
             if not self._closed:
                 self._czi.close()

@@ -1,5 +1,4 @@
-"""
-Spatial neighborhood search indexing abstractions.
+"""Spatial neighborhood search indexing abstractions.
 
 This module provides a unified interface for querying spatial neighbors within a specified radius.
 The CPU implementation is backed by `scipy.spatial.cKDTree`, while the protocol design enables
@@ -13,7 +12,6 @@ RefactorNote:
     I will avoid addinmore comments
 """
 
-from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
@@ -25,13 +23,12 @@ from scipy.spatial import cKDTree  # type: ignore ty: ignore[unresolved-import]
 
 
 class SpatialIndex(Protocol):
-    """
-    Protocol defining the interface for spatial neighbor searches.
+    """Protocol defining the interface for spatial neighbor searches.
 
     Out hate for python interfaces is storng but love for interfaces is storngest.
     """
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """Query indices of stored points within a given radius from each query point.
 
         Args:
@@ -39,7 +36,7 @@ class SpatialIndex(Protocol):
             radius: Search radius distance threshold.
 
         Returns:
-            A sequence of length M, where element i is a sequence of integer indices
+            A list of length M, where element i is a list of integer indices
             of points within radius from query_points[i].
         """
         ...
@@ -51,8 +48,7 @@ class KDTreeSpatialIndex:
     """
 
     def __init__(self, points: NDArray[np.float32]) -> None:
-        """
-        Initialize the KD-tree index.
+        """Initialize the KD-tree index.
 
         Args:
             points: (N, D) array of reference coordinates.
@@ -60,7 +56,7 @@ class KDTreeSpatialIndex:
         self._points = np.asarray(points, dtype=np.float32)
         self._tree = cKDTree(self._points) if len(self._points) > 0 else None
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """
         Find neighbor indices within radius.
 
@@ -78,8 +74,7 @@ class KDTreeSpatialIndex:
 
 
 class GPUAcceleratedSpatialIndex:
-    """
-    Placeholder for a GPU-accelerated spatial search index.
+    """Placeholder for a GPU-accelerated spatial search index.
 
     This class is intended for future implementation of GPU-based spatial indexing.
     """
@@ -93,7 +88,7 @@ class GPUAcceleratedSpatialIndex:
         """
         raise NotImplementedError("GPUAcceleratedSpatialIndex is not yet implemented.")
 
-    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> Sequence[Sequence[int]]:
+    def query_radius(self, query_points: NDArray[np.float32], radius: float) -> list[list[int]]:
         """
         Query neighbor indices within radius on GPU.
 
@@ -108,8 +103,7 @@ class GPUAcceleratedSpatialIndex:
 
 
 def create_spatial_index(points: NDArray[np.float32]) -> SpatialIndex:
-    """
-    Factory function to instantiate a spatial search index.
+    """Factory function to instantiate a spatial search index.
 
     Args:
         points: (N, D) array of points.

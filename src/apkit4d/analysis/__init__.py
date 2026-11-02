@@ -1,3 +1,1 @@
-"""
-Analysis and quantitative motility package for ApKit4D tracking data.
-"""
+"""Analysis and quantitative motility package for apkit4d tracking data."""

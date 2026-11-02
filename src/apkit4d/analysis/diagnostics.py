@@ -1,5 +1,4 @@
-"""
-Diagnostic visualization dashboard for particle tracking and motility analysis.
+"""Diagnostic visualization dashboard for particle tracking and motility analysis.
 
 This module renders a 6-panel Matplotlib dashboard evaluating tracking quality, active track
 counts, velocity distributions, directional autocorrelation, and assignment ambiguities.
