@@ -121,19 +121,33 @@ class Viewport(QWidget):
         if grid is None or grid.n_points == 0:
             return
 
+        # with this if we want to avoid to recreate the volume when we will change frames
+        # we just update the values
         if (
             self._volume_grid is not None
             and self._volume_grid.dimensions == grid.dimensions
             and self._volume_grid.spacing == grid.spacing
             and self._volume_grid.origin == grid.origin
         ):
-            np.copyto(self._volume_grid.point_data["values"], grid.point_data["values"])
+            # "values" is the name of the point data we used in the data_mapper.py file
+            # it represents the 3D data in a flattened format, which is the intensity
+            # values of the voxels
+            # I don't know if replace this with .active_scalars so that if we change the
+            # name in the mapper we don't have to change it here too,
+            # but for now we keep it as it is
+            values = grid.point_data["values"]
+            np.copyto(self._volume_grid.point_data["values"], values)
             self._volume_grid.point_data.Modified()
             self._volume_grid.Modified()
+
+            # Aggiorna il range min, max della colormap/opacità e della scalar bar
+            vmin, vmax = float(np.min(values)), float(np.max(values))
+            self.plotter.actors["volume"].mapper.scalar_range = (vmin, vmax)
+            self.plotter.update_scalar_bar_range((vmin, vmax))
+
             if reset_camera:
-                self.plotter.reset_camera()
-            else:
-                self.plotter.render()
+                self.plotter.renderer.reset_camera(render=False)
+            self._request_render()
             return
 
         self._volume_grid = grid.copy()
@@ -142,7 +156,7 @@ class Viewport(QWidget):
         # render=False here and below: PyVista would draw the view after each call (the scalar bar too),
         # we draw it once at the end
         actor = self.plotter.add_volume(
-            grid,
+            self._volume_grid,
             cmap="magma",
             opacity="linear",
             name="volume",
@@ -157,16 +171,18 @@ class Viewport(QWidget):
         actor.mapper.LockSampleDistanceToInputSpacingOn()
 
         # with this we can see the cube borders
-        self.plotter.add_mesh(grid.outline(), color="white", line_width=2, name="outline", render=False)
+        self.plotter.add_mesh(
+            self._volume_grid.outline(), color="white", line_width=2, name="outline", render=False
+        )
 
         # store the center and bounds
-        self.volume_center = np.array(grid.center, dtype=np.float64)
-        self.volume_bounds = grid.bounds
+        self.volume_center = np.array(self._volume_grid.center, dtype=np.float64)
+        self.volume_bounds = self._volume_grid.bounds
 
         # i think setting max and min zoom only the first time we show the volume or when we reset
         # should work, that kinda depends on how we are going to handle future ROIs
         if self.max_zoom_dist == float("inf") or reset_camera:
-            diagonal = grid.length
+            diagonal = self._volume_grid.length
             self.min_zoom_dist = diagonal * 0.1
             self.max_zoom_dist = diagonal * 4.0
 
@@ -211,6 +227,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
+        self._volume_grid = None
         self.volume_center = None
         self.volume_bounds = None
         self.min_zoom_dist = 0.0
