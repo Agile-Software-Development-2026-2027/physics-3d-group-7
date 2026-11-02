@@ -39,6 +39,8 @@ class Viewport(QWidget):
 
         self._volume_grid: pv.ImageData | None = None
 
+        self._blobs_poly: pv.PolyData | None = None
+
         # Set the margins to 0 so that we use the entire space
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -209,12 +211,34 @@ class Viewport(QWidget):
         Returns:
             None
         """
+
+        # remove past blobs if the new poly is empty, and return
         if poly is None or poly.n_points == 0:
+            if "blobs" in self.plotter.actors:
+                self.plotter.remove_actor("blobs", render=False)
+                self._blobs_poly = None
+                self._request_render()
             return
 
+        # if the blobs are already in the plotter we just update them
+        if self._blobs_poly is not None and "blobs" in self.plotter.actors:
+            # i can't use np.copyto here because the number of points can change
+            # shallow copy substitues the pointers to the data
+            self._blobs_poly.shallow_copy(poly)
+            self._blobs_poly.Modified()
+            self._request_render()
+            return
+
+        # shallow copy gives me an error in the test cause of NoneType here so i use copy
+        self._blobs_poly = poly.copy()
         # here we add the dectected blobs in the plotter
         self.plotter.add_mesh(
-            poly, color="red", point_size=10.0, render_points_as_spheres=True, name="blobs", render=False
+            self._blobs_poly,
+            color="red",
+            point_size=10.0,
+            render_points_as_spheres=True,
+            name="blobs",
+            render=False,
         )
         self._request_render()
 
@@ -228,6 +252,7 @@ class Viewport(QWidget):
             None
         """
         self._volume_grid = None
+        self._blobs_poly = None
         self.volume_center = None
         self.volume_bounds = None
         self.min_zoom_dist = 0.0
