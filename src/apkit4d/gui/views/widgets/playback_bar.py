@@ -1,15 +1,15 @@
 """
 Playback bar: slider and buttons to move through the frames of a recording.
 
-The bar holds no logic. It announces what the user asks for with signals, and shows
-what it is told with its methods. The controller connects it to the rest of the application.
-It starts disabled, and the controller enables it when there is something to play.
+The bar holds no logic. It announces what the user asks for with signals, and shows what it is told
+with its methods. The controller connects it to the rest of the application. It starts disabled, and
+the controller enables it when there is something to play.
 """
 
 from PySide6.QtCore import Qt, Signal, SignalInstance
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QVBoxLayout, QWidget
 
-from apkit4d.gui import constants
+from apkit4d.gui.constants import names, texts
 
 
 class PlaybackBar(QWidget):
@@ -32,26 +32,21 @@ class PlaybackBar(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName(constants.NAME_PLAYBACK_BAR)
+        self.setObjectName(names.PLAYBACK_BAR)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setObjectName(constants.NAME_FRAME_SLIDER)
+        self._slider.setObjectName(names.FRAME_SLIDER)
         self._slider.valueChanged.connect(self.frame_requested)
 
-        self._play_button = self._make_button(
-            constants.NAME_PLAY_BUTTON, constants.TEXT_BUTTON_PLAY, self.play_toggled
+        self._previous_button = self._make_button(
+            names.PREVIOUS_BUTTON, texts.BUTTON_PREVIOUS, self.previous_requested
         )
+        self._play_button = self._make_button(names.PLAY_BUTTON, texts.BUTTON_PLAY, self.play_toggled)
+        self._next_button = self._make_button(names.NEXT_BUTTON, texts.BUTTON_NEXT, self.next_requested)
 
         buttons = QHBoxLayout()
-        buttons.addWidget(
-            self._make_button(
-                constants.NAME_PREVIOUS_BUTTON, constants.TEXT_BUTTON_PREVIOUS, self.previous_requested
-            )
-        )
-        buttons.addWidget(self._play_button)
-        buttons.addWidget(
-            self._make_button(constants.NAME_NEXT_BUTTON, constants.TEXT_BUTTON_NEXT, self.next_requested)
-        )
+        for button in (self._previous_button, self._play_button, self._next_button):
+            buttons.addWidget(button)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._slider)
@@ -88,7 +83,7 @@ class PlaybackBar(QWidget):
         Args:
             playing: True while the playback is running.
         """
-        self._play_button.setText(constants.TEXT_BUTTON_PAUSE if playing else constants.TEXT_BUTTON_PLAY)
+        self._play_button.setText(texts.BUTTON_PAUSE if playing else texts.BUTTON_PLAY)
 
     @staticmethod
     def _make_button(name: str, text: str, signal: SignalInstance) -> QPushButton:

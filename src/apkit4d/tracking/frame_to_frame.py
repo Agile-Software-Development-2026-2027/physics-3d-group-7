@@ -1,12 +1,10 @@
-"""
-Frame-to-frame Linear Assignment Problem (LAP) particle tracking.
+"""Frame-to-frame Linear Assignment Problem (LAP) particle tracking.
 
 This module matches active trajectories to candidate detections in consecutive time frames
 using minimum-cost bipartite matching, Monte Carlo prediction perturbation stability
 scoring, and second-choice ambiguity margin estimation.
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -242,9 +240,7 @@ def link_consecutive_frames(
                 velocities=np.array(active_velocities, dtype=np.float32),
             )
             spatial_index = create_spatial_index(current_coords)
-            candidates: Sequence[Sequence[int]] = spatial_index.query_radius(
-                pred_positions, config.max_dist_um
-            )
+            candidates: list[list[int]] = spatial_index.query_radius(pred_positions, config.max_dist_um)
 
             row_list: list[int] = []
             col_list: list[int] = []

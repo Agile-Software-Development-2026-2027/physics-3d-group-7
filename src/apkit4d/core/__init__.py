@@ -1,5 +1,4 @@
-"""
-Core logic and schemas for apkit4d
+"""Core logic and schemas for apkit4d
 This does not includes any visualization or compelx code just a simple point
 tht can be easily refactored into something else to start
 Why do we have the schemas here and not the separate modules?

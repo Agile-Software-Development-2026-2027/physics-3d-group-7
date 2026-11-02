@@ -1,5 +1,4 @@
-"""
-Biophysical motility analysis for reconstructed cell trajectories.
+"""Biophysical motility analysis for reconstructed cell trajectories.
 
 This module provides analytics such as the direction autocorrelation function (ACF)
 to evaluate helical swimming dynamics and path persistence.
@@ -18,8 +17,7 @@ def compute_direction_acf(
     max_lag: int = 15,
     min_points: int = 20,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Compute direction autocorrelation function <cos θ(theta)> across time lags on long tracks.
+    """Compute direction autocorrelation function <cos θ(theta)> across time lags on long tracks.
 
     Serves two purposes at once: random connections crush it to zero, while Chlamydomonas'
     helical swimming (~2 Hz rotation) makes it oscillate, with minima at half-turn and

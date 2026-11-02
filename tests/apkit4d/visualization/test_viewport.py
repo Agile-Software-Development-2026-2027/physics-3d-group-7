@@ -2,7 +2,12 @@ import numpy as np
 import pytest
 import pyvista as pv
 
-from apkit4d.visualization.viewport import Viewport
+from apkit4d.visualization.viewport import (
+    FAST_SCROLL_THRESHOLD,
+    FULL_QUALITY_DELAY,
+    MOVING_IMAGE_SAMPLE_DISTANCE,
+    Viewport,
+)
 
 
 def make_grid(n: int = 5) -> pv.ImageData:
@@ -347,3 +352,123 @@ class TestComputeLocalZoomStep:
         p1, f1 = step(viewport, 1, position=pos, focal_point=focal, target_point=focal, zoom_factor=0.2)
         p2, f2 = step(viewport, -1, position=p1, focal_point=f1, volume_center=f1, zoom_factor=0.2)
         assert dist(p2, f2) == pytest.approx(10.0)
+
+
+class TestWheelRendering:
+    def test_no_automatic_redraw(self, viewport):
+        assert not viewport.plotter.render_timer.isActive()
+
+    def test_volume_resolution_is_lowered_while_moving(self, viewport):
+        viewport.show_volume(make_grid())
+        mapper = viewport.plotter.actors["volume"].mapper
+        window = viewport.plotter.render_window
+        iren = viewport.plotter.iren.interactor
+        # StartEvent is what VTK sends before every redraw
+        window.SetDesiredUpdateRate(iren.GetDesiredUpdateRate())
+        window.InvokeEvent("StartEvent")
+        assert mapper.GetImageSampleDistance() == MOVING_IMAGE_SAMPLE_DISTANCE
+        window.SetDesiredUpdateRate(iren.GetStillUpdateRate())
+        window.InvokeEvent("StartEvent")
+        assert mapper.GetImageSampleDistance() == 1.0
+
+    def test_volume_sampling_follows_the_voxel_spacing(self, viewport):
+        viewport.show_volume(make_grid())
+        assert viewport.plotter.actors["volume"].mapper.GetLockSampleDistanceToInputSpacing() == 1
+
+    def test_volume_quality_without_volume_does_nothing(self, viewport):
+        viewport.plotter.render_window.InvokeEvent("StartEvent")
+        viewport.plotter.close()
+        viewport._set_volume_quality(None, "StartEvent")
+
+    def test_wheel_step_uses_moving_quality(self, viewport):
+        viewport.show_volume(make_grid())
+        viewport._apply_wheel_zoom(direction=1)
+        iren = viewport.plotter.iren.interactor
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetDesiredUpdateRate()
+        assert viewport._full_quality_timer.isActive()
+
+    def test_full_quality_when_the_wheel_stops(self, viewport):
+        viewport.show_volume(make_grid())
+        viewport._apply_wheel_zoom(direction=1)
+        assert viewport._full_quality_timer.isSingleShot()
+        # this is what the timer calls when it fires, called directly so the test does not wait
+        viewport._request_full_quality_render()
+        iren = viewport.plotter.iren.interactor
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetStillUpdateRate()
+
+    def test_full_quality_waits_longer_than_a_fast_scroll_step(self, viewport):
+        assert FULL_QUALITY_DELAY > FAST_SCROLL_THRESHOLD
+        assert viewport._full_quality_timer.interval() == round(FULL_QUALITY_DELAY * 1000)
+
+    def test_no_full_quality_redraw_during_a_drag(self, viewport):
+        viewport.show_volume(make_grid())
+        iren = viewport.plotter.iren.interactor
+        style = iren.GetInteractorStyle()
+        style.StartRotate()
+        viewport._request_full_quality_render()
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetDesiredUpdateRate()
+        style.EndRotate()
+
+    def test_full_quality_after_close_does_nothing(self, viewport):
+        viewport.plotter.close()
+        viewport._request_full_quality_render()
+
+    def test_moving_quality_after_close_does_nothing(self, viewport):
+        viewport.plotter.close()
+        viewport._request_moving_render()
+        assert not viewport._full_quality_timer.isActive()
+
+    def test_clear_goes_back_to_full_quality(self, viewport):
+        viewport.show_volume(make_grid())
+        viewport._apply_wheel_zoom(direction=1)
+        viewport.clear()
+        iren = viewport.plotter.iren.interactor
+        assert not viewport._full_quality_timer.isActive()
+        assert viewport.plotter.render_window.GetDesiredUpdateRate() == iren.GetStillUpdateRate()
+
+    def test_scene_changes_ask_for_a_redraw_instead_of_drawing(self, viewport, monkeypatch):
+        draws, requests = [], []
+        monkeypatch.setattr(viewport.plotter, "render", lambda: draws.append(1))
+        monkeypatch.setattr(viewport, "_request_render", lambda: requests.append(1))
+        viewport.show_volume(make_grid())
+        viewport.show_blobs(make_poly())
+        viewport.clear()
+        assert draws == []
+        assert len(requests) == 3
+
+    def test_wheel_event_does_not_reach_the_default_zoom(self, viewport):
+        viewport.show_volume(make_grid())
+        iren = viewport.plotter.iren.interactor
+        calls = []
+        # the default VTK zoom listens with priority 0, below our observers
+        iren.AddObserver("MouseWheelForwardEvent", lambda *_: calls.append("forward"), 0.0)
+        iren.AddObserver("MouseWheelBackwardEvent", lambda *_: calls.append("backward"), 0.0)
+        before = viewport.plotter.camera.position
+        iren.MouseWheelForwardEvent()
+        assert viewport.plotter.camera.position != before
+        iren.MouseWheelBackwardEvent()
+        assert calls == []
+
+    def test_wheel_zoom_stays_inside_the_limits(self, viewport, monkeypatch):
+        # every step counts as a fast scroll, so the steps grow to the biggest one
+        monkeypatch.setattr("apkit4d.visualization.viewport.FAST_SCROLL_THRESHOLD", float("inf"))
+        viewport.show_volume(make_grid())
+        iren = viewport.plotter.iren.interactor
+        camera = viewport.plotter.camera
+        for _ in range(100):
+            iren.MouseWheelForwardEvent()
+        assert dist(camera.position, camera.focal_point) == pytest.approx(viewport.min_zoom_dist)
+        for _ in range(100):
+            iren.MouseWheelBackwardEvent()
+        assert dist(camera.position, camera.focal_point) == pytest.approx(viewport.max_zoom_dist)
+
+    @pytest.mark.parametrize("event", ["InteractionEvent", "EndInteractionEvent"])
+    def test_drag_zoom_stays_inside_the_limits(self, viewport, event):
+        viewport.show_volume(make_grid())
+        camera = viewport.plotter.camera
+        # the camera gets closer than the limit, as a zoom with the right mouse button can do
+        focal = np.array(camera.focal_point)
+        direction = (np.array(camera.position) - focal) / dist(camera.position, focal)
+        camera.position = tuple(focal + direction * viewport.min_zoom_dist / 2)
+        viewport.plotter.iren.interactor.InvokeEvent(event)
+        assert dist(camera.position, camera.focal_point) == pytest.approx(viewport.min_zoom_dist)

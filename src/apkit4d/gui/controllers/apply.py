@@ -1,15 +1,12 @@
 """
-Look of the application: builds the palette of a theme and applies it.
-
-This module only changes how the application looks. Which theme is active is decided
-by the `ThemeController`.
+Paints the application with a theme.
 """
 
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
-from apkit4d.gui import constants
-from apkit4d.gui.constants import Theme, ThemeColors
+from apkit4d.gui.constants import application
+from apkit4d.gui.theme.themes import THEME_COLORS, Theme, ThemeColors
 
 ColorRole = QPalette.ColorRole
 ColorGroup = QPalette.ColorGroup
@@ -58,6 +55,5 @@ def apply_theme(app: QApplication, theme: Theme) -> None:
         app: The application to paint.
         theme: Theme to apply.
     """
-    app.setStyle(constants.STYLE_NAME)  # changing the style resets the palette, so it comes first
-    app.setPalette(build_palette(constants.THEME_COLORS[theme]))
-    app.setStyleSheet(constants.STYLESHEET)
+    app.setStyle(application.QT_STYLE)  # changing the style resets the palette, so it comes first
+    app.setPalette(build_palette(THEME_COLORS[theme]))

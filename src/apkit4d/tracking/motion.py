@@ -1,5 +1,4 @@
-"""
-Kinematic motion modeling and prediction utilities for trajectory tracking.
+"""Kinematic motion modeling and prediction utilities for trajectory tracking.
 
 This module provides functions for physical search gate calculation, exponential
 moving average (EMA) position and velocity updates, and adaptive uncertainty
@@ -14,8 +13,7 @@ MIN_SIGMA_VALUE: float = 1e-3
 
 
 def compute_search_gate(dt_s: float, max_speed_um_s: float = 250.0) -> float:
-    """
-    Calculate the physical search gate radius from time interval and max speed.
+    """Calculate the physical search gate radius from time interval and max speed.
 
     Args:
         dt_s: Sampling time interval between consecutive frames in seconds.
@@ -37,8 +35,7 @@ def compute_search_gate(dt_s: float, max_speed_um_s: float = 250.0) -> float:
 def predict_positions_ema(
     positions: NDArray[np.float32], velocities: NDArray[np.float32]
 ) -> NDArray[np.float32]:
-    """
-    Predict next positions given current positions and estimated velocities.
+    """Predict next positions given current positions and estimated velocities.
 
     Args:
         positions: (N, 3) current 3D positions in physical coordinates.
@@ -55,8 +52,7 @@ def predict_positions_ema(
 def update_velocity_ema(
     old_velocity: NDArray[np.float32], displacement: NDArray[np.float32], smoothing_factor: float
 ) -> NDArray[np.float32]:
-    """
-    Update velocity vector using exponential moving average (EMA).
+    """Update velocity vector using exponential moving average (EMA).
 
     Args:
         old_velocity: (3,) prior estimated velocity vector.
@@ -76,8 +72,7 @@ def update_adaptive_sigma(
     current_sigma: NDArray[np.float32],
     momentum: float = 0.8,
 ) -> NDArray[np.float32]:
-    """
-    Update prediction uncertainty sigma per axis based on empirical residuals.
+    """Update prediction uncertainty sigma per axis based on empirical residuals.
 
     Uses the Median Absolute Deviation (MAD) scaled by 1.4826 for robust Gaussian
     estimation, blended with previous sigma via momentum.

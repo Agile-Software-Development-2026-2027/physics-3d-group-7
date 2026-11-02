@@ -1,10 +1,10 @@
 """
 Controller of the main window.
 
-It is the only place where the view meets the rest of the application: it will call the
-processing classes and then update the view. Those classes are not developed yet, so for
-now it only changes the view and calls nothing. The navigation through the frames is
-delegated to the `PlaybackController`, the look of the application to the `ThemeController`.
+It is the only place where the view meets the rest of the application: it will call the processing
+classes and then update the view. Those classes are not developed yet, so for now it only changes the
+view and calls nothing. The navigation through the frames is delegated to the `PlaybackController`,
+the look of the application to the `ThemeController`.
 """
 
 from pathlib import Path
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.theme_controller import ThemeController
-from apkit4d.gui.main_window import MainWindow
+from apkit4d.gui.views.main_window import MainWindow
 
 
 class MainController(QObject):

@@ -27,9 +27,7 @@ REQUIRED_COLUMNS: list[str] = ["frame", "z_um", "y_um", "x_um"]
 
 @dataclass(frozen=True)
 class TrackingResult:
-    """
-    Result returned by `ParticleLinker.link()`, check the `ParticleLinker` class for more details.
-    """
+    """Result returned by `ParticleLinker.link()`, check the `ParticleLinker` class for more details."""
 
     tracks: pd.DataFrame
     metadata: dict[str, Any]
@@ -47,8 +45,7 @@ class ParticleLinker:
         config: TrackingConfig | None = None,
         lap_solver: LAPSolver = solve_sparse_lap,
     ) -> None:
-        """
-        Initialize the linker with configuration and LAP solver.
+        """Initialize the linker with configuration and LAP solver.
 
         Args:
             config: Tracking configuration parameters. If None, default config is used.
@@ -66,8 +63,7 @@ class ParticleLinker:
         dataset_name: str = "",
         dt_s: float | None = None,
     ) -> TrackingResult:
-        """
-        Link particle detections across frames into continuous trajectories.
+        """Link particle detections across frames into continuous trajectories.
 
         Args:
             detections: Input DataFrame with at least ['frame', 'z_um', 'y_um', 'x_um'].
