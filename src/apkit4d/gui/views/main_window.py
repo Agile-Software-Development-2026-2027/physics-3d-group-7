@@ -72,6 +72,27 @@ class MainWindow(QMainWindow):
         """
         self._center.set_view(view)
 
+    def set_status(self, message: str) -> None:
+        """
+        Show `message` in the status bar.
+
+        Args:
+            message: Text to show.
+        """
+        self.statusBar().showMessage(message)
+
+    def set_current_file(self, path: Path | None) -> None:
+        """
+        Show the name of the open file in the title of the window.
+
+        Args:
+            path: The open file, or None to show only the name of the application.
+        """
+        if path is None:
+            self.setWindowTitle(application.APP_NAME)
+        else:
+            self.setWindowTitle(texts.WINDOW_TITLE_WITH_FILE.format(name=path.name, app=application.APP_NAME))
+
     def open_file(self, path: Path) -> bool:
         """
         Accept `path` if it is an existing .czi file and announce it.
