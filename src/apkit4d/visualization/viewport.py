@@ -56,6 +56,7 @@ class Viewport(QWidget):
         # set up of some viewport things
         self.plotter.set_background("gray")
         self.plotter.add_axes()
+        self.plotter.enable_terrain_style() 
         self.min_zoom_dist: float = 0.0
         self.max_zoom_dist: float = float("inf")
 
