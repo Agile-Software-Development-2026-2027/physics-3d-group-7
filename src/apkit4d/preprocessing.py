@@ -6,10 +6,14 @@ See the `preprocess` function for more details on the pipeline.
 
 Memory copies and allocations are avoided as much as possible during the
 preprocessing sub-pipeline.
+
+RefactorNote:
+    BgMode was updated to inherit from enum.StrEnum, this allows native string representation,
+    JSON serialization while mantaining backward compatibility with enum comparison.
 """
 
 from dataclasses import asdict, dataclass, fields
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 from scipy import ndimage
@@ -18,7 +22,7 @@ from skimage.exposure import equalize_adapthist
 from apkit4d.image import Image
 
 
-class BgMode(Enum):
+class BgMode(StrEnum):
     NONE = "None"
     PERCENTILE_PER_SLICE = "Percentile per slice"
     WIDE_GAUSSIAN = "Wide Gaussian"
@@ -66,7 +70,10 @@ class PreprocParams:
     @classmethod
     def from_dict(cls, d):
         names = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in (d or {}).items() if k in names})
+        kwargs = {k: v for k, v in (d or {}).items() if k in names}
+        if "bg_mode" in kwargs and kwargs["bg_mode"] is not None:
+            kwargs["bg_mode"] = BgMode(kwargs["bg_mode"])
+        return cls(**kwargs)
 
 
 def sigmas_to_voxels(
@@ -97,7 +104,7 @@ def denoise(
         sigmas = sigmas_to_voxels(
             (p.denoise_z_scale_um, p.denoise_xy_scale_um, p.denoise_xy_scale_um), voxel_dim
         )
-        vol = ndimage.gaussian_filter(vol, sigmas, output=vol)
+        ndimage.gaussian_filter(vol, sigmas, output=vol)
     return vol
 
 
