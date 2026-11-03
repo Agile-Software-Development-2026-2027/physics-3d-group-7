@@ -24,7 +24,8 @@ def test_apkit4d_batch_is_defined(runner: CliRunner):
 
 
 @pytest.mark.parametrize(
-    "param", ["czi", "--params", "--t0", "--t1", "--out", "--workers", "--chunk", "--format"]
+    "param",
+    ["czi", "--params", "--first-frame", "--last-frame", "--out", "--workers", "--chunk", "--format"],
 )
 def test_apkit4d_batch_has_params_defined(param: str):
     assert is_param_defined(BATCH, param)
@@ -40,14 +41,14 @@ def test_czi_is_a_path_and_an_obligatory_argument():
     assert not arg.type.dir_okay
 
 
-def test_t0_is_an_option_and_an_int():
-    opt = get_option(BATCH, "--t0")
+def test_first_frame_is_an_option_and_an_int():
+    opt = get_option(BATCH, "--first-frame")
     assert isinstance(opt.type, click.types.IntParamType)
     assert opt.default is UNSET
 
 
-def test_t1_is_an_option_and_an_int():
-    opt = get_option(BATCH, "--t1")
+def test_last_frame_is_an_option_and_an_int():
+    opt = get_option(BATCH, "--last-frame")
     assert isinstance(opt.type, click.types.IntParamType)
     assert opt.default is UNSET
 
@@ -114,9 +115,9 @@ def test_batch_runs_with_valid_params(runner: CliRunner, tmp_path: pathlib.Path)
                 str(czi),
                 "--params",
                 str(params),
-                "--t0",
+                "--first-frame",
                 "0",
-                "--t1",
+                "--last-frame",
                 "10",
                 "--workers",
                 "2",
@@ -148,9 +149,9 @@ def test_batch_runs_with_valid_params(runner: CliRunner, tmp_path: pathlib.Path)
     [
         ["--workers", "0"],
         ["--chunk", "0"],
-        ["--t0", "-1"],
-        ["--t1", "-1"],
-        ["--t0", "10", "--t1", "5"],
+        ["--first-frame", "-1"],
+        ["--last-frame", "-1"],
+        ["--first-frame", "10", "--last-frame", "5"],
     ],
 )
 def test_batch_rejects_invalid_arguments(runner, tmp_path, arguments):

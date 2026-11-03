@@ -39,13 +39,17 @@ def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
 )
 @click.option(
-    "--t0",
+    "--first-frame",
+    "--fs",
+    "first_frame",
     type=click.INT,
     help="First frame to process (0-based, inclusive). "
     + "If omitted, the value from the parameters is used, otherwise 0.",
 )
 @click.option(
-    "--t1",
+    "--last-frame",
+    "--ls",
+    "last_frame",
     type=click.INT,
     help="Last frame to process (0-based, inclusive). "
     + "If omitted, the value from the parameters is used, otherwise the last frame of the file.",
@@ -54,7 +58,7 @@ def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
     "--params",
     type=click.STRING,
     help="JSON file with the channel, preprocessing and blob finder parameters. "
-    + "If omitted, the parameters saved for this file are used.",
+    + "If omitted, saved parameters are used, or defaults if none exist.",
 )
 @click.option(
     "--workers",
@@ -81,12 +85,12 @@ def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
 @click.option(
     "--out",
     type=click.Path(exists=False, dir_okay=True, file_okay=False, path_type=pathlib.Path),
-    help="Existing directory where the results are written.",
+    help="Directory where the results are written. It is created if it does not exist.",
 )
 def batch(
     czi: pathlib.Path,
-    t0: int | None,
-    t1: int | None,
+    first_frame: int | None,
+    last_frame: int | None,
     params: str | None,
     workers: int,
     chunk: int,
@@ -99,11 +103,11 @@ def batch(
     if chunk < 1:
         raise click.BadParameter("Must be at least 1.", param_hint="--chunk")
 
-    if t0 is not None and t0 < 0:
-        raise click.BadParameter("Must be non-negative.", param_hint="--t0")
+    if first_frame is not None and first_frame < 0:
+        raise click.BadParameter("Must be non-negative.", param_hint="--first-frame")
 
-    if t1 is not None and t1 < 0:
-        raise click.BadParameter("Must be non-negative.", param_hint="--t1")
+    if last_frame is not None and last_frame < 0:
+        raise click.BadParameter("Must be non-negative.", param_hint="--last-frame")
 
     if params is not None:
         try:
@@ -113,14 +117,14 @@ def batch(
             raise click.ClickException(f"Cannot load parameters from {params}: {exc}") from exc
     else:
         entry = load_saved_params(czi)
-        if not entry:
-            raise click.ClickException(f"No saved parameters for {czi.name}. Provide --params.")
 
     if not isinstance(entry, dict):
         raise click.ClickException("Parameters must be a JSON object.")
 
-    start = t0 if t0 is not None else entry.get("t0", 0)
-    end = t1 if t1 is not None else entry.get("t1")
+    # Use frame values from CLI if provided otherwise use JSON values
+    # Support legacy t0/t1 keys if first_frame/last_frame are missing
+    start = first_frame if first_frame is not None else entry.get("first_frame", entry.get("t0", 0))
+    end = last_frame if last_frame is not None else entry.get("last_frame", entry.get("t1"))
 
     if type(start) is not int or start < 0:
         raise click.ClickException("Invalid starting frame.")
@@ -129,7 +133,7 @@ def batch(
         if type(end) is not int or end < 0:
             raise click.ClickException("Invalid ending frame.")
         if start > end:
-            raise click.UsageError("--t0 cannot be greater than --t1.")
+            raise click.UsageError("--first-frame cannot be greater than --last-frame.")
 
     batch_config = BatchConfig(
         workers=workers,
