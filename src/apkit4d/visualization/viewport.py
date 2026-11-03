@@ -56,6 +56,7 @@ class Viewport(QWidget):
         # set up of some viewport things
         self.plotter.set_background("gray")
         self.plotter.add_axes()
+        self.plotter.enable_terrain_style()
         self.min_zoom_dist: float = 0.0
         self.max_zoom_dist: float = float("inf")
 
@@ -139,6 +140,11 @@ class Viewport(QWidget):
             # but for now we keep it as it is
             values = grid.point_data["values"]
             np.copyto(self._volume_grid.point_data["values"], values)
+
+            # fixed the bug of blobs not moving caused by the missing call on
+            # .Modified() on the scalars and the point data, that was needed to tell
+            #  VTK that the data has changed
+            self._volume_grid.GetPointData().GetScalars().Modified()
             self._volume_grid.point_data.Modified()
             self._volume_grid.Modified()
 
@@ -159,7 +165,7 @@ class Viewport(QWidget):
         # we draw it once at the end
         actor = self.plotter.add_volume(
             self._volume_grid,
-            cmap="magma",
+            cmap="inferno",
             opacity="linear",
             name="volume",
             mapper="gpu",
