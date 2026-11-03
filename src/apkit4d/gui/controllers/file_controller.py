@@ -11,6 +11,7 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
+from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
 from apkit4d.gui.constants import texts
@@ -24,6 +25,8 @@ class FrameSource(Protocol):
 
     @property
     def info(self) -> CziInfo: ...
+
+    def read(self, t: int) -> NDArray: ...
 
     def close(self) -> None: ...
 
