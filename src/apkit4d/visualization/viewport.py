@@ -139,6 +139,11 @@ class Viewport(QWidget):
             # but for now we keep it as it is
             values = grid.point_data["values"]
             np.copyto(self._volume_grid.point_data["values"], values)
+
+            # fixed the bug of blobs not moving caused by the missing call on
+            # .Modified() on the scalars and the point data, that was needed to tell
+            #  VTK that the data has changed
+            self._volume_grid.GetPointData().GetScalars().Modified()
             self._volume_grid.point_data.Modified()
             self._volume_grid.Modified()
 
