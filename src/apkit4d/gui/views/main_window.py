@@ -72,9 +72,33 @@ class MainWindow(QMainWindow):
         """
         self._center.set_view(view)
 
+    def set_status(self, message: str) -> None:
+        """
+        Show `message` in the status bar.
+
+        Args:
+            message: Text to show.
+        """
+        self.statusBar().showMessage(message)
+
+    def set_current_file(self, path: Path | None) -> None:
+        """
+        Show the name of the open file in the title of the window.
+
+        Args:
+            path: The open file, or None to show only the name of the application.
+        """
+        if path is None:
+            self.setWindowTitle(application.APP_NAME)
+        else:
+            self.setWindowTitle(texts.WINDOW_TITLE_WITH_FILE.format(name=path.name, app=application.APP_NAME))
+
     def open_file(self, path: Path) -> bool:
         """
         Accept `path` if it is an existing .czi file and announce it.
+
+        The window does not read the file: whoever receives `file_opened` does, and tells the window
+        the outcome with `set_current_file` and `set_status`.
 
         Args:
             path: File chosen by the user.
@@ -83,13 +107,11 @@ class MainWindow(QMainWindow):
             True if the file was accepted and `file_opened` was emitted, False otherwise.
         """
         if path.suffix.lower() != application.CZI_SUFFIX:
-            self.statusBar().showMessage(texts.STATUS_NOT_CZI.format(name=path.name))
+            self.set_status(texts.STATUS_NOT_CZI.format(name=path.name))
             return False
         if not path.is_file():
-            self.statusBar().showMessage(texts.STATUS_NOT_FOUND.format(path=path))
+            self.set_status(texts.STATUS_NOT_FOUND.format(path=path))
             return False
-        self.setWindowTitle(texts.WINDOW_TITLE_WITH_FILE.format(name=path.name, app=application.APP_NAME))
-        self.statusBar().showMessage(str(path))
         self.file_opened.emit(path)
         return True
 
