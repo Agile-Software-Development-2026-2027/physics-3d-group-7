@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.views.main_window import MainWindow
+from apkit4d.visualization.viewport import Viewport
 
 
 def _get_application() -> QApplication:
@@ -33,8 +34,9 @@ def run(path: Path | None = None) -> int:
     """
     app = _get_application()
     window = MainWindow()
-    MainController(window, app, window)
-    # the 3D view will be plugged in with window.set_view(...)
+    viewport = Viewport()
+    window.set_view(viewport)
+    MainController(window, app, window, view=viewport)
     window.show()
     if path is not None:
         window.open_file(path)
