@@ -10,6 +10,6 @@ Refer to the [Google Python Style Guide](https://google.github.io/styleguide/pyg
 
 ## Types in Python
 
-Try to have the most specific and strict values for the type of any value. This, in combination with tools such as `ty`, can help us avoid runtime bugs.
+Try to have the most specific and strict types for any value. This, in combination with tools such as `ty`, can help us avoid runtime bugs.
 
 It is usually not necessary to specify the type of a local variable, as it should be inferred by the type checker. The types in function signatures **must** be fully explicit. Class fields too.
