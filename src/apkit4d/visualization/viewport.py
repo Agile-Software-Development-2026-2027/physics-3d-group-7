@@ -164,7 +164,7 @@ class Viewport(QWidget):
         # we draw it once at the end
         actor = self.plotter.add_volume(
             self._volume_grid,
-            cmap="magma",
+            cmap="inferno",
             opacity="linear",
             name="volume",
             mapper="gpu",
