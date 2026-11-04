@@ -1,6 +1,6 @@
-# Project name
+# ApKit4D
 
-One paragraph: what the project is.
+An application for visualizing and analyzing 4D (3D space + time) microscopy recordings of swimming algae taken in the Zeiss [`.czi`](https://www.zeiss.com/microscopy/en/products/software/zeiss-zen/czi-image-file-format.html) format. The microorganisms are detected in 3D, their trajectories tracked across frames in order to perform a motility analysis and to extract metrics.
 
 ## How we work
 

@@ -195,7 +195,7 @@ def preprocess(
     Steps:
         1. smooth out high-frequency noise via Gaussian smoothing;
         2. remove background given a strategy;
-        3. normalize the intensity of the voxels in the volume so that they are in [0.0, 1.1];
+        3. normalize the intensity of the voxels in the volume so that they are in [0.0, 1.0];
         4. optional logarithmic compression, to lift dim voxels and dim bright ones;
         5. adjust the gamma;
         6. optional CLAHE to maximize local contrast.
