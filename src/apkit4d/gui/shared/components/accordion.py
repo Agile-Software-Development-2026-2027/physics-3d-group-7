@@ -6,7 +6,7 @@ Provides collapsible accordion sections with smooth height animations.
 
 import sys
 
-from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation
+from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -43,6 +43,7 @@ class AccordionSection(QWidget):
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
+        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Header Button (Toggles collapse)
         self.toggle_button = QPushButton()
@@ -121,8 +122,9 @@ class AccordionSection(QWidget):
             self.on_toggle(expanded)
         else:
             self._update_toggle_button_text(expanded)
-            content_height = self.content_layout.sizeHint().height() + 20
+            content_height = self.content_area.sizeHint().height()
             target_height = content_height if expanded else 0
+            self.anim_group.stop()
             self.content_area.setMaximumHeight(target_height)
 
     def on_toggle(self, checked: bool) -> None:
@@ -134,10 +136,11 @@ class AccordionSection(QWidget):
         """
         self._update_toggle_button_text(checked)
 
-        content_height = self.content_layout.sizeHint().height() + 20
-        start_height = 0 if checked else content_height
+        content_height = self.content_area.sizeHint().height()
+        start_height = self.content_area.maximumHeight()
         end_height = content_height if checked else 0
 
+        self.anim_group.stop()
         self.toggle_animation.setStartValue(start_height)
         self.toggle_animation.setEndValue(end_height)
         self.anim_group.start()

@@ -5,6 +5,8 @@ Houses the top control bar (e.g. toggle all), the scrollable accordion sections,
 and a collapsible statistics and diagnostics section docked at the bottom.
 """
 
+import random
+
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -45,6 +47,7 @@ class BottomStatsSection(QFrame):
         self._main_layout = QVBoxLayout(self)
         self._main_layout.setContentsMargins(0, 0, 0, 0)
         self._main_layout.setSpacing(0)
+        self._main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Summary header (always visible)
         self._header = QFrame(self)
@@ -131,7 +134,7 @@ class BottomStatsSection(QFrame):
 
         if animate:
             self._animation.stop()
-            self._animation.setStartValue(self._details_frame.height())
+            self._animation.setStartValue(self._details_frame.maximumHeight())
             self._animation.setEndValue(target_height)
             self._animation.start()
         else:
@@ -405,6 +408,6 @@ class RightPanel(SidePanel):
         """Populate initial accordion sections."""
         for i in range(1, 10):
             section = AccordionSection(f"Section {i}")
-            for j in range(1, 4):
+            for j in range(1, random.randint(3 + i, 10 + i)):
                 section.add_widget(QLabel(f"Item {j} in Section {i}"))
             self.add_section(section)
