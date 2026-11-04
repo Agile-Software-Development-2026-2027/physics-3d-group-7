@@ -22,6 +22,9 @@ from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme.apply import apply_theme
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
 
+# Do not import anything else from this file
+__all__ = ["AccordionSection"]
+
 
 class AccordionSection(QWidget):
     """

@@ -57,6 +57,8 @@ class MainController(QObject):
         self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
+        self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
+        window.right_panel.set_theme(self._theme_controller.theme)
         # TODO: the 3D view does not follow the theme yet: it needs a method to change its background,
         # and then `self._theme_controller.theme_changed.connect(view.set_theme)`
 

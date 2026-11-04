@@ -7,6 +7,8 @@ from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 from apkit4d.gui.shared.components.accordion import (
     AccordionDemo,
     AccordionSection,
+)
+from apkit4d.gui.shared.components.scroll_area import (
     ModernScrollArea,
     get_scrollbar_stylesheet,
 )
