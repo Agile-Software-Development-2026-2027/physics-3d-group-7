@@ -1,7 +1,6 @@
 import pytest
-from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog
 
 from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, texts
@@ -53,8 +52,8 @@ def test_quit_action_closes_the_window(window):
     assert not window.isVisible()
 
 
-def test_run_shows_the_window_and_returns_when_closed(qapp, czi_file):
-    QTimer.singleShot(0, qapp.quit)
+def test_run_returns_the_exit_code_of_the_application(qapp, czi_file, monkeypatch):
+    monkeypatch.setattr(QApplication, "exec", lambda *_: 0)
     assert run(czi_file) == 0
 
 
