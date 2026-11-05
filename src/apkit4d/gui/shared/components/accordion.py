@@ -36,24 +36,20 @@ def _get_status_colors(status: StepStatus, theme_colors: ThemeColors) -> tuple[s
     is_dark = theme_colors.window == DARK_COLORS.window
 
     if status == StepStatus.PENDING:
-        # Muted Blue: planned / queued
         if is_dark:
             return (gui_colors.DARK_STATUS_PENDING_BG, theme_colors.button_text)
         return (gui_colors.LIGHT_STATUS_PENDING_BG, gui_colors.LIGHT_STATUS_PENDING_TEXT)
 
     if status == StepStatus.RUNNING:
-        # Muted Orange / Amber: working / in progress
         if is_dark:
             return (gui_colors.DARK_STATUS_RUNNING_BG, theme_colors.button_text)
         return (gui_colors.LIGHT_STATUS_RUNNING_BG, gui_colors.LIGHT_STATUS_RUNNING_TEXT)
 
     if status == StepStatus.COMPLETED:
-        # Muted Green / Emerald: finished / processed
         if is_dark:
             return (gui_colors.DARK_STATUS_COMPLETED_BG, theme_colors.button_text)
         return (gui_colors.LIGHT_STATUS_COMPLETED_BG, gui_colors.LIGHT_STATUS_COMPLETED_TEXT)
 
-    # IDLE: default theme colors
     return (theme_colors.button, theme_colors.button_text)
 
 
