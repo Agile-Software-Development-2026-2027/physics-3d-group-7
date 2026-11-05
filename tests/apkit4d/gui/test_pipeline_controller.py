@@ -30,46 +30,81 @@ def test_pipeline_controller_init(qtbot) -> None:
         assert sec.status == StepStatus.IDLE
 
 
-def test_pipeline_controller_run_up_to_intermediate_stage(qtbot) -> None:
+def test_pipeline_controller_interactive_workflow(qtbot) -> None:
     view = RightPanel()
     qtbot.addWidget(view)
     model = PipelineModel()
     controller = PipelineController(model, view)
 
-    # Click Execute button on Blob Detection (step 3)
-    detection_btn = view.get_execute_button(PipelineStep.DETECTION)
-    assert detection_btn is not None
-    detection_btn.click()
+    # Click "Plan up to this" on Detection (step 3)
+    plan_detection_btn = view.get_plan_button(PipelineStep.DETECTION)
+    assert plan_detection_btn is not None
+    plan_detection_btn.click()
 
     assert controller.target_step == PipelineStep.DETECTION
-    assert model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
+    assert model.get_status(PipelineStep.ROI) == StepStatus.PENDING
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.PENDING
     assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
-    # Downstream steps remain IDLE!
     assert model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
     assert model.get_status(PipelineStep.BATCH) == StepStatus.IDLE
+    # No action event text like "Planned up to Detection"; displays state of work
+    assert view.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
-    # Complete ROI -> advances to Preprocessing
-    controller.complete_step(PipelineStep.ROI)
+    # Attempt to "Complete this" on Detection before ROI/Preprocessing: ignored without error
+    complete_detection_btn = view.get_complete_button(PipelineStep.DETECTION)
+    assert complete_detection_btn is not None
+    complete_detection_btn.click()
+
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
+    # Still shows state of work (not an error message)
+    assert view.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
+
+    # Click "Complete this" on ROI
+    complete_roi_btn = view.get_complete_button(PipelineStep.ROI)
+    assert complete_roi_btn is not None
+    complete_roi_btn.click()
+
     assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    # Preprocessing was PENDING, so it advances to RUNNING!
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.RUNNING
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
+    # Bottom stats reflects active execution in progress
+    assert "Working: Preprocessing..." in view.bottom_stats.summary_label.text()
+    assert "Active Step: Preprocessing" in view.bottom_stats.details_label.text()
+    assert "Completed: ROI" in view.bottom_stats.details_label.text()
 
-    # Complete Preprocessing -> advances to Detection
-    controller.complete_step(PipelineStep.PREPROCESSING)
+    # Click "Complete this" on Preprocessing
+    complete_prep_btn = view.get_complete_button(PipelineStep.PREPROCESSING)
+    assert complete_prep_btn is not None
+    complete_prep_btn.click()
+
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+    # Detection was PENDING, so it advances to RUNNING!
     assert model.get_status(PipelineStep.DETECTION) == StepStatus.RUNNING
+    assert "Working: Detection..." in view.bottom_stats.summary_label.text()
+    assert "Completed: ROI, Preprocessing" in view.bottom_stats.details_label.text()
 
-    # Complete Detection -> reached target, stops!
-    controller.complete_step(PipelineStep.DETECTION)
+    # Click "Complete this" on Detection
+    complete_detection_btn.click()
     assert model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED
-    assert controller.target_step is None
     assert model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
     assert model.get_status(PipelineStep.BATCH) == StepStatus.IDLE
-    assert "Completed up to Detection" in view.bottom_stats.summary_label.text()
+    # Idle now: shows completed progress count and completed stages list
+    assert "Completed: 3 / 5 stages" in view.bottom_stats.summary_label.text()
+    assert "ROI, Preprocessing, Detection" in view.bottom_stats.details_label.text()
 
-    # Clicking Execute again on Detection reports already completed
-    detection_btn.click()
-    assert "Stage 'Detection' is already completed." in view.bottom_stats.details_label.text()
+    # Test parameter change cascading invalidation:
+    # User edits number field on ROI
+    roi_num_field = view.get_number_field(PipelineStep.ROI)
+    assert roi_num_field is not None
+    roi_num_field.setValue(99)
+
+    # ROI becomes IDLE, and downstream Preprocessing and Detection cascade to IDLE!
+    assert model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.IDLE
+    # Stats automatically reflects updated state (0 completed, idle) without event logging
+    assert view.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
 
 def test_pipeline_controller_run_pipeline_full(qtbot) -> None:
@@ -78,7 +113,7 @@ def test_pipeline_controller_run_pipeline_full(qtbot) -> None:
     model = PipelineModel()
     controller = PipelineController(model, view)
 
-    # Run full pipeline
+    # Run full pipeline programmatically
     controller.run_pipeline()
     assert controller.target_step == PipelineStep.BATCH
     assert model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
@@ -91,21 +126,6 @@ def test_pipeline_controller_run_pipeline_full(qtbot) -> None:
 
     assert model.is_complete
     assert view.bottom_stats.summary_label.text() == texts.STATS_COMPLETED_SUMMARY
-    assert texts.STATS_COMPLETED_DETAILS in view.bottom_stats.details_label.text()
-
-
-def test_pipeline_controller_run_single_step(qtbot) -> None:
-    view = RightPanel()
-    qtbot.addWidget(view)
-    model = PipelineModel()
-    controller = PipelineController(model, view)
-
-    # Run single step ROI
-    controller.run_step("roi")
-    assert model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
-
-    # Attempting invalid step name
-    controller.run_step("non_existent_step")
 
 
 def test_pipeline_controller_reset_pipeline(qtbot) -> None:
@@ -126,25 +146,3 @@ def test_pipeline_controller_reset_pipeline(qtbot) -> None:
         assert sec.status == StepStatus.IDLE
 
     assert view.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
-
-
-def test_pipeline_controller_view_param_change_handling(qtbot) -> None:
-    view = RightPanel()
-    qtbot.addWidget(view)
-    model = PipelineModel()
-    controller = PipelineController(model, view)
-
-    # Complete ROI
-    controller.run_pipeline()
-    controller.complete_step(PipelineStep.ROI)
-    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
-
-    # User alters parameter in ROI from view
-    view.step_param_changed.emit("roi", "z_start", 12)
-    assert model.get_step_params(PipelineStep.ROI) == {"z_start": 12}
-    # Invalidation resets ROI and downstream steps to IDLE
-    assert model.get_status(PipelineStep.ROI) == StepStatus.IDLE
-    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
-
-    # Invalid step name emission handled safely
-    view.step_param_changed.emit("unknown_step", "param", 1)

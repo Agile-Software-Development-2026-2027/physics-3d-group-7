@@ -3,7 +3,7 @@ Unit tests for RightPanel, BottomStatsSection, and its theme, layout, and contro
 """
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QSizePolicy
+from PySide6.QtWidgets import QLabel, QSizePolicy
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
@@ -32,21 +32,29 @@ def test_right_panel_init(qtbot) -> None:
     assert panel.toggle_all_btn.text() == texts.BUTTON_TOGGLE_ALL
     assert panel.toggle_all_btn.objectName() == names.TOGGLE_ALL_BUTTON
 
-    # Ensure no Run Pipeline button exists on top bar
-    assert panel.findChild(QPushButton, "runPipelineButton") is None
-
     assert panel.bottom_stats is not None
     assert not panel.bottom_stats.is_expanded()
-    assert panel.bottom_stats.summary_label.text() == texts.STATS_INITIAL_SUMMARY
+    assert panel.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
-    # Verify each section has an Execute button and can be retrieved
+    # Verify each section has number field, plan up to this button, and complete this button
     for step in PipelineStep:
         assert panel.get_section(step) is not None
         assert panel.get_section(step.value) is not None
-        btn = panel.get_execute_button(step)
-        assert btn is not None
-        assert btn.text() == texts.BUTTON_EXECUTE
-        assert btn.objectName() == names.EXECUTE_STAGE_BUTTON
+
+        num_field = panel.get_number_field(step)
+        assert num_field is not None
+        assert num_field.objectName() == names.STAGE_NUMBER_FIELD
+        assert num_field.value() == 10
+
+        plan_btn = panel.get_plan_button(step)
+        assert plan_btn is not None
+        assert plan_btn.text() == texts.BUTTON_PLAN_UP_TO
+        assert plan_btn.objectName() == names.PLAN_UP_TO_BUTTON
+
+        complete_btn = panel.get_complete_button(step)
+        assert complete_btn is not None
+        assert complete_btn.text() == texts.BUTTON_COMPLETE_STAGE
+        assert complete_btn.objectName() == names.COMPLETE_STAGE_BUTTON
 
 
 def test_right_panel_theme_switch(qtbot) -> None:
@@ -110,19 +118,33 @@ def test_right_panel_param_changed_signal(qtbot) -> None:
     panel = RightPanel()
     qtbot.addWidget(panel)
 
+    # Editing number field emits step_param_changed
+    num_field = panel.get_number_field(PipelineStep.ROI)
+    assert num_field is not None
     with qtbot.waitSignal(panel.step_param_changed) as blocker:
-        panel.notify_param_changed("roi", "z_start", 5)
-    assert blocker.args == ["roi", "z_start", 5]
+        num_field.setValue(42)
+    assert blocker.args == [PipelineStep.ROI.value, "value", 42]
 
 
-def test_right_panel_execute_stage_signal(qtbot) -> None:
+def test_right_panel_plan_stage_signal(qtbot) -> None:
     panel = RightPanel()
     qtbot.addWidget(panel)
 
-    roi_btn = panel.get_execute_button(PipelineStep.ROI)
-    assert roi_btn is not None
-    with qtbot.waitSignal(panel.execute_stage_requested) as blocker:
-        roi_btn.click()
+    plan_btn = panel.get_plan_button(PipelineStep.DETECTION)
+    assert plan_btn is not None
+    with qtbot.waitSignal(panel.plan_stage_requested) as blocker:
+        plan_btn.click()
+    assert blocker.args == [PipelineStep.DETECTION]
+
+
+def test_right_panel_complete_stage_signal(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    complete_btn = panel.get_complete_button(PipelineStep.ROI)
+    assert complete_btn is not None
+    with qtbot.waitSignal(panel.complete_stage_requested) as blocker:
+        complete_btn.click()
     assert blocker.args == [PipelineStep.ROI]
 
 

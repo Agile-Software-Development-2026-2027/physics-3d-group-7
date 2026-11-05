@@ -33,7 +33,11 @@ RIGHT_PANEL_TOP_BAR: str = "right_panel_top_bar"
 TOGGLE_ALL_BUTTON: str = "toggle_all_button"
 SCROLL_CONTENT: str = "accordion_scroll_content"
 MODERN_SCROLL_AREA: str = "modernScrollArea"
-EXECUTE_STAGE_BUTTON: str = "execute_stage_button"
+
+# pipeline stage controls
+STAGE_NUMBER_FIELD: str = "stage_number_field"
+PLAN_UP_TO_BUTTON: str = "plan_up_to_button"
+COMPLETE_STAGE_BUTTON: str = "complete_stage_button"
 
 # bottom stats section
 BOTTOM_STATS_SECTION: str = "bottom_stats_section"

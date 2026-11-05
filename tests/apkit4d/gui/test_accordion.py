@@ -4,18 +4,21 @@ Unit tests for the AccordionSection, ModernScrollArea, and AccordionDemo compone
 
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
-from apkit4d.gui.constants import colors as gui_colors
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.shared.components.accordion import (
     AccordionDemo,
     AccordionSection,
 )
-from apkit4d.gui.shared.components.scroll_area import (
-    ModernScrollArea,
-    get_scrollbar_stylesheet,
+from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
+from apkit4d.gui.theme.style import get_scrollbar_stylesheet
+from apkit4d.gui.theme.themes import (
+    DARK_COLORS,
+    DARK_STATUS_COLORS,
+    LIGHT_COLORS,
+    LIGHT_STATUS_COLORS,
+    Theme,
 )
-from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 
 
 def test_accordion_section_init(qtbot) -> None:
@@ -131,7 +134,7 @@ def test_accordion_section_status_colors(qtbot) -> None:
     section.apply_theme(DARK_COLORS)
     section.set_status(StepStatus.PENDING)
     assert section.status == StepStatus.PENDING
-    assert gui_colors.DARK_STATUS_PENDING_BG in section.toggle_button.styleSheet()
+    assert DARK_STATUS_COLORS.pending_bg in section.toggle_button.styleSheet()
     # Confirm no left accent border
     assert "border-left" not in section.toggle_button.styleSheet()
 
@@ -142,19 +145,19 @@ def test_accordion_section_status_colors(qtbot) -> None:
     # Transition to RUNNING (Muted Orange)
     section.set_status(StepStatus.RUNNING)
     assert section.status == StepStatus.RUNNING
-    assert gui_colors.DARK_STATUS_RUNNING_BG in section.toggle_button.styleSheet()
+    assert DARK_STATUS_COLORS.running_bg in section.toggle_button.styleSheet()
     assert "border-left" not in section.toggle_button.styleSheet()
 
     # Transition to COMPLETED (Muted Green)
     section.set_status(StepStatus.COMPLETED)
     assert section.status == StepStatus.COMPLETED
-    assert gui_colors.DARK_STATUS_COMPLETED_BG in section.toggle_button.styleSheet()
+    assert DARK_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
     assert "border-left" not in section.toggle_button.styleSheet()
 
     # Switch to Light theme while COMPLETED
     section.apply_theme(LIGHT_COLORS)
-    assert gui_colors.LIGHT_STATUS_COMPLETED_BG in section.toggle_button.styleSheet()
-    assert gui_colors.LIGHT_STATUS_COMPLETED_TEXT in section.toggle_button.styleSheet()
+    assert LIGHT_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
+    assert LIGHT_STATUS_COLORS.completed_text in section.toggle_button.styleSheet()
 
     # Back to IDLE
     section.set_status(StepStatus.IDLE)

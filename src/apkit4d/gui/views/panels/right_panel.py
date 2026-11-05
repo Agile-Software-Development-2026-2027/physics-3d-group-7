@@ -2,8 +2,9 @@
 Right column of the main window.
 
 Houses the top control bar (Toggle All), the 5 consolidated
-pipeline accordion stages with execution triggers, and a collapsible bottom
-statistics and diagnostics section.
+pipeline accordion stages with interactive demo controls (number field,
+plan up to this, complete this), and a collapsible bottom statistics
+and diagnostics section.
 """
 
 from typing import Any
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -57,14 +59,14 @@ class BottomStatsSection(QFrame):
         self._main_layout.setSpacing(0)
         self._main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Summary header (always visible)
+        # 1. Summary header (always visible)
         self._header = QFrame(self)
         self._header.setObjectName(names.BOTTOM_STATS_HEADER)
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(8, 6, 8, 6)
         header_layout.setSpacing(6)
 
-        self._summary_label = QLabel(texts.STATS_INITIAL_SUMMARY)
+        self._summary_label = QLabel(texts.STATS_DEFAULT_SUMMARY)
         self._summary_label.setObjectName(names.BOTTOM_STATS_SUMMARY_LABEL)
 
         self._toggle_btn = QPushButton(texts.STATS_ARROW_COLLAPSED)
@@ -76,14 +78,14 @@ class BottomStatsSection(QFrame):
         header_layout.addWidget(self._summary_label, stretch=1)
         header_layout.addWidget(self._toggle_btn)
 
-        # Details container (collapsible)
+        # 2. Details container (collapsible)
         self._details_frame = QFrame(self)
         self._details_frame.setObjectName(names.BOTTOM_STATS_DETAILS_FRAME)
         self._details_layout = QVBoxLayout(self._details_frame)
         self._details_layout.setContentsMargins(8, 6, 8, 6)
         self._details_layout.setSpacing(4)
 
-        self._details_label = QLabel(texts.STATS_INITIAL_DETAILS)
+        self._details_label = QLabel(texts.STATS_DEFAULT_DETAILS)
         self._details_label.setObjectName(names.BOTTOM_STATS_DETAILS_LABEL)
         self._details_label.setWordWrap(True)
         self._details_layout.addWidget(self._details_label)
@@ -161,15 +163,20 @@ class RightPanel(SidePanel):
 
     Houses:
     - Top bar: action controls ('Toggle All').
-    - Middle: 5 consolidated pipeline stages, each equipped with an Execute button.
+    - Middle: 5 consolidated pipeline stages, each equipped with demo controls:
+      - number field (parameter modification)
+      - plan up to this (queues stages up to target as PENDING)
+      - complete this (marks stage as COMPLETED and advances pipeline)
     - Bottom: collapsible statistics panel with summary and detailed states.
 
     Signals:
-        execute_stage_requested: Emitted with (PipelineStep) when an execute button is clicked.
+        plan_stage_requested: Emitted with (PipelineStep) when 'Plan up to this' is clicked.
+        complete_stage_requested: Emitted with (PipelineStep) when 'Complete this' is clicked.
         step_param_changed: Emitted with (step_name, param_name, value) when a setting changes.
     """
 
-    execute_stage_requested = Signal(object)
+    plan_stage_requested = Signal(object)
+    complete_stage_requested = Signal(object)
     step_param_changed = Signal(str, str, object)
 
     def __init__(self) -> None:
@@ -177,7 +184,9 @@ class RightPanel(SidePanel):
         self._theme: Theme = DEFAULT_THEME
         self._sections: list[AccordionSection] = []
         self._stage_sections: dict[str, AccordionSection] = {}
-        self._execute_buttons: dict[PipelineStep, QPushButton] = {}
+        self._number_fields: dict[PipelineStep, QSpinBox] = {}
+        self._plan_buttons: dict[PipelineStep, QPushButton] = {}
+        self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
@@ -186,7 +195,7 @@ class RightPanel(SidePanel):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        # Top Controls Bar
+        # 1. Top Controls Bar
         self.top_bar = QFrame(self)
         self.top_bar.setObjectName(names.RIGHT_PANEL_TOP_BAR)
         top_layout = QHBoxLayout(self.top_bar)
@@ -200,7 +209,7 @@ class RightPanel(SidePanel):
 
         top_layout.addWidget(self.toggle_all_btn)
 
-        # Middle Scroll Area with Accordion Sections
+        # 2. Middle Scroll Area with Accordion Sections
         self.scroll_area = ModernScrollArea(self)
         self.scroll_area.setObjectName(names.MODERN_SCROLL_AREA)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -215,7 +224,7 @@ class RightPanel(SidePanel):
         self.accordion_layout.addStretch()
         self.scroll_area.setWidget(self._scroll_content)
 
-        # Bottom Stats Section
+        # 3. Bottom Stats Section
         self._bottom_stats = BottomStatsSection(self)
 
         self._layout.addWidget(self.top_bar)
@@ -251,15 +260,20 @@ class RightPanel(SidePanel):
         key = step.value if isinstance(step, PipelineStep) else str(step)
         return self._stage_sections.get(key)
 
-    def get_execute_button(self, step: str | PipelineStep) -> QPushButton | None:
-        """
-        Return the Execute QPushButton associated with `step`.
-
-        Args:
-            step: Step identifier or enum member.
-        """
+    def get_number_field(self, step: str | PipelineStep) -> QSpinBox | None:
+        """Return the parameter QSpinBox associated with `step`."""
         enum_step = PipelineStep(step) if isinstance(step, str) else step
-        return self._execute_buttons.get(enum_step)
+        return self._number_fields.get(enum_step)
+
+    def get_plan_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the 'Plan up to this' QPushButton associated with `step`."""
+        enum_step = PipelineStep(step) if isinstance(step, str) else step
+        return self._plan_buttons.get(enum_step)
+
+    def get_complete_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the 'Complete this' QPushButton associated with `step`."""
+        enum_step = PipelineStep(step) if isinstance(step, str) else step
+        return self._complete_buttons.get(enum_step)
 
     def set_step_status(self, step: str | PipelineStep, status: StepStatus) -> None:
         """
@@ -321,7 +335,9 @@ class RightPanel(SidePanel):
     def clear_sections(self) -> None:
         """Remove all accordion sections from the panel."""
         self._stage_sections.clear()
-        self._execute_buttons.clear()
+        self._number_fields.clear()
+        self._plan_buttons.clear()
+        self._complete_buttons.clear()
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -349,7 +365,10 @@ class RightPanel(SidePanel):
 
     def _build_pipeline_stages(self) -> None:
         """
-        Construct the 5 consolidated pipeline stages, each equipped with an Execute button.
+        Construct the 5 consolidated pipeline stages with interactive demo controls:
+        1. Number field (parameter input)
+        2. Plan up to this (sets incomplete steps up to this stage to PENDING)
+        3. Complete this (marks stage as COMPLETED and advances pipeline)
         """
         stage_definitions: tuple[tuple[PipelineStep, str], ...] = (
             (PipelineStep.ROI, texts.STAGE_TITLE_ROI),
@@ -361,13 +380,40 @@ class RightPanel(SidePanel):
 
         for step, title in stage_definitions:
             sec = AccordionSection(title)
-            execute_btn = QPushButton(texts.BUTTON_EXECUTE)
-            execute_btn.setObjectName(names.EXECUTE_STAGE_BUTTON)
-            execute_btn.setToolTip(texts.TOOLTIP_EXECUTE_STAGE)
-            execute_btn.clicked.connect(lambda _, s=step: self.execute_stage_requested.emit(s))
 
-            sec.add_widget(execute_btn)
-            self._execute_buttons[step] = execute_btn
+            # Number field
+            param_row = QWidget()
+            param_layout = QHBoxLayout(param_row)
+            param_layout.setContentsMargins(0, 0, 0, 0)
+            param_label = QLabel(texts.LABEL_STAGE_VALUE)
+            num_box = QSpinBox()
+            num_box.setObjectName(names.STAGE_NUMBER_FIELD)
+            num_box.setRange(0, 1000)
+            num_box.setValue(10)
+            num_box.valueChanged.connect(
+                lambda val, s=step: self.step_param_changed.emit(s.value, "value", val)
+            )
+            param_layout.addWidget(param_label)
+            param_layout.addWidget(num_box)
+            sec.add_widget(param_row)
+            self._number_fields[step] = num_box
+
+            # Plan up to this button
+            plan_btn = QPushButton(texts.BUTTON_PLAN_UP_TO)
+            plan_btn.setObjectName(names.PLAN_UP_TO_BUTTON)
+            plan_btn.setToolTip(texts.TOOLTIP_PLAN_UP_TO)
+            plan_btn.clicked.connect(lambda _, s=step: self.plan_stage_requested.emit(s))
+            sec.add_widget(plan_btn)
+            self._plan_buttons[step] = plan_btn
+
+            # Complete this button
+            complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
+            complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+            complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+            complete_btn.clicked.connect(lambda _, s=step: self.complete_stage_requested.emit(s))
+            sec.add_widget(complete_btn)
+            self._complete_buttons[step] = complete_btn
+
             self._register_stage(step.value, sec)
 
     def _register_stage(self, stage_id: str, section: AccordionSection) -> None:

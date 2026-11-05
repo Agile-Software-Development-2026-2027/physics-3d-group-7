@@ -16,13 +16,28 @@ from apkit4d.gui.models.pipeline_model import (
 from apkit4d.gui.views.panels.right_panel import RightPanel
 
 
+def _format_step_title(step: PipelineStep) -> str:
+    """
+    Format pipeline step enum member into display title.
+
+    Args:
+        step: Pipeline step.
+
+    Returns:
+        Formatted title string (e.g., 'ROI', 'Preprocessing').
+    """
+    if step == PipelineStep.ROI:
+        return "ROI"
+    return step.value.replace("_", " ").title()
+
+
 class PipelineController(QObject):
     """
     Single point of entry for orchestrating pipeline execution and updating the right panel.
 
     Connects the PipelineModel to the RightPanel view:
     - Propagates model status and parameter events to the view.
-    - Handles user actions from the view (stage execution up to target).
+    - Handles interactive stage planning, completion, and parameter adjustments.
     - Enforces sequential execution and cascading invalidation.
 
     Args:
@@ -47,7 +62,8 @@ class PipelineController(QObject):
         self._model.pipeline_reset.connect(self._on_pipeline_reset)
 
         # 2. Connect View events -> Controller / Model
-        self._view.execute_stage_requested.connect(self.run_up_to)
+        self._view.plan_stage_requested.connect(self.plan_up_to)
+        self._view.complete_stage_requested.connect(self.complete_stage)
         self._view.step_param_changed.connect(self._on_view_param_changed)
 
         # Synchronize initial state
@@ -68,9 +84,11 @@ class PipelineController(QObject):
         """The target step of the current execution run, or None."""
         return self._target_step
 
-    def run_up_to(self, target_step: PipelineStep | str) -> None:
+    def plan_up_to(self, target_step: PipelineStep | str) -> None:
         """
-        Execute the pipeline from the first incomplete step up to `target_step` (inclusive).
+        Plan execution from the first incomplete step up to `target_step` (inclusive).
+
+        Sets incomplete steps up to `target_step` as PENDING (blue).
 
         Args:
             target_step: The target PipelineStep or step string.
@@ -81,11 +99,7 @@ class PipelineController(QObject):
             except ValueError:
                 return
 
-        target_title = target_step.value.replace("_", " ").title()
-
         if self._model.get_status(target_step) == StepStatus.COMPLETED:
-            self._view.set_stats_summary(texts.STATS_COMPLETED_UP_TO_SUMMARY.format(step=target_title))
-            self._view.set_stats_details(texts.STATS_ALREADY_COMPLETED.format(step=target_title))
             return
 
         target_idx = PIPELINE_STEP_ORDER.index(target_step)
@@ -101,61 +115,73 @@ class PipelineController(QObject):
             return
 
         self._target_step = target_step
-
-        # Plan incomplete steps up to target as PENDING
         self._model.plan_execution(from_step=first_incomplete, to_step=target_step)
+        self._update_pipeline_stats()
 
-        # Start the first incomplete step as RUNNING
-        self._model.set_step_status(first_incomplete, StepStatus.RUNNING)
-        self._update_stats_for_running(first_incomplete, target_step)
-
-    def run_pipeline(self) -> None:
-        """Initiate or resume execution through all pipeline stages."""
-        self.run_up_to(PIPELINE_STEP_ORDER[-1])
-
-    def complete_step(self, step: PipelineStep) -> None:
+    def complete_stage(self, step: PipelineStep | str) -> None:
         """
-        Mark `step` as COMPLETED and automatically advance to next step if target not reached.
+        Mark `step` as COMPLETED, verifying that all prior stages are completed.
+
+        If the next step was planned (PENDING), it automatically transitions to RUNNING.
+        If prior stages are not completed, the request is ignored without displaying errors.
 
         Args:
             step: Step to mark as completed.
         """
-        self._model.set_step_status(step, StepStatus.COMPLETED)
-        step_title = step.value.replace("_", " ").title()
+        if isinstance(step, str):
+            try:
+                step = PipelineStep(step)
+            except ValueError:
+                return
 
-        if step == self._target_step:
-            # Reached target of this run
-            self._target_step = None
-            if self._model.is_complete:
-                self._view.set_stats_summary(texts.STATS_COMPLETED_SUMMARY)
-                self._view.set_stats_details(texts.STATS_COMPLETED_DETAILS)
-            else:
-                self._view.set_stats_summary(texts.STATS_COMPLETED_UP_TO_SUMMARY.format(step=step_title))
-                self._view.set_stats_details(texts.STATS_COMPLETED_UP_TO_DETAILS.format(step=step_title))
+        if self._model.get_status(step) == StepStatus.COMPLETED:
             return
 
-        # Advance to next step if queued
-        idx = PIPELINE_STEP_ORDER.index(step)
-        next_idx = idx + 1
+        # Check prerequisite invariant: all prior steps must be COMPLETED
+        step_idx = PIPELINE_STEP_ORDER.index(step)
+        for prev_step in PIPELINE_STEP_ORDER[:step_idx]:
+            if self._model.get_status(prev_step) != StepStatus.COMPLETED:
+                # Prerequisite stages incomplete; ignore request without displaying errors
+                return
+
+        self._model.set_step_status(step, StepStatus.COMPLETED)
+
+        # Advance to next step if queued as PENDING
+        next_idx = step_idx + 1
         if next_idx < len(PIPELINE_STEP_ORDER):
             next_step = PIPELINE_STEP_ORDER[next_idx]
             if self._model.get_status(next_step) == StepStatus.PENDING:
                 self._model.set_step_status(next_step, StepStatus.RUNNING)
-                target = self._target_step or PIPELINE_STEP_ORDER[-1]
-                self._update_stats_for_running(next_step, target)
-        else:
-            self._target_step = None
-            self._view.set_stats_summary(texts.STATS_COMPLETED_SUMMARY)
-            self._view.set_stats_details(texts.STATS_COMPLETED_DETAILS)
 
-    def run_step(self, step_name: str) -> None:
+        self._update_pipeline_stats()
+
+    def complete_step(self, step: PipelineStep) -> None:
+        """Convenience alias for complete_stage."""
+        self.complete_stage(step)
+
+    def run_up_to(self, target_step: PipelineStep | str) -> None:
         """
-        Run a single pipeline step by delegating to `run_up_to`.
+        Execute the pipeline from the first incomplete step up to `target_step` (inclusive).
 
         Args:
-            step_name: Name of the step to run.
+            target_step: The target PipelineStep or step string.
         """
-        self.run_up_to(step_name)
+        self.plan_up_to(target_step)
+        if isinstance(target_step, str):
+            try:
+                target_step = PipelineStep(target_step)
+            except ValueError:
+                return
+
+        for step in PIPELINE_STEP_ORDER:
+            if self._model.get_status(step) == StepStatus.PENDING:
+                self._model.set_step_status(step, StepStatus.RUNNING)
+                break
+        self._update_pipeline_stats()
+
+    def run_pipeline(self) -> None:
+        """Initiate or resume execution through all pipeline stages."""
+        self.run_up_to(PIPELINE_STEP_ORDER[-1])
 
     def reset_pipeline(self) -> None:
         """Reset all stages to IDLE and clear stats."""
@@ -163,9 +189,10 @@ class PipelineController(QObject):
         self._model.reset_all()
 
     def _sync_view(self) -> None:
-        """Synchronize the view with current model statuses."""
+        """Synchronize the view with current model statuses and statistics."""
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, self._model.get_status(step))
+        self._update_pipeline_stats()
 
     def _on_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Handle status updates emitted by the model."""
@@ -174,10 +201,9 @@ class PipelineController(QObject):
     def _on_pipeline_reset(self) -> None:
         """Handle model reset event."""
         self._target_step = None
-        self._view.set_stats_summary(texts.STATS_DEFAULT_SUMMARY)
-        self._view.set_stats_details(texts.STATS_DEFAULT_DETAILS)
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, StepStatus.IDLE)
+        self._update_pipeline_stats()
 
     def _on_view_param_changed(self, step_name: str, param_name: str, value: Any) -> None:
         """Handle parameter adjustments from the view."""
@@ -186,10 +212,70 @@ class PipelineController(QObject):
         except ValueError:
             return
         self._model.update_step_params(step, **{param_name: value})
+        self._update_pipeline_stats()
 
-    def _update_stats_for_running(self, step: PipelineStep, target: PipelineStep) -> None:
-        """Update bottom stats bar to reflect the active step and target."""
-        step_title = step.value.replace("_", " ").title()
-        target_title = target.value.replace("_", " ").title()
-        self._view.set_stats_summary(texts.STATS_WORKING_SUMMARY.format(step=step_title))
-        self._view.set_stats_details(texts.STATS_WORKING_DETAILS.format(step=step_title, target=target_title))
+    def _update_pipeline_stats(self) -> None:
+        """
+        Update the bottom statistics pane to reflect the current state of work.
+
+        Shows what the pipeline is currently doing (if a step is running) or what
+        has been completed, avoiding transient event logs or error messages.
+        """
+        running_step: PipelineStep | None = None
+        completed_steps: list[PipelineStep] = []
+
+        for step in PIPELINE_STEP_ORDER:
+            status = self._model.get_status(step)
+            if status == StepStatus.RUNNING:
+                running_step = step
+            elif status == StepStatus.COMPLETED:
+                completed_steps.append(step)
+
+        # Active execution in progress: show what it is doing
+        if running_step is not None:
+            step_title = _format_step_title(running_step)
+            self._view.set_stats_summary(texts.STATS_WORKING_SUMMARY.format(step=step_title))
+            completed_str = (
+                ", ".join(_format_step_title(s) for s in completed_steps) if completed_steps else "None"
+            )
+            target = self._target_step or running_step
+            target_str = _format_step_title(target)
+            self._view.set_stats_details(
+                texts.STATS_WORKING_DETAILS.format(
+                    step=step_title,
+                    completed=completed_str,
+                    target=target_str,
+                )
+            )
+            return
+
+        total = len(PIPELINE_STEP_ORDER)
+
+        # All stages completed
+        if len(completed_steps) == total:
+            self._target_step = None
+            self._view.set_stats_summary(texts.STATS_COMPLETED_SUMMARY)
+            self._view.set_stats_details(texts.STATS_COMPLETED_DETAILS)
+            return
+
+        # Some stages completed
+        if completed_steps:
+            completed_str = ", ".join(_format_step_title(s) for s in completed_steps)
+            self._view.set_stats_summary(
+                texts.STATS_COMPLETED_PROGRESS_SUMMARY.format(
+                    completed=len(completed_steps),
+                    total=total,
+                )
+            )
+            self._view.set_stats_details(
+                texts.STATS_COMPLETED_PROGRESS_DETAILS.format(
+                    completed_count=len(completed_steps),
+                    total=total,
+                    completed_stages=completed_str,
+                )
+            )
+            return
+
+        # Idle / nothing completed
+        self._view.set_stats_summary(texts.STATS_DEFAULT_SUMMARY)
+        self._view.set_stats_details(texts.STATS_DEFAULT_DETAILS)
