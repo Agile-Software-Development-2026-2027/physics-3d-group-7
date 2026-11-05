@@ -18,39 +18,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.gui.constants import colors as gui_colors
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
-from apkit4d.gui.theme.apply import apply_theme
-from apkit4d.gui.theme.themes import DARK_COLORS, DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
+from apkit4d.gui.theme import (
+    DEFAULT_THEME,
+    THEME_COLORS,
+    AccordionStyler,
+    Theme,
+    ThemeColors,
+    apply_theme,
+)
 
 __all__ = ["AccordionSection"]
-
-
-def _get_status_colors(status: StepStatus, theme_colors: ThemeColors) -> tuple[str, str]:
-    """
-    Return (bg_color, text_color) for a step status.
-    Uses muted tones below the text to ensure high readability and cohesive theme integration.
-    """
-    is_dark = theme_colors.window == DARK_COLORS.window
-
-    if status == StepStatus.PENDING:
-        if is_dark:
-            return (gui_colors.DARK_STATUS_PENDING_BG, theme_colors.button_text)
-        return (gui_colors.LIGHT_STATUS_PENDING_BG, gui_colors.LIGHT_STATUS_PENDING_TEXT)
-
-    if status == StepStatus.RUNNING:
-        if is_dark:
-            return (gui_colors.DARK_STATUS_RUNNING_BG, theme_colors.button_text)
-        return (gui_colors.LIGHT_STATUS_RUNNING_BG, gui_colors.LIGHT_STATUS_RUNNING_TEXT)
-
-    if status == StepStatus.COMPLETED:
-        if is_dark:
-            return (gui_colors.DARK_STATUS_COMPLETED_BG, theme_colors.button_text)
-        return (gui_colors.LIGHT_STATUS_COMPLETED_BG, gui_colors.LIGHT_STATUS_COMPLETED_TEXT)
-
-    return (theme_colors.button, theme_colors.button_text)
 
 
 class AccordionSection(QWidget):
@@ -194,55 +174,13 @@ class AccordionSection(QWidget):
     def apply_theme(self, colors: ThemeColors) -> None:
         """
         Apply theme colors to header button, content area, and text.
-        Maintains active step status colors (Blue, Orange, Green) across theme changes.
+        Maintains active step status colors across theme changes.
 
         Args:
             colors: Colors of the active theme.
         """
         self._theme_colors = colors
-        bg_col, text_col = _get_status_colors(self._status, colors)
-        hover_bg = colors.alternate_base if self._status == StepStatus.IDLE else bg_col
-        checked_bg = colors.window if self._status == StepStatus.IDLE else bg_col
-
-        self.toggle_button.setStyleSheet(f"""
-            QPushButton#{names.ACCORDION_TOGGLE_BUTTON} {{
-                background-color: {bg_col};
-                color: {text_col};
-                border: 1px solid {colors.alternate_base};
-                border-radius: 4px;
-                padding: 10px;
-                text-align: left;
-                font-weight: bold;
-                font-size: 13px;
-            }}
-            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:hover {{
-                background-color: {hover_bg};
-            }}
-            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked {{
-                background-color: {checked_bg};
-                border-bottom-left-radius: 0px;
-                border-bottom-right-radius: 0px;
-            }}
-            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked:hover {{
-                background-color: {hover_bg};
-            }}
-        """)
-
-        # Style content area specifically without affecting child QLabels/QFrames
-        self.content_area.setStyleSheet(f"""
-            QFrame#{names.ACCORDION_CONTENT_AREA} {{
-                background-color: {colors.base};
-                border: 1px solid {colors.alternate_base};
-                border-top: none;
-                border-bottom-left-radius: 4px;
-                border-bottom-right-radius: 4px;
-            }}
-            QFrame#{names.ACCORDION_CONTENT_AREA} QLabel {{
-                background-color: transparent;
-                color: {colors.text};
-                border: none;
-            }}
-        """)
+        AccordionStyler.apply(self.toggle_button, self.content_area, colors, self._status)
 
 
 class AccordionDemo(QWidget):

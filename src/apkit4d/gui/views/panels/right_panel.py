@@ -23,7 +23,13 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
-from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
+from apkit4d.gui.theme import (
+    DEFAULT_THEME,
+    THEME_COLORS,
+    RightPanelStyler,
+    Theme,
+    ThemeColors,
+)
 from apkit4d.gui.views.panels.side_panel import SidePanel
 
 __all__ = ["BottomStatsSection", "RightPanel"]
@@ -51,7 +57,7 @@ class BottomStatsSection(QFrame):
         self._main_layout.setSpacing(0)
         self._main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # 1. Summary header (always visible)
+        # Summary header (always visible)
         self._header = QFrame(self)
         self._header.setObjectName(names.BOTTOM_STATS_HEADER)
         header_layout = QHBoxLayout(self._header)
@@ -70,7 +76,7 @@ class BottomStatsSection(QFrame):
         header_layout.addWidget(self._summary_label, stretch=1)
         header_layout.addWidget(self._toggle_btn)
 
-        # 2. Details container (collapsible)
+        # Details container (collapsible)
         self._details_frame = QFrame(self)
         self._details_frame.setObjectName(names.BOTTOM_STATS_DETAILS_FRAME)
         self._details_layout = QVBoxLayout(self._details_frame)
@@ -146,44 +152,7 @@ class BottomStatsSection(QFrame):
 
     def apply_theme(self, colors: ThemeColors) -> None:
         """Apply theme colors to header, labels, borders, and details frame."""
-        self.setStyleSheet(f"""
-            QFrame#{names.BOTTOM_STATS_SECTION} {{
-                background-color: {colors.window};
-                border-top: 1px solid {colors.alternate_base};
-            }}
-            QFrame#{names.BOTTOM_STATS_HEADER} {{
-                background-color: transparent;
-                border: none;
-            }}
-            QLabel#{names.BOTTOM_STATS_SUMMARY_LABEL} {{
-                color: {colors.window_text};
-                font-weight: bold;
-                font-size: 12px;
-                background-color: transparent;
-                border: none;
-            }}
-            QPushButton#{names.BOTTOM_STATS_TOGGLE_BUTTON} {{
-                background-color: {colors.button};
-                color: {colors.button_text};
-                border: 1px solid {colors.alternate_base};
-                border-radius: 3px;
-                font-size: 10px;
-                padding: 0px;
-            }}
-            QPushButton#{names.BOTTOM_STATS_TOGGLE_BUTTON}:hover {{
-                background-color: {colors.alternate_base};
-            }}
-            QFrame#{names.BOTTOM_STATS_DETAILS_FRAME} {{
-                background-color: {colors.base};
-                border-top: 1px solid {colors.alternate_base};
-            }}
-            QLabel#{names.BOTTOM_STATS_DETAILS_LABEL} {{
-                color: {colors.text};
-                font-size: 11px;
-                background-color: transparent;
-                border: none;
-            }}
-        """)
+        RightPanelStyler.apply_bottom_stats(self, colors)
 
 
 class RightPanel(SidePanel):
@@ -376,24 +345,7 @@ class RightPanel(SidePanel):
 
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
-        self.top_bar.setStyleSheet(f"""
-            QFrame#{names.RIGHT_PANEL_TOP_BAR} {{
-                background-color: {colors.window};
-                border-bottom: 1px solid {colors.alternate_base};
-            }}
-            QPushButton#{names.TOGGLE_ALL_BUTTON} {{
-                background-color: {colors.button};
-                color: {colors.button_text};
-                border: 1px solid {colors.alternate_base};
-                border-radius: 4px;
-                padding: 6px 8px;
-                font-size: 11px;
-                font-weight: bold;
-            }}
-            QPushButton#{names.TOGGLE_ALL_BUTTON}:hover {{
-                background-color: {colors.alternate_base};
-            }}
-        """)
+        self.top_bar.setStyleSheet(RightPanelStyler.top_bar_stylesheet(colors))
 
     def _build_pipeline_stages(self) -> None:
         """
