@@ -1,12 +1,13 @@
 """
-Unit tests for RightPanel and its theme and layout synchronization.
+Unit tests for RightPanel, BottomStatsSection, and its theme, layout, and control synchronization.
 """
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QSizePolicy
+from PySide6.QtWidgets import QLabel, QPushButton, QSizePolicy
 
-from apkit4d.gui.constants import names
+from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
+from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
@@ -19,17 +20,33 @@ def test_right_panel_init(qtbot) -> None:
 
     assert panel.objectName() == names.RIGHT_PANEL
     assert panel.theme == Theme.DARK
-    assert len(panel.sections) == 9
+    # 5 consolidated stages: roi, preprocessing, detection, tracking, batch
+    assert len(panel.sections) == 5
     assert panel.scroll_area.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert panel.scroll_area.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Expanding
     assert panel.scroll_area.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding
 
     # Verify top bar and bottom stats presence
     assert panel.top_bar is not None
-    assert panel.toggle_all_btn.text() == "Toggle All"
+    assert panel.top_bar.objectName() == names.RIGHT_PANEL_TOP_BAR
+    assert panel.toggle_all_btn.text() == texts.BUTTON_TOGGLE_ALL
+    assert panel.toggle_all_btn.objectName() == names.TOGGLE_ALL_BUTTON
+
+    # Ensure no Run Pipeline button exists on top bar
+    assert panel.findChild(QPushButton, "runPipelineButton") is None
+
     assert panel.bottom_stats is not None
     assert not panel.bottom_stats.is_expanded()
-    assert panel.bottom_stats.summary_label.text() == "Working: 15%"
+    assert panel.bottom_stats.summary_label.text() == texts.STATS_INITIAL_SUMMARY
+
+    # Verify each section has an Execute button and can be retrieved
+    for step in PipelineStep:
+        assert panel.get_section(step) is not None
+        assert panel.get_section(step.value) is not None
+        btn = panel.get_execute_button(step)
+        assert btn is not None
+        assert btn.text() == texts.BUTTON_EXECUTE
+        assert btn.objectName() == names.EXECUTE_STAGE_BUTTON
 
 
 def test_right_panel_theme_switch(qtbot) -> None:
@@ -74,19 +91,55 @@ def test_right_panel_toggle_and_expand_all(qtbot) -> None:
     assert all(not s.is_expanded() for s in panel.sections)
 
 
+def test_right_panel_step_status_update(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    roi_section = panel.get_section(PipelineStep.ROI)
+    assert roi_section is not None
+    assert roi_section.status == StepStatus.IDLE
+
+    panel.set_step_status(PipelineStep.ROI, StepStatus.RUNNING)
+    assert roi_section.status == StepStatus.RUNNING
+
+    panel.set_step_status("roi", StepStatus.COMPLETED)
+    assert roi_section.status == StepStatus.COMPLETED
+
+
+def test_right_panel_param_changed_signal(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    with qtbot.waitSignal(panel.step_param_changed) as blocker:
+        panel.notify_param_changed("roi", "z_start", 5)
+    assert blocker.args == ["roi", "z_start", 5]
+
+
+def test_right_panel_execute_stage_signal(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    roi_btn = panel.get_execute_button(PipelineStep.ROI)
+    assert roi_btn is not None
+    with qtbot.waitSignal(panel.execute_stage_requested) as blocker:
+        roi_btn.click()
+    assert blocker.args == [PipelineStep.ROI]
+
+
 def test_bottom_stats_section_collapse_and_expand(qtbot) -> None:
     stats = BottomStatsSection()
     qtbot.addWidget(stats)
 
+    assert stats.objectName() == names.BOTTOM_STATS_SECTION
     assert not stats.is_expanded()
     assert stats._details_frame.maximumHeight() == 0
-    assert stats._toggle_btn.text() == "▲"
+    assert stats._toggle_btn.text() == texts.STATS_ARROW_COLLAPSED
 
     # Expand without animation for instant assert
     stats.set_expanded(True, animate=False)
     assert stats.is_expanded()
     assert stats._details_frame.maximumHeight() > 0
-    assert stats._toggle_btn.text() == "▼"
+    assert stats._toggle_btn.text() == texts.STATS_ARROW_EXPANDED
 
     # Redundant set_expanded should return early
     stats.set_expanded(True, animate=False)
@@ -95,7 +148,7 @@ def test_bottom_stats_section_collapse_and_expand(qtbot) -> None:
     # Collapse with animation
     stats.toggle(animate=True)
     assert not stats.is_expanded()
-    assert stats._toggle_btn.text() == "▲"
+    assert stats._toggle_btn.text() == texts.STATS_ARROW_COLLAPSED
 
     # Text updates
     stats.set_summary("Progress: 50%")
@@ -152,13 +205,17 @@ def test_right_panel_add_control(qtbot) -> None:
     assert label.parent() is not None
 
 
-def test_main_controller_syncs_right_panel_theme(qtbot, qapp) -> None:
+def test_main_controller_initialization_and_theme_sync(qtbot, qapp) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     controller = MainController(window, qapp, window)
 
     # Initial theme should match controller
     assert window.right_panel.theme == controller.theme_controller.theme
+    assert controller.pipeline_model is not None
+    assert controller.pipeline_controller is not None
+    assert controller.pipeline_controller.model is controller.pipeline_model
+    assert controller.pipeline_controller.view is window.right_panel
 
     # Toggle theme via left panel switch request
     window.left_panel.theme_switch_requested.emit()

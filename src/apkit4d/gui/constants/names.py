@@ -27,3 +27,22 @@ FRAME_SLIDER: str = "frame_slider"
 
 # controls of the side panels
 THEME_BUTTON: str = "theme_button"
+
+# right panel controls and containers
+RIGHT_PANEL_TOP_BAR: str = "right_panel_top_bar"
+TOGGLE_ALL_BUTTON: str = "toggle_all_button"
+SCROLL_CONTENT: str = "accordion_scroll_content"
+MODERN_SCROLL_AREA: str = "modernScrollArea"
+EXECUTE_STAGE_BUTTON: str = "execute_stage_button"
+
+# bottom stats section
+BOTTOM_STATS_SECTION: str = "bottom_stats_section"
+BOTTOM_STATS_HEADER: str = "bottom_stats_header"
+BOTTOM_STATS_SUMMARY_LABEL: str = "bottom_stats_summary_label"
+BOTTOM_STATS_TOGGLE_BUTTON: str = "bottom_stats_toggle_button"
+BOTTOM_STATS_DETAILS_FRAME: str = "bottom_stats_details_frame"
+BOTTOM_STATS_DETAILS_LABEL: str = "bottom_stats_details_label"
+
+# accordion component
+ACCORDION_TOGGLE_BUTTON: str = "accordion_toggle_button"
+ACCORDION_CONTENT_AREA: str = "accordion_content_area"

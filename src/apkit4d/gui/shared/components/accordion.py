@@ -1,5 +1,5 @@
 """
-Accordion widget .
+Accordion widget.
 
 Provides collapsible accordion sections with smooth height animations.
 """
@@ -18,12 +18,43 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.gui.constants import colors as gui_colors
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme.apply import apply_theme
-from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
+from apkit4d.gui.theme.themes import DARK_COLORS, DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
 
-# Do not import anything else from this file
 __all__ = ["AccordionSection"]
+
+
+def _get_status_colors(status: StepStatus, theme_colors: ThemeColors) -> tuple[str, str]:
+    """
+    Return (bg_color, text_color) for a step status.
+    Uses muted tones below the text to ensure high readability and cohesive theme integration.
+    """
+    is_dark = theme_colors.window == DARK_COLORS.window
+
+    if status == StepStatus.PENDING:
+        # Muted Blue: planned / queued
+        if is_dark:
+            return (gui_colors.DARK_STATUS_PENDING_BG, theme_colors.button_text)
+        return (gui_colors.LIGHT_STATUS_PENDING_BG, gui_colors.LIGHT_STATUS_PENDING_TEXT)
+
+    if status == StepStatus.RUNNING:
+        # Muted Orange / Amber: working / in progress
+        if is_dark:
+            return (gui_colors.DARK_STATUS_RUNNING_BG, theme_colors.button_text)
+        return (gui_colors.LIGHT_STATUS_RUNNING_BG, gui_colors.LIGHT_STATUS_RUNNING_TEXT)
+
+    if status == StepStatus.COMPLETED:
+        # Muted Green / Emerald: finished / processed
+        if is_dark:
+            return (gui_colors.DARK_STATUS_COMPLETED_BG, theme_colors.button_text)
+        return (gui_colors.LIGHT_STATUS_COMPLETED_BG, gui_colors.LIGHT_STATUS_COMPLETED_TEXT)
+
+    # IDLE: default theme colors
+    return (theme_colors.button, theme_colors.button_text)
 
 
 class AccordionSection(QWidget):
@@ -38,6 +69,8 @@ class AccordionSection(QWidget):
     def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._title: str = title
+        self._status: StepStatus = StepStatus.IDLE
+        self._theme_colors: ThemeColors = THEME_COLORS[DEFAULT_THEME]
 
         # Primary layouts
         self.main_layout = QVBoxLayout(self)
@@ -47,14 +80,14 @@ class AccordionSection(QWidget):
 
         # Header Button (Toggles collapse)
         self.toggle_button = QPushButton()
-        self.toggle_button.setObjectName("accordionToggleButton")
+        self.toggle_button.setObjectName(names.ACCORDION_TOGGLE_BUTTON)
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(False)
         self._update_toggle_button_text(False)
 
         # Content Container
         self.content_area = QFrame()
-        self.content_area.setObjectName("accordionContentArea")
+        self.content_area.setObjectName(names.ACCORDION_CONTENT_AREA)
         self.content_layout = QVBoxLayout(self.content_area)
         self.content_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -80,6 +113,23 @@ class AccordionSection(QWidget):
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
 
     @property
+    def status(self) -> StepStatus:
+        """The current step status of the section."""
+        return self._status
+
+    def set_status(self, status: StepStatus) -> None:
+        """
+        Update the execution status of this section and refresh its visual styling.
+
+        Args:
+            status: The new StepStatus (IDLE, PENDING, RUNNING, COMPLETED).
+        """
+        if self._status == status:
+            return
+        self._status = status
+        self.apply_theme(self._theme_colors)
+
+    @property
     def title(self) -> str:
         """The section title."""
         return self._title
@@ -91,7 +141,7 @@ class AccordionSection(QWidget):
 
     def _update_toggle_button_text(self, checked: bool) -> None:
         """Update toggle button arrow and title text."""
-        arrow = "▲" if checked else "▼"
+        arrow = texts.STATS_ARROW_COLLAPSED if checked else texts.STATS_ARROW_EXPANDED
         self.toggle_button.setText(f"{arrow} {self._title}")
 
     def add_widget(self, widget: QWidget) -> None:
@@ -148,14 +198,20 @@ class AccordionSection(QWidget):
     def apply_theme(self, colors: ThemeColors) -> None:
         """
         Apply theme colors to header button, content area, and text.
+        Maintains active step status colors (Blue, Orange, Green) across theme changes.
 
         Args:
             colors: Colors of the active theme.
         """
+        self._theme_colors = colors
+        bg_col, text_col = _get_status_colors(self._status, colors)
+        hover_bg = colors.alternate_base if self._status == StepStatus.IDLE else bg_col
+        checked_bg = colors.window if self._status == StepStatus.IDLE else bg_col
+
         self.toggle_button.setStyleSheet(f"""
-            QPushButton#accordionToggleButton {{
-                background-color: {colors.button};
-                color: {colors.button_text};
+            QPushButton#{names.ACCORDION_TOGGLE_BUTTON} {{
+                background-color: {bg_col};
+                color: {text_col};
                 border: 1px solid {colors.alternate_base};
                 border-radius: 4px;
                 padding: 10px;
@@ -163,29 +219,29 @@ class AccordionSection(QWidget):
                 font-weight: bold;
                 font-size: 13px;
             }}
-            QPushButton#accordionToggleButton:hover {{
-                background-color: {colors.alternate_base};
+            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:hover {{
+                background-color: {hover_bg};
             }}
-            QPushButton#accordionToggleButton:checked {{
-                background-color: {colors.window};
+            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked {{
+                background-color: {checked_bg};
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
             }}
-            QPushButton#accordionToggleButton:checked:hover {{
-                background-color: {colors.button};
+            QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked:hover {{
+                background-color: {hover_bg};
             }}
         """)
 
         # Style content area specifically without affecting child QLabels/QFrames
         self.content_area.setStyleSheet(f"""
-            QFrame#accordionContentArea {{
+            QFrame#{names.ACCORDION_CONTENT_AREA} {{
                 background-color: {colors.base};
                 border: 1px solid {colors.alternate_base};
                 border-top: none;
                 border-bottom-left-radius: 4px;
                 border-bottom-right-radius: 4px;
             }}
-            QFrame#accordionContentArea QLabel {{
+            QFrame#{names.ACCORDION_CONTENT_AREA} QLabel {{
                 background-color: transparent;
                 color: {colors.text};
                 border: none;
@@ -217,7 +273,7 @@ class AccordionDemo(QWidget):
         # Theme switcher toolbar
         toolbar_layout = QHBoxLayout()
         self._theme_label = QLabel(f"Active Theme: {self._active_theme.value.title()}")
-        self._theme_toggle_btn = QPushButton("Switch Theme")
+        self._theme_toggle_btn = QPushButton(texts.BUTTON_THEME)
         self._theme_toggle_btn.clicked.connect(self.toggle_theme)
 
         toolbar_layout.addWidget(self._theme_label)
@@ -227,9 +283,10 @@ class AccordionDemo(QWidget):
 
         # Scroll area with modern scrollbar
         self.scroll_area = ModernScrollArea()
+        self.scroll_area.setObjectName(names.MODERN_SCROLL_AREA)
 
         scroll_content = QWidget()
-        scroll_content.setObjectName("accordionScrollContent")
+        scroll_content.setObjectName(names.SCROLL_CONTENT)
         self.accordion_layout = QVBoxLayout(scroll_content)
         self.accordion_layout.setContentsMargins(5, 5, 5, 5)
         self.accordion_layout.setSpacing(6)

@@ -4,6 +4,9 @@ Unit tests for the AccordionSection, ModernScrollArea, and AccordionDemo compone
 
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
+from apkit4d.gui.constants import colors as gui_colors
+from apkit4d.gui.constants import names
+from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.shared.components.accordion import (
     AccordionDemo,
     AccordionSection,
@@ -21,8 +24,10 @@ def test_accordion_section_init(qtbot) -> None:
 
     assert section.title == "Test Section"
     assert not section.is_expanded()
+    assert section.status == StepStatus.IDLE
     assert section.toggle_button.text() == "▼ Test Section"
-    assert section.content_area.objectName() == "accordionContentArea"
+    assert section.toggle_button.objectName() == names.ACCORDION_TOGGLE_BUTTON
+    assert section.content_area.objectName() == names.ACCORDION_CONTENT_AREA
     assert section.content_area.maximumHeight() == 0
 
 
@@ -46,9 +51,9 @@ def test_accordion_section_add_widget_and_qlabel_styling(qtbot) -> None:
 
     assert section.content_layout.count() == 2
     # Ensure content_area has the isolated object name selector
-    assert "QFrame#accordionContentArea" in section.content_area.styleSheet()
+    assert f"QFrame#{names.ACCORDION_CONTENT_AREA}" in section.content_area.styleSheet()
     assert "QLabel" in section.content_area.styleSheet()
-    assert label.objectName() != "accordionContentArea"
+    assert label.objectName() != names.ACCORDION_CONTENT_AREA
 
 
 def test_accordion_section_expand_and_collapse(qtbot) -> None:
@@ -115,6 +120,48 @@ def test_accordion_section_theme_application(qtbot) -> None:
     assert LIGHT_COLORS.base in section.content_area.styleSheet()
 
 
+def test_accordion_section_status_colors(qtbot) -> None:
+    section = AccordionSection("Status Section")
+    qtbot.addWidget(section)
+
+    # Initially IDLE
+    assert section.status == StepStatus.IDLE
+
+    # Transition to PENDING (Muted Blue) in dark theme
+    section.apply_theme(DARK_COLORS)
+    section.set_status(StepStatus.PENDING)
+    assert section.status == StepStatus.PENDING
+    assert gui_colors.DARK_STATUS_PENDING_BG in section.toggle_button.styleSheet()
+    # Confirm no left accent border
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Same status call is a no-op
+    section.set_status(StepStatus.PENDING)
+    assert section.status == StepStatus.PENDING
+
+    # Transition to RUNNING (Muted Orange)
+    section.set_status(StepStatus.RUNNING)
+    assert section.status == StepStatus.RUNNING
+    assert gui_colors.DARK_STATUS_RUNNING_BG in section.toggle_button.styleSheet()
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Transition to COMPLETED (Muted Green)
+    section.set_status(StepStatus.COMPLETED)
+    assert section.status == StepStatus.COMPLETED
+    assert gui_colors.DARK_STATUS_COMPLETED_BG in section.toggle_button.styleSheet()
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Switch to Light theme while COMPLETED
+    section.apply_theme(LIGHT_COLORS)
+    assert gui_colors.LIGHT_STATUS_COMPLETED_BG in section.toggle_button.styleSheet()
+    assert gui_colors.LIGHT_STATUS_COMPLETED_TEXT in section.toggle_button.styleSheet()
+
+    # Back to IDLE
+    section.set_status(StepStatus.IDLE)
+    assert section.status == StepStatus.IDLE
+    assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
+
+
 def test_modern_scrollbar_stylesheet() -> None:
     qss = get_scrollbar_stylesheet(DARK_COLORS)
     assert "QScrollBar:vertical" in qss
@@ -132,7 +179,7 @@ def test_modern_scroll_area(qtbot) -> None:
 
     assert scroll_area.frameShape() == QFrame.Shape.NoFrame
     assert scroll_area.widgetResizable()
-    assert scroll_area.objectName() == "modernScrollArea"
+    assert scroll_area.objectName() == names.MODERN_SCROLL_AREA
 
     scroll_area.apply_theme(LIGHT_COLORS)
     assert LIGHT_COLORS.placeholder_text in scroll_area.styleSheet()

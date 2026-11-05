@@ -4,7 +4,7 @@ Controller of the main window.
 It is the only place where the view meets the rest of the application. It creates the other controllers
 and connects them: the `FileController` opens the files, the `PlaybackController` moves through the
 frames, the `VolumeController` shows them in the 3D view, the `ThemeController` changes the look of the
-application.
+application, and the `PipelineController` orchestrates the analysis pipeline.
 """
 
 from pathlib import Path
@@ -13,9 +13,11 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeView
+from apkit4d.gui.models.pipeline_model import PipelineModel
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.czi import CziSource
 
@@ -47,6 +49,8 @@ class MainController(QObject):
         self._file_controller = FileController(window, open_source, self)
         self._playback_controller = PlaybackController(window.playback_bar, self)
         self._theme_controller = ThemeController(app, self)
+        self._pipeline_model = PipelineModel(self)
+        self._pipeline_controller = PipelineController(self._pipeline_model, window.right_panel, self)
 
         self._volume_controller = VolumeController(window, view, self) if view is not None else None
         if self._volume_controller is not None:
@@ -81,6 +85,16 @@ class MainController(QObject):
     def volume_controller(self) -> VolumeController | None:
         """Controller of the 3D view, None if the application has no 3D view."""
         return self._volume_controller
+
+    @property
+    def pipeline_model(self) -> PipelineModel:
+        """Model representing the analysis pipeline state."""
+        return self._pipeline_model
+
+    @property
+    def pipeline_controller(self) -> PipelineController:
+        """Controller of the analysis pipeline."""
+        return self._pipeline_controller
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller
