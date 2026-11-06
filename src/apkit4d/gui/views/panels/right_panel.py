@@ -175,6 +175,7 @@ class RightPanel(SidePanel):
         step_param_changed: Emitted with (step_name, param_name, value) when a setting changes.
     """
 
+    run_stage_requested = Signal(object)
     plan_stage_requested = Signal(object)
     complete_stage_requested = Signal(object)
     step_param_changed = Signal(str, str, object)
@@ -185,6 +186,7 @@ class RightPanel(SidePanel):
         self._sections: list[AccordionSection] = []
         self._stage_sections: dict[str, AccordionSection] = {}
         self._number_fields: dict[PipelineStep, QSpinBox] = {}
+        self._play_buttons: dict[PipelineStep, QPushButton] = {}
         self._plan_buttons: dict[PipelineStep, QPushButton] = {}
         self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
@@ -195,7 +197,7 @@ class RightPanel(SidePanel):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        # 1. Top Controls Bar
+        # Top Controls Bar
         self.top_bar = QFrame(self)
         self.top_bar.setObjectName(names.RIGHT_PANEL_TOP_BAR)
         top_layout = QHBoxLayout(self.top_bar)
@@ -209,7 +211,7 @@ class RightPanel(SidePanel):
 
         top_layout.addWidget(self.toggle_all_btn)
 
-        # 2. Middle Scroll Area with Accordion Sections
+        # Middle Scroll Area with Accordion Sections
         self.scroll_area = ModernScrollArea(self)
         self.scroll_area.setObjectName(names.MODERN_SCROLL_AREA)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -224,7 +226,7 @@ class RightPanel(SidePanel):
         self.accordion_layout.addStretch()
         self.scroll_area.setWidget(self._scroll_content)
 
-        # 3. Bottom Stats Section
+        # Bottom Stats Section
         self._bottom_stats = BottomStatsSection(self)
 
         self._layout.addWidget(self.top_bar)
@@ -265,10 +267,14 @@ class RightPanel(SidePanel):
         enum_step = PipelineStep(step) if isinstance(step, str) else step
         return self._number_fields.get(enum_step)
 
-    def get_plan_button(self, step: str | PipelineStep) -> QPushButton | None:
-        """Return the 'Plan up to this' QPushButton associated with `step`."""
+    def get_play_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the play QPushButton on the header associated with `step`."""
         enum_step = PipelineStep(step) if isinstance(step, str) else step
-        return self._plan_buttons.get(enum_step)
+        return self._play_buttons.get(enum_step)
+
+    def get_plan_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the play/plan QPushButton associated with `step`."""
+        return self.get_play_button(step)
 
     def get_complete_button(self, step: str | PipelineStep) -> QPushButton | None:
         """Return the 'Complete this' QPushButton associated with `step`."""
@@ -336,6 +342,7 @@ class RightPanel(SidePanel):
         """Remove all accordion sections from the panel."""
         self._stage_sections.clear()
         self._number_fields.clear()
+        self._play_buttons.clear()
         self._plan_buttons.clear()
         self._complete_buttons.clear()
         for section in list(self._sections):
@@ -363,12 +370,17 @@ class RightPanel(SidePanel):
         """Style the top control bar with the active theme colors."""
         self.top_bar.setStyleSheet(RightPanelStyler.top_bar_stylesheet(colors))
 
+    def _on_play_clicked(self, step: PipelineStep) -> None:
+        """Handle play button click on stage header."""
+        self.run_stage_requested.emit(step)
+        self.plan_stage_requested.emit(step)
+
     def _build_pipeline_stages(self) -> None:
         """
-        Construct the 5 consolidated pipeline stages with interactive demo controls:
-        1. Number field (parameter input)
-        2. Plan up to this (sets incomplete steps up to this stage to PENDING)
-        3. Complete this (marks stage as COMPLETED and advances pipeline)
+        Construct the 5 consolidated pipeline stages with interactive controls:
+        1. Play button on accordion header: plans and starts execution up to this stage
+        2. Number field (parameter input)
+        3. Complete this button (testing helper to advance stage)
         """
         stage_definitions: tuple[tuple[PipelineStep, str], ...] = (
             (PipelineStep.ROI, texts.STAGE_TITLE_ROI),
@@ -380,6 +392,12 @@ class RightPanel(SidePanel):
 
         for step, title in stage_definitions:
             sec = AccordionSection(title)
+            play_btn = sec.enable_play_button(
+                callback=lambda s=step: self._on_play_clicked(s),
+                tooltip=texts.TOOLTIP_PLAY_STAGE,
+            )
+            self._play_buttons[step] = play_btn
+            self._plan_buttons[step] = play_btn
 
             # Number field
             param_row = QWidget()
@@ -398,15 +416,7 @@ class RightPanel(SidePanel):
             sec.add_widget(param_row)
             self._number_fields[step] = num_box
 
-            # Plan up to this button
-            plan_btn = QPushButton(texts.BUTTON_PLAN_UP_TO)
-            plan_btn.setObjectName(names.PLAN_UP_TO_BUTTON)
-            plan_btn.setToolTip(texts.TOOLTIP_PLAN_UP_TO)
-            plan_btn.clicked.connect(lambda _, s=step: self.plan_stage_requested.emit(s))
-            sec.add_widget(plan_btn)
-            self._plan_buttons[step] = plan_btn
-
-            # Complete this button
+            # Complete this button (testing helper)
             complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
             complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
             complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)

@@ -100,11 +100,41 @@ def test_pipeline_model_update_step_params_cascading() -> None:
     model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
     model.set_step_status(PipelineStep.PREPROCESSING, StepStatus.COMPLETED)
 
-    # Update parameters on ROI: ROI becomes IDLE, Preprocessing becomes IDLE
+    # Update parameters on ROI: does NOT immediately invalidate completed stages
     model.update_step_params(PipelineStep.ROI, z_start=10, z_end=100)
     assert model.get_step_params(PipelineStep.ROI) == {"z_start": 10, "z_end": 100}
+    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+
+    # When ROI executes again (transitions to RUNNING), subsequent steps are invalidated to IDLE
+    model.set_step_status(PipelineStep.ROI, StepStatus.RUNNING)
+    assert model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+
+    # Direct invalidate_subsequent helper resets downstream steps
+    model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
+    model.set_step_status(PipelineStep.PREPROCESSING, StepStatus.COMPLETED)
+    model.invalidate_subsequent(PipelineStep.ROI)
+    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+
+
+def test_pipeline_model_is_step_dirty_and_invalidate_from() -> None:
+    model = PipelineModel()
+    model.update_step_params(PipelineStep.ROI, val=10)
+    model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
+    assert not model.is_step_dirty(PipelineStep.ROI)
+
+    # Change parameter while completed -> becomes dirty
+    model.update_step_params(PipelineStep.ROI, val=20)
+    assert model.is_step_dirty(PipelineStep.ROI)
+
+    # Invalidate from ROI resets ROI and downstream steps
+    model.set_step_status(PipelineStep.PREPROCESSING, StepStatus.COMPLETED)
+    model.invalidate_from(PipelineStep.ROI)
     assert model.get_status(PipelineStep.ROI) == StepStatus.IDLE
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+    assert not model.is_step_dirty(PipelineStep.ROI)
 
 
 def test_pipeline_model_plan_execution() -> None:

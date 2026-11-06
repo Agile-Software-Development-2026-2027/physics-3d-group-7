@@ -202,3 +202,58 @@ def test_accordion_demo(qtbot) -> None:
     # Set explicit theme
     demo.set_theme(Theme.DARK)
     assert demo.active_theme == Theme.DARK
+
+
+def test_accordion_section_configurable_header_actions(qtbot) -> None:
+    section = AccordionSection("Actions Test")
+    qtbot.addWidget(section)
+
+    assert section.play_button is None
+    assert section.right_widget is None
+
+    # Enable play button with callback
+    callback_calls = []
+    play_btn = section.enable_play_button(callback=lambda: callback_calls.append("play"))
+    assert play_btn is not None
+    assert section.play_button is play_btn
+    assert section.right_widget is play_btn
+    assert play_btn.parent() is section.header_frame
+
+    # Clicking play button triggers signal and callback without toggling expansion
+    with qtbot.waitSignal(section.play_clicked):
+        play_btn.click()
+    assert callback_calls == ["play"]
+    assert not section.is_expanded()
+
+    # Clicking toggle button toggles expansion without calling play callback
+    section.toggle_button.click()
+    assert section.is_expanded()
+    assert callback_calls == ["play"]
+
+    # Re-calling enable_play_button is idempotent
+    assert section.enable_play_button() is play_btn
+
+    # Add custom action button with custom callback
+    custom_calls = []
+    custom_btn = section.add_header_action(
+        text="⚙",
+        callback=lambda: custom_calls.append("gear"),
+        tooltip="Settings",
+        object_name="custom_gear_btn",
+    )
+    assert section.right_widget is custom_btn
+    assert section.play_button is None
+    assert custom_btn.objectName() == "custom_gear_btn"
+    assert custom_btn.toolTip() == "Settings"
+
+    custom_btn.click()
+    assert custom_calls == ["gear"]
+
+    # Set custom arbitrary QWidget
+    custom_widget = QLabel("STATUS")
+    section.set_right_widget(custom_widget)
+    assert section.right_widget is custom_widget
+
+    # Clear right widget
+    section.set_right_widget(None)
+    assert section.right_widget is None

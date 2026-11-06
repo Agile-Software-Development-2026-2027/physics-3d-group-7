@@ -46,6 +46,8 @@ TOOLTIP_STATS_TOGGLE: str = "Toggle statistics details"
 
 # pipeline stage controls
 LABEL_STAGE_VALUE: str = "Parameter:"
+BUTTON_PLAY_STAGE: str = "▶"
+TOOLTIP_PLAY_STAGE: str = "Run pipeline up to this stage"
 BUTTON_PLAN_UP_TO: str = "Plan up to this"
 TOOLTIP_PLAN_UP_TO: str = "Plan execution up to this stage"
 BUTTON_COMPLETE_STAGE: str = "Complete this"

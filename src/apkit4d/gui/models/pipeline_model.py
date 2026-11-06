@@ -2,6 +2,7 @@
 Model representing the analysis pipeline state, stage dependencies, and execution status.
 """
 
+import copy
 from enum import StrEnum
 from typing import Any
 
@@ -62,6 +63,7 @@ class PipelineModel(QObject):
             step: StepStatus.IDLE for step in PIPELINE_STEP_ORDER
         }
         self._params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
+        self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
 
     @property
     def step_order(self) -> tuple[PipelineStep, ...]:
@@ -147,14 +149,28 @@ class PipelineModel(QObject):
                     self.step_status_changed.emit(later_step, StepStatus.IDLE)
 
         self._statuses[step] = status
+        if status == StepStatus.COMPLETED:
+            self._last_run_params[step] = copy.deepcopy(self._params[step])
         self.step_status_changed.emit(step, status)
+
+    def is_step_dirty(self, step: PipelineStep) -> bool:
+        """
+        Return True if a completed step's parameters were modified after completion.
+
+        Args:
+            step: The step to check.
+        """
+        if self._statuses[step] != StepStatus.COMPLETED:
+            return False
+        return self._params[step] != self._last_run_params.get(step, {})
 
     def update_step_params(self, step: PipelineStep, **params: Any) -> None:
         """
         Update configuration parameters for `step`.
 
-        If the step or any subsequent step was already completed, parameter changes
-        invalidate downstream results and reset them to IDLE.
+        Updating parameters does not immediately invalidate completed stages,
+        preventing accidental parameter adjustments from discarding hours of processing.
+        Invalidation occurs when the stage is executed again or planned for rework.
 
         Args:
             step: Step whose parameters changed.
@@ -163,14 +179,34 @@ class PipelineModel(QObject):
         self._params[step].update(params)
         self.step_params_changed.emit(step)
 
-        idx = PIPELINE_STEP_ORDER.index(step)
-        # If this step was completed, it is no longer valid with new parameters
-        if self._statuses[step] == StepStatus.COMPLETED:
-            self._statuses[step] = StepStatus.IDLE
-            self.step_status_changed.emit(step, StepStatus.IDLE)
+    def invalidate_subsequent(self, step: PipelineStep) -> None:
+        """
+        Invalidate all steps following `step`, resetting their status to IDLE.
 
-        # Invalidate all subsequent steps
+        Called when `step` is re-executed, ensuring stale downstream results
+        are cleared.
+
+        Args:
+            step: Step whose downstream stages should be invalidated.
+        """
+        idx = PIPELINE_STEP_ORDER.index(step)
         self._invalidate_subsequent(idx)
+
+    def invalidate_from(self, step: PipelineStep) -> None:
+        """
+        Invalidate `step` and all steps following it, resetting their status to IDLE.
+
+        Called when a completed step with modified parameters is planned for rework.
+
+        Args:
+            step: Earliest pipeline step to invalidate.
+        """
+        idx = PIPELINE_STEP_ORDER.index(step)
+        for s in PIPELINE_STEP_ORDER[idx:]:
+            if self._statuses[s] != StepStatus.IDLE:
+                self._statuses[s] = StepStatus.IDLE
+                self._last_run_params[s] = {}
+                self.step_status_changed.emit(s, StepStatus.IDLE)
 
     def get_step_params(self, step: PipelineStep) -> dict[str, Any]:
         """Return a copy of the configuration dictionary for `step`."""
@@ -205,6 +241,7 @@ class PipelineModel(QObject):
 
     def reset_all(self) -> None:
         """Reset all steps to IDLE status."""
+        self._last_run_params = {step: {} for step in PIPELINE_STEP_ORDER}
         for step in PIPELINE_STEP_ORDER:
             if self._statuses[step] != StepStatus.IDLE:
                 self._statuses[step] = StepStatus.IDLE

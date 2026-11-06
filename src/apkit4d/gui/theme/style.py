@@ -26,6 +26,8 @@ __all__ = [
     "ScrollAreaStyler",
     "ThemeStyler",
     "get_accordion_content_area_stylesheet",
+    "get_accordion_header_frame_stylesheet",
+    "get_accordion_play_button_stylesheet",
     "get_accordion_toggle_button_stylesheet",
     "get_bottom_stats_stylesheet",
     "get_right_panel_top_bar_stylesheet",
@@ -150,25 +152,63 @@ def get_scroll_area_stylesheet(colors: ThemeColors) -> str:
     """
 
 
-def get_accordion_toggle_button_stylesheet(colors: ThemeColors, status: StepStatus = StepStatus.IDLE) -> str:
+def get_accordion_header_frame_stylesheet(
+    colors: ThemeColors,
+    status: StepStatus = StepStatus.IDLE,
+    is_expanded: bool = False,
+) -> str:
+    """
+    Generate stylesheet for the accordion header container frame.
+
+    Args:
+        colors: Colors of the active theme.
+        status: The execution status of the section.
+        is_expanded: Whether the section is currently expanded.
+    """
+    bg_col, _ = get_status_colors(status, colors)
+    bottom_radius = 0 if is_expanded else 4
+
+    return f"""
+        QFrame#{names.ACCORDION_HEADER_FRAME} {{
+            background-color: {bg_col};
+            border: 1px solid {colors.alternate_base};
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            border-bottom-left-radius: {bottom_radius}px;
+            border-bottom-right-radius: {bottom_radius}px;
+        }}
+    """
+
+
+def get_accordion_toggle_button_stylesheet(
+    colors: ThemeColors,
+    status: StepStatus = StepStatus.IDLE,
+    is_expanded: bool = False,
+) -> str:
     """
     Generate stylesheet for the accordion header toggle button.
 
     Args:
         colors: Colors of the active theme.
         status: The execution status of the section.
+        is_expanded: Whether the section is currently expanded.
     """
     bg_col, text_col = get_status_colors(status, colors)
-    hover_bg = colors.alternate_base if status == StepStatus.IDLE else bg_col
+    is_dark = colors.window == DARK_COLORS.window
+    hover_bg = "rgba(255, 255, 255, 0.05)" if is_dark else "rgba(0, 0, 0, 0.04)"
     checked_bg = colors.window if status == StepStatus.IDLE else bg_col
+    bottom_radius = 0 if is_expanded else 4
 
     return f"""
         QPushButton#{names.ACCORDION_TOGGLE_BUTTON} {{
             background-color: {bg_col};
             color: {text_col};
-            border: 1px solid {colors.alternate_base};
-            border-radius: 4px;
-            padding: 10px;
+            border: none;
+            border-top-left-radius: 4px;
+            border-bottom-left-radius: {bottom_radius}px;
+            border-top-right-radius: 0px;
+            border-bottom-right-radius: 0px;
+            padding: 9px 10px;
             text-align: left;
             font-weight: bold;
             font-size: 13px;
@@ -179,10 +219,46 @@ def get_accordion_toggle_button_stylesheet(colors: ThemeColors, status: StepStat
         QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked {{
             background-color: {checked_bg};
             border-bottom-left-radius: 0px;
-            border-bottom-right-radius: 0px;
         }}
         QPushButton#{names.ACCORDION_TOGGLE_BUTTON}:checked:hover {{
             background-color: {hover_bg};
+        }}
+    """
+
+
+def get_accordion_play_button_stylesheet(
+    colors: ThemeColors,
+    status: StepStatus = StepStatus.IDLE,
+) -> str:
+    """
+    Generate stylesheet for the play or action button on the right of an accordion header.
+
+    Args:
+        colors: Colors of the active theme.
+        status: The execution status of the section.
+    """
+    _, text_col = get_status_colors(status, colors)
+    is_dark = colors.window == DARK_COLORS.window
+    hover_bg = "rgba(255, 255, 255, 0.15)" if is_dark else "rgba(0, 0, 0, 0.08)"
+    hover_border = "rgba(255, 255, 255, 0.25)" if is_dark else "rgba(0, 0, 0, 0.15)"
+    pressed_bg = "rgba(255, 255, 255, 0.25)" if is_dark else "rgba(0, 0, 0, 0.15)"
+
+    return f"""
+        QPushButton#{names.PLAY_STAGE_BUTTON} {{
+            background-color: transparent;
+            color: {text_col};
+            border: 1px solid transparent;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 0px;
+        }}
+        QPushButton#{names.PLAY_STAGE_BUTTON}:hover {{
+            background-color: {hover_bg};
+            border-color: {hover_border};
+        }}
+        QPushButton#{names.PLAY_STAGE_BUTTON}:pressed {{
+            background-color: {pressed_bg};
         }}
     """
 
@@ -293,9 +369,30 @@ class AccordionStyler:
         return get_status_colors(status, colors)
 
     @staticmethod
-    def toggle_button_stylesheet(colors: ThemeColors, status: StepStatus = StepStatus.IDLE) -> str:
+    def header_frame_stylesheet(
+        colors: ThemeColors,
+        status: StepStatus = StepStatus.IDLE,
+        is_expanded: bool = False,
+    ) -> str:
+        """Return header frame QSS."""
+        return get_accordion_header_frame_stylesheet(colors, status, is_expanded)
+
+    @staticmethod
+    def toggle_button_stylesheet(
+        colors: ThemeColors,
+        status: StepStatus = StepStatus.IDLE,
+        is_expanded: bool = False,
+    ) -> str:
         """Return toggle button QSS."""
-        return get_accordion_toggle_button_stylesheet(colors, status)
+        return get_accordion_toggle_button_stylesheet(colors, status, is_expanded)
+
+    @staticmethod
+    def play_button_stylesheet(
+        colors: ThemeColors,
+        status: StepStatus = StepStatus.IDLE,
+    ) -> str:
+        """Return accordion play button QSS."""
+        return get_accordion_play_button_stylesheet(colors, status)
 
     @staticmethod
     def content_area_stylesheet(colors: ThemeColors) -> str:
@@ -308,10 +405,17 @@ class AccordionStyler:
         content_area: QFrame,
         colors: ThemeColors,
         status: StepStatus = StepStatus.IDLE,
+        play_button: QPushButton | None = None,
+        header_frame: QFrame | None = None,
+        is_expanded: bool = False,
     ) -> None:
-        """Apply theme styling directly to accordion toggle button and content area."""
-        toggle_button.setStyleSheet(get_accordion_toggle_button_stylesheet(colors, status))
+        """Apply theme styling directly to accordion components."""
+        if header_frame is not None:
+            header_frame.setStyleSheet(get_accordion_header_frame_stylesheet(colors, status, is_expanded))
+        toggle_button.setStyleSheet(get_accordion_toggle_button_stylesheet(colors, status, is_expanded))
         content_area.setStyleSheet(get_accordion_content_area_stylesheet(colors))
+        if play_button is not None:
+            play_button.setStyleSheet(get_accordion_play_button_stylesheet(colors, status))
 
 
 class ScrollAreaStyler:
@@ -385,9 +489,17 @@ class ThemeStyler:
         """Return scroll area QSS."""
         return get_scroll_area_stylesheet(self._colors)
 
-    def accordion_toggle_button(self, status: StepStatus = StepStatus.IDLE) -> str:
+    def accordion_header_frame(self, status: StepStatus = StepStatus.IDLE, is_expanded: bool = False) -> str:
+        """Return accordion header frame QSS for `status`."""
+        return get_accordion_header_frame_stylesheet(self._colors, status, is_expanded)
+
+    def accordion_toggle_button(self, status: StepStatus = StepStatus.IDLE, is_expanded: bool = False) -> str:
         """Return accordion toggle button QSS for `status`."""
-        return get_accordion_toggle_button_stylesheet(self._colors, status)
+        return get_accordion_toggle_button_stylesheet(self._colors, status, is_expanded)
+
+    def accordion_play_button(self, status: StepStatus = StepStatus.IDLE) -> str:
+        """Return accordion play button QSS for `status`."""
+        return get_accordion_play_button_stylesheet(self._colors, status)
 
     def accordion_content_area(self) -> str:
         """Return accordion content area QSS."""

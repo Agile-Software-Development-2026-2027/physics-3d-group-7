@@ -46,10 +46,10 @@ def test_right_panel_init(qtbot) -> None:
         assert num_field.objectName() == names.STAGE_NUMBER_FIELD
         assert num_field.value() == 10
 
-        plan_btn = panel.get_plan_button(step)
-        assert plan_btn is not None
-        assert plan_btn.text() == texts.BUTTON_PLAN_UP_TO
-        assert plan_btn.objectName() == names.PLAN_UP_TO_BUTTON
+        play_btn = panel.get_play_button(step)
+        assert play_btn is not None
+        assert play_btn.text() == texts.BUTTON_PLAY_STAGE
+        assert play_btn.objectName() == names.PLAY_STAGE_BUTTON
 
         complete_btn = panel.get_complete_button(step)
         assert complete_btn is not None
@@ -130,10 +130,10 @@ def test_right_panel_plan_stage_signal(qtbot) -> None:
     panel = RightPanel()
     qtbot.addWidget(panel)
 
-    plan_btn = panel.get_plan_button(PipelineStep.DETECTION)
-    assert plan_btn is not None
-    with qtbot.waitSignal(panel.plan_stage_requested) as blocker:
-        plan_btn.click()
+    play_btn = panel.get_play_button(PipelineStep.DETECTION)
+    assert play_btn is not None
+    with qtbot.waitSignal(panel.run_stage_requested) as blocker:
+        play_btn.click()
     assert blocker.args == [PipelineStep.DETECTION]
 
 

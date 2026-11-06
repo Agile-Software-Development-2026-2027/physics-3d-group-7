@@ -63,6 +63,7 @@ class PipelineController(QObject):
 
         # 2. Connect View events -> Controller / Model
         self._view.plan_stage_requested.connect(self.plan_up_to)
+        self._view.run_stage_requested.connect(self.run_up_to)
         self._view.complete_stage_requested.connect(self.complete_stage)
         self._view.step_param_changed.connect(self._on_view_param_changed)
 
@@ -86,9 +87,11 @@ class PipelineController(QObject):
 
     def plan_up_to(self, target_step: PipelineStep | str) -> None:
         """
-        Plan execution from the first incomplete step up to `target_step` (inclusive).
+        Plan execution from the earliest unexecuted or modified step up to `target_step` (inclusive).
 
-        Sets incomplete steps up to `target_step` as PENDING (blue).
+        Sets steps up to `target_step` as PENDING (blue). If any completed step
+        up to `target_step` had its parameters modified, it is assumed it will be reworked,
+        so that step and all downstream steps are invalidated to IDLE before planning.
 
         Args:
             target_step: The target PipelineStep or step string.
@@ -99,23 +102,34 @@ class PipelineController(QObject):
             except ValueError:
                 return
 
-        if self._model.get_status(target_step) == StepStatus.COMPLETED:
-            return
-
         target_idx = PIPELINE_STEP_ORDER.index(target_step)
 
-        # Find first incomplete step up to target
-        first_incomplete: PipelineStep | None = None
+        # Check if any completed step up to target has modified parameters (dirty)
+        first_dirty: PipelineStep | None = None
         for step in PIPELINE_STEP_ORDER[: target_idx + 1]:
-            if self._model.get_status(step) != StepStatus.COMPLETED:
-                first_incomplete = step
+            if self._model.is_step_dirty(step):
+                first_dirty = step
                 break
 
-        if first_incomplete is None:
-            return
+        if first_dirty is not None:
+            # We assume it will be reworked; invalidate from this step onwards
+            self._model.invalidate_from(first_dirty)
+            first_step_to_plan = first_dirty
+        else:
+            # Find first incomplete step up to target
+            first_incomplete: PipelineStep | None = None
+            for step in PIPELINE_STEP_ORDER[: target_idx + 1]:
+                if self._model.get_status(step) != StepStatus.COMPLETED:
+                    first_incomplete = step
+                    break
+
+            if first_incomplete is None:
+                return  # All steps up to target are completed and clean
+
+            first_step_to_plan = first_incomplete
 
         self._target_step = target_step
-        self._model.plan_execution(from_step=first_incomplete, to_step=target_step)
+        self._model.plan_execution(from_step=first_step_to_plan, to_step=target_step)
         self._update_pipeline_stats()
 
     def complete_stage(self, step: PipelineStep | str) -> None:
@@ -134,15 +148,18 @@ class PipelineController(QObject):
             except ValueError:
                 return
 
-        if self._model.get_status(step) == StepStatus.COMPLETED:
-            return
-
         # Check prerequisite invariant: all prior steps must be COMPLETED
         step_idx = PIPELINE_STEP_ORDER.index(step)
         for prev_step in PIPELINE_STEP_ORDER[:step_idx]:
             if self._model.get_status(prev_step) != StepStatus.COMPLETED:
                 # Prerequisite stages incomplete; ignore request without displaying errors
                 return
+
+        # If already COMPLETED, re-completing it executes it again and invalidates subsequent stages
+        if self._model.get_status(step) == StepStatus.COMPLETED:
+            self._model.invalidate_subsequent(step)
+            self._update_pipeline_stats()
+            return
 
         self._model.set_step_status(step, StepStatus.COMPLETED)
 

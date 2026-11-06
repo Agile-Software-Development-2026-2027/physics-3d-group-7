@@ -23,6 +23,8 @@ from apkit4d.gui.theme import (
     apply_theme,
     build_palette,
     get_accordion_content_area_stylesheet,
+    get_accordion_header_frame_stylesheet,
+    get_accordion_play_button_stylesheet,
     get_accordion_toggle_button_stylesheet,
     get_bottom_stats_stylesheet,
     get_right_panel_top_bar_stylesheet,
@@ -106,6 +108,10 @@ def test_scrollbar_and_scroll_area_stylesheet() -> None:
 
 
 def test_accordion_stylesheets() -> None:
+    header_qss = get_accordion_header_frame_stylesheet(DARK_COLORS, StepStatus.RUNNING)
+    assert names.ACCORDION_HEADER_FRAME in header_qss
+    assert DARK_STATUS_COLORS.running_bg in header_qss
+
     toggle_qss = get_accordion_toggle_button_stylesheet(DARK_COLORS, StepStatus.RUNNING)
     assert names.ACCORDION_TOGGLE_BUTTON in toggle_qss
     assert DARK_STATUS_COLORS.running_bg in toggle_qss
@@ -115,6 +121,10 @@ def test_accordion_stylesheets() -> None:
     assert names.ACCORDION_CONTENT_AREA in content_qss
     assert DARK_COLORS.base in content_qss
     assert DARK_COLORS.alternate_base in content_qss
+
+    play_qss = get_accordion_play_button_stylesheet(DARK_COLORS, StepStatus.RUNNING)
+    assert names.PLAY_STAGE_BUTTON in play_qss
+    assert "background-color: transparent" in play_qss
 
 
 def test_right_panel_stylesheets() -> None:
@@ -138,8 +148,10 @@ def test_theme_styler_class() -> None:
 
     assert "QScrollBar:vertical" in styler.scrollbar()
     assert names.MODERN_SCROLL_AREA in styler.scroll_area()
+    assert names.ACCORDION_HEADER_FRAME in styler.accordion_header_frame(StepStatus.PENDING)
     assert names.ACCORDION_TOGGLE_BUTTON in styler.accordion_toggle_button(StepStatus.PENDING)
     assert DARK_STATUS_COLORS.pending_bg in styler.accordion_toggle_button(StepStatus.PENDING)
+    assert names.PLAY_STAGE_BUTTON in styler.accordion_play_button(StepStatus.PENDING)
     assert names.ACCORDION_CONTENT_AREA in styler.accordion_content_area()
     assert names.RIGHT_PANEL_TOP_BAR in styler.right_panel_top_bar()
     assert names.BOTTOM_STATS_SECTION in styler.bottom_stats()

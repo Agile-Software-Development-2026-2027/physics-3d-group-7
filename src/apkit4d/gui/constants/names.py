@@ -48,5 +48,7 @@ BOTTOM_STATS_DETAILS_FRAME: str = "bottom_stats_details_frame"
 BOTTOM_STATS_DETAILS_LABEL: str = "bottom_stats_details_label"
 
 # accordion component
+ACCORDION_HEADER_FRAME: str = "accordion_header_frame"
 ACCORDION_TOGGLE_BUTTON: str = "accordion_toggle_button"
+PLAY_STAGE_BUTTON: str = "play_stage_button"
 ACCORDION_CONTENT_AREA: str = "accordion_content_area"

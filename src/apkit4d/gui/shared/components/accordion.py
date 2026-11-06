@@ -5,8 +5,9 @@ Provides collapsible accordion sections with smooth height animations.
 """
 
 import sys
+from collections.abc import Callable
 
-from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -35,18 +36,30 @@ __all__ = ["AccordionSection"]
 
 class AccordionSection(QWidget):
     """
-    Collapsible section with an animated content container.
+    Collapsible section with an animated content container and customizable header actions.
 
     Args:
         title: Title displayed on the header toggle button.
         parent: Optional parent widget.
+        show_play_button: Whether to display a play action button on the header.
+        right_widget: Optional custom widget placed on the right portion of the header.
     """
 
-    def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
+    play_clicked = Signal()
+
+    def __init__(
+        self,
+        title: str = "",
+        parent: QWidget | None = None,
+        show_play_button: bool = False,
+        right_widget: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._title: str = title
         self._status: StepStatus = StepStatus.IDLE
         self._theme_colors: ThemeColors = THEME_COLORS[DEFAULT_THEME]
+        self._right_widget: QWidget | None = None
+        self._play_button: QPushButton | None = None
 
         # Primary layouts
         self.main_layout = QVBoxLayout(self)
@@ -54,15 +67,23 @@ class AccordionSection(QWidget):
         self.main_layout.setSpacing(0)
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
+        # Header Container Frame
+        self.header_frame = QFrame(self)
+        self.header_frame.setObjectName(names.ACCORDION_HEADER_FRAME)
+        self.header_layout = QHBoxLayout(self.header_frame)
+        self.header_layout.setContentsMargins(0, 0, 6, 0)
+        self.header_layout.setSpacing(4)
+
         # Header Button (Toggles collapse)
-        self.toggle_button = QPushButton()
+        self.toggle_button = QPushButton(self.header_frame)
         self.toggle_button.setObjectName(names.ACCORDION_TOGGLE_BUTTON)
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(False)
         self._update_toggle_button_text(False)
+        self.header_layout.addWidget(self.toggle_button, stretch=1)
 
         # Content Container
-        self.content_area = QFrame()
+        self.content_area = QFrame(self)
         self.content_area.setObjectName(names.ACCORDION_CONTENT_AREA)
         self.content_layout = QVBoxLayout(self.content_area)
         self.content_layout.setContentsMargins(10, 10, 10, 10)
@@ -71,7 +92,7 @@ class AccordionSection(QWidget):
         self.content_area.setMaximumHeight(0)
 
         # Add to main section layout
-        self.main_layout.addWidget(self.toggle_button)
+        self.main_layout.addWidget(self.header_frame)
         self.main_layout.addWidget(self.content_area)
 
         # Smooth Animation Setup
@@ -85,8 +106,101 @@ class AccordionSection(QWidget):
         # Connect the click signal
         self.toggle_button.clicked.connect(self.on_toggle)
 
+        # Install custom right widget or play button if requested
+        if right_widget is not None:
+            self.set_right_widget(right_widget)
+        elif show_play_button:
+            self.enable_play_button()
+
         # Initialize with default theme
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
+
+    @property
+    def play_button(self) -> QPushButton | None:
+        """The play button on the right portion of the header, if enabled."""
+        return self._play_button
+
+    @property
+    def right_widget(self) -> QWidget | None:
+        """The custom widget placed on the right portion of the header, if any."""
+        return self._right_widget
+
+    def set_right_widget(self, widget: QWidget | None) -> None:
+        """
+        Set or clear the widget placed on the right portion of the accordion header.
+
+        Args:
+            widget: A QWidget to display on the right, or None to clear.
+        """
+        if self._right_widget is not None:
+            self.header_layout.removeWidget(self._right_widget)
+            if self._right_widget is not widget:
+                self._right_widget.setParent(None)
+            if self._right_widget is self._play_button:
+                self._play_button = None
+            self._right_widget = None
+
+        if widget is not None:
+            self._right_widget = widget
+            self.header_layout.addWidget(widget)
+
+    def add_header_action(
+        self,
+        text: str,
+        callback: Callable[[], None] | None = None,
+        tooltip: str = "",
+        object_name: str = "",
+    ) -> QPushButton:
+        """
+        Add a customizable action button on the right portion of the accordion header.
+
+        Args:
+            text: Text or icon symbol displayed on the button.
+            callback: Optional callback invoked when the button is clicked.
+            tooltip: Optional tooltip for the button.
+            object_name: Optional Qt object name.
+
+        Returns:
+            The created action QPushButton.
+        """
+        btn = QPushButton(text, self.header_frame)
+        btn.setObjectName(object_name or names.PLAY_STAGE_BUTTON)
+        btn.setToolTip(tooltip)
+        btn.setFixedSize(26, 26)
+        if callback is not None:
+            btn.clicked.connect(lambda _=False, cb=callback: cb())
+        self.set_right_widget(btn)
+        if hasattr(self, "_theme_colors"):
+            btn.setStyleSheet(AccordionStyler.play_button_stylesheet(self._theme_colors, self._status))
+        return btn
+
+    def enable_play_button(
+        self,
+        callback: Callable[[], None] | None = None,
+        tooltip: str = "",
+    ) -> QPushButton:
+        """
+        Create and insert the play button on the right portion of the accordion header.
+
+        Args:
+            callback: Optional callback invoked when the play button is clicked.
+            tooltip: Optional tooltip for the button.
+
+        Returns:
+            The created QPushButton.
+        """
+        if self._play_button is not None:
+            return self._play_button
+
+        btn = self.add_header_action(
+            text=texts.BUTTON_PLAY_STAGE,
+            callback=callback,
+            tooltip=tooltip or texts.TOOLTIP_PLAY_STAGE,
+            object_name=names.PLAY_STAGE_BUTTON,
+        )
+        btn.clicked.connect(self.play_clicked.emit)
+        self._play_button = btn
+        return btn
 
     @property
     def status(self) -> StepStatus:
@@ -133,6 +247,21 @@ class AccordionSection(QWidget):
         """Return True if the section is currently expanded."""
         return self.toggle_button.isChecked()
 
+    def _update_header_style(self) -> None:
+        """Refresh header frame and toggle button styles for expanded/collapsed state."""
+        if hasattr(self, "_theme_colors"):
+            is_expanded = self.toggle_button.isChecked()
+            self.header_frame.setStyleSheet(
+                AccordionStyler.header_frame_stylesheet(self._theme_colors, self._status, is_expanded)
+            )
+            self.toggle_button.setStyleSheet(
+                AccordionStyler.toggle_button_stylesheet(self._theme_colors, self._status, is_expanded)
+            )
+            if self._play_button is not None:
+                self._play_button.setStyleSheet(
+                    AccordionStyler.play_button_stylesheet(self._theme_colors, self._status)
+                )
+
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         """
         Set the expanded state of the section.
@@ -148,6 +277,7 @@ class AccordionSection(QWidget):
             self.on_toggle(expanded)
         else:
             self._update_toggle_button_text(expanded)
+            self._update_header_style()
             content_height = self.content_area.sizeHint().height()
             target_height = content_height if expanded else 0
             self.anim_group.stop()
@@ -161,6 +291,7 @@ class AccordionSection(QWidget):
             checked: True if expanding, False if collapsing.
         """
         self._update_toggle_button_text(checked)
+        self._update_header_style()
 
         content_height = self.content_area.sizeHint().height()
         start_height = self.content_area.maximumHeight()
@@ -180,7 +311,16 @@ class AccordionSection(QWidget):
             colors: Colors of the active theme.
         """
         self._theme_colors = colors
-        AccordionStyler.apply(self.toggle_button, self.content_area, colors, self._status)
+        is_expanded = self.toggle_button.isChecked()
+        AccordionStyler.apply(
+            self.toggle_button,
+            self.content_area,
+            colors,
+            self._status,
+            self._play_button,
+            self.header_frame,
+            is_expanded,
+        )
 
 
 class AccordionDemo(QWidget):
