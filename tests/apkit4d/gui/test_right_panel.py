@@ -132,9 +132,15 @@ def test_right_panel_plan_stage_signal(qtbot) -> None:
 
     play_btn = panel.get_play_button(PipelineStep.DETECTION)
     assert play_btn is not None
+
+    plan_requested_emitted: list[object] = []
+    panel.plan_stage_requested.connect(plan_requested_emitted.append)
+
     with qtbot.waitSignal(panel.run_stage_requested) as blocker:
         play_btn.click()
     assert blocker.args == [PipelineStep.DETECTION]
+    # Verify play click only emits run_stage_requested, not duplicate plan_stage_requested
+    assert len(plan_requested_emitted) == 0
 
 
 def test_right_panel_complete_stage_signal(qtbot) -> None:

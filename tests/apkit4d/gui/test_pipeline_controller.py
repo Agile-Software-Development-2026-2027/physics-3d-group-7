@@ -2,6 +2,8 @@
 Unit tests for PipelineController orchestrating PipelineModel and RightPanel.
 """
 
+import pytest
+
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.models.pipeline_model import (
@@ -49,14 +51,14 @@ def test_pipeline_controller_interactive_workflow(qtbot) -> None:
     assert model.get_status(PipelineStep.BATCH) == StepStatus.IDLE
     assert "Working: ROI..." in view.bottom_stats.summary_label.text()
 
-    # Attempt to "Complete this" on Detection before ROI/Preprocessing: ignored without error
+    # Attempt to "Complete this" on Detection before ROI/Preprocessing: raises ValueError
     complete_detection_btn = view.get_complete_button(PipelineStep.DETECTION)
     assert complete_detection_btn is not None
-    complete_detection_btn.click()
-
-    assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
-    # Still shows active work in progress
-    assert "Working: ROI..." in view.bottom_stats.summary_label.text()
+    with qtbot.capture_exceptions() as exceptions:
+        complete_detection_btn.click()
+    assert len(exceptions) == 1
+    assert exceptions[0][0] is ValueError
+    assert "prior step 'roi' is not completed" in str(exceptions[0][1])
 
     # Click "Complete this" on ROI
     complete_roi_btn = view.get_complete_button(PipelineStep.ROI)
@@ -151,3 +153,79 @@ def test_pipeline_controller_reset_pipeline(qtbot) -> None:
         assert sec.status == StepStatus.IDLE
 
     assert view.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
+
+
+def test_pipeline_controller_run_up_to_while_step_already_running(qtbot) -> None:
+    view = RightPanel()
+    qtbot.addWidget(view)
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    # Start execution up to Preprocessing
+    controller.run_up_to(PipelineStep.PREPROCESSING)
+    assert model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.PENDING
+
+    # Complete ROI -> Preprocessing transitions to RUNNING
+    controller.complete_step(PipelineStep.ROI)
+    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.RUNNING
+    assert model.current_running_step == PipelineStep.PREPROCESSING
+
+    # Verify plan_up_to returns the correct sequence of steps [PREPROCESSING, DETECTION, TRACKING, BATCH]
+    planned = controller.plan_up_to(PipelineStep.BATCH)
+    assert planned == [
+        PipelineStep.PREPROCESSING,
+        PipelineStep.DETECTION,
+        PipelineStep.TRACKING,
+        PipelineStep.BATCH,
+    ]
+
+    # User clicks execute on Batch Export while Preprocessing is RUNNING.
+    # Because planned[0] is PREPROCESSING (which is already RUNNING), it doesn't mistakenly
+    # attempt to run DETECTION or throw a ValueError.
+    play_batch_btn = view.get_play_button(PipelineStep.BATCH)
+    assert play_batch_btn is not None
+    play_batch_btn.click()
+
+    assert controller.target_step == PipelineStep.BATCH
+    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.RUNNING
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
+    assert model.get_status(PipelineStep.TRACKING) == StepStatus.PENDING
+    assert model.get_status(PipelineStep.BATCH) == StepStatus.PENDING
+
+    # 4. As Preprocessing completes, execution advances sequentially without errors
+    controller.complete_step(PipelineStep.PREPROCESSING)
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.RUNNING
+
+    controller.complete_step(PipelineStep.DETECTION)
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.TRACKING) == StepStatus.RUNNING
+
+    controller.complete_step(PipelineStep.TRACKING)
+    assert model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.BATCH) == StepStatus.RUNNING
+
+    controller.complete_step(PipelineStep.BATCH)
+    assert model.get_status(PipelineStep.BATCH) == StepStatus.COMPLETED
+    assert model.is_complete
+
+
+def test_pipeline_controller_complete_stage_raises_value_error_when_prior_incomplete() -> None:
+    view = RightPanel()
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    # Attempting to complete Preprocessing when ROI is not completed raises ValueError
+    with pytest.raises(
+        ValueError, match="Cannot set 'preprocessing' to completed: prior step 'roi' is not completed."
+    ):
+        controller.complete_stage(PipelineStep.PREPROCESSING)
+
+    # Attempting to complete Detection when Preprocessing is not completed raises ValueError
+    with pytest.raises(
+        ValueError, match="Cannot set 'detection' to completed: prior step 'roi' is not completed."
+    ):
+        controller.complete_stage(PipelineStep.DETECTION)

@@ -88,6 +88,11 @@ class PipelineModel(QObject):
                 return step
         return None
 
+    @property
+    def current_running_step(self) -> PipelineStep | None:
+        """Convenience alias for active_step."""
+        return self.active_step
+
     def get_status(self, step: PipelineStep) -> StepStatus:
         """
         Return the current execution status of a step.
@@ -125,7 +130,7 @@ class PipelineModel(QObject):
         if current_status == status:
             return
 
-        idx = PIPELINE_STEP_ORDER.index(step)
+        idx: int = PIPELINE_STEP_ORDER.index(step)
 
         # Invariant check: Cannot mark COMPLETED or RUNNING if any prior step is incomplete
         if status in (StepStatus.COMPLETED, StepStatus.RUNNING):
@@ -216,11 +221,18 @@ class PipelineModel(QObject):
         self,
         from_step: PipelineStep | None = None,
         to_step: PipelineStep | None = None,
-    ) -> None:
+    ) -> list[PipelineStep]:
         """
         Plan pipeline execution starting from `from_step` up to `to_step` (inclusive).
 
         Sets incomplete steps to PENDING.
+
+        Args:
+            from_step: Starting step. If None, starts from the first incomplete step.
+            to_step: Ending step (inclusive). If None, plans through the last step.
+
+        Returns:
+            List of steps included in the execution plan from `from_step` to `to_step`.
         """
         start_step = from_step
         if start_step is None:
@@ -230,14 +242,17 @@ class PipelineModel(QObject):
                     break
 
         if start_step is None:
-            return  # Already all completed
+            return []  # Already all completed
 
         start_idx = PIPELINE_STEP_ORDER.index(start_step)
         end_idx = PIPELINE_STEP_ORDER.index(to_step) + 1 if to_step is not None else len(PIPELINE_STEP_ORDER)
+        planned_steps: list[PipelineStep] = []
         for s in PIPELINE_STEP_ORDER[start_idx:end_idx]:
+            planned_steps.append(s)
             if self._statuses[s] not in (StepStatus.RUNNING, StepStatus.COMPLETED):
                 self._statuses[s] = StepStatus.PENDING
                 self.step_status_changed.emit(s, StepStatus.PENDING)
+        return planned_steps
 
     def reset_all(self) -> None:
         """Reset all steps to IDLE status."""

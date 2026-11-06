@@ -85,7 +85,7 @@ class PipelineController(QObject):
         """The target step of the current execution run, or None."""
         return self._target_step
 
-    def plan_up_to(self, target_step: PipelineStep | str) -> None:
+    def plan_up_to(self, target_step: PipelineStep | str) -> list[PipelineStep]:
         """
         Plan execution from the earliest unexecuted or modified step up to `target_step` (inclusive).
 
@@ -95,12 +95,15 @@ class PipelineController(QObject):
 
         Args:
             target_step: The target PipelineStep or step string.
+
+        Returns:
+            List of planned PipelineSteps from the earliest incomplete/rework step up to target_step.
         """
         if isinstance(target_step, str):
             try:
                 target_step = PipelineStep(target_step)
             except ValueError:
-                return
+                return []
 
         target_idx = PIPELINE_STEP_ORDER.index(target_step)
 
@@ -124,35 +127,31 @@ class PipelineController(QObject):
                     break
 
             if first_incomplete is None:
-                return  # All steps up to target are completed and clean
+                return []  # All steps up to target are completed and clean
 
             first_step_to_plan = first_incomplete
 
         self._target_step = target_step
-        self._model.plan_execution(from_step=first_step_to_plan, to_step=target_step)
+        planned = self._model.plan_execution(from_step=first_step_to_plan, to_step=target_step)
         self._update_pipeline_stats()
+        return planned
 
     def complete_stage(self, step: PipelineStep | str) -> None:
         """
         Mark `step` as COMPLETED, verifying that all prior stages are completed.
 
         If the next step was planned (PENDING), it automatically transitions to RUNNING.
-        If prior stages are not completed, the request is ignored without displaying errors.
 
         Args:
             step: Step to mark as completed.
+
+        Raises:
+            ValueError: If prior steps are not completed.
         """
         if isinstance(step, str):
             try:
                 step = PipelineStep(step)
             except ValueError:
-                return
-
-        # Check prerequisite invariant: all prior steps must be COMPLETED
-        step_idx = PIPELINE_STEP_ORDER.index(step)
-        for prev_step in PIPELINE_STEP_ORDER[:step_idx]:
-            if self._model.get_status(prev_step) != StepStatus.COMPLETED:
-                # Prerequisite stages incomplete; ignore request without displaying errors
                 return
 
         # If already COMPLETED, re-completing it executes it again and invalidates subsequent stages
@@ -164,6 +163,7 @@ class PipelineController(QObject):
         self._model.set_step_status(step, StepStatus.COMPLETED)
 
         # Advance to next step if queued as PENDING
+        step_idx = PIPELINE_STEP_ORDER.index(step)
         next_idx = step_idx + 1
         if next_idx < len(PIPELINE_STEP_ORDER):
             next_step = PIPELINE_STEP_ORDER[next_idx]
@@ -183,17 +183,14 @@ class PipelineController(QObject):
         Args:
             target_step: The target PipelineStep or step string.
         """
-        self.plan_up_to(target_step)
-        if isinstance(target_step, str):
-            try:
-                target_step = PipelineStep(target_step)
-            except ValueError:
-                return
+        planned_steps = self.plan_up_to(target_step)
+        if not planned_steps:
+            return
 
-        for step in PIPELINE_STEP_ORDER:
-            if self._model.get_status(step) == StepStatus.PENDING:
-                self._model.set_step_status(step, StepStatus.RUNNING)
-                break
+        # The entry point of this planned sequence is the first step in the plan.
+        first_step = planned_steps[0]
+        self._model.set_step_status(first_step, StepStatus.RUNNING)
+
         self._update_pipeline_stats()
 
     def run_pipeline(self) -> None:

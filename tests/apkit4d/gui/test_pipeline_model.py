@@ -141,20 +141,23 @@ def test_pipeline_model_plan_execution() -> None:
     model = PipelineModel()
 
     # Plan from scratch: all steps should become PENDING
-    model.plan_execution()
+    planned = model.plan_execution()
+    assert planned == list(PIPELINE_STEP_ORDER)
     for step in PIPELINE_STEP_ORDER:
         assert model.get_status(step) == StepStatus.PENDING
 
     # Complete ROI
     model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
     # Plan execution: remaining steps should remain PENDING
-    model.plan_execution()
+    planned = model.plan_execution()
+    assert planned == list(PIPELINE_STEP_ORDER[1:])
     assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.PENDING
 
     # Plan up to intermediate step: Preprocessing up to Detection
     model.reset_all()
-    model.plan_execution(from_step=PipelineStep.ROI, to_step=PipelineStep.DETECTION)
+    planned = model.plan_execution(from_step=PipelineStep.ROI, to_step=PipelineStep.DETECTION)
+    assert planned == [PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION]
     assert model.get_status(PipelineStep.ROI) == StepStatus.PENDING
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.PENDING
     assert model.get_status(PipelineStep.DETECTION) == StepStatus.PENDING
@@ -167,7 +170,7 @@ def test_pipeline_model_plan_execution() -> None:
             model.set_step_status(step, StepStatus.COMPLETED)
     assert model.is_complete
 
-    model.plan_execution()
+    assert model.plan_execution() == []
     assert model.is_complete
 
 

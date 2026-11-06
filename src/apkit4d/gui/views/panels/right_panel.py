@@ -170,7 +170,9 @@ class RightPanel(SidePanel):
     - Bottom: collapsible statistics panel with summary and detailed states.
 
     Signals:
-        plan_stage_requested: Emitted with (PipelineStep) when 'Plan up to this' is clicked.
+        run_stage_requested: Emitted with (PipelineStep) when a stage header play button is clicked.
+        plan_stage_requested: Emitted with (PipelineStep) to plan stages up to target as PENDING without
+            starting execution.
         complete_stage_requested: Emitted with (PipelineStep) when 'Complete this' is clicked.
         step_param_changed: Emitted with (step_name, param_name, value) when a setting changes.
     """
@@ -373,7 +375,6 @@ class RightPanel(SidePanel):
     def _on_play_clicked(self, step: PipelineStep) -> None:
         """Handle play button click on stage header."""
         self.run_stage_requested.emit(step)
-        self.plan_stage_requested.emit(step)
 
     def _build_pipeline_stages(self) -> None:
         """
