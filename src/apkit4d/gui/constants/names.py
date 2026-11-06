@@ -27,3 +27,5 @@ FRAME_SLIDER: str = "frame_slider"
 
 # controls of the side panels
 THEME_BUTTON: str = "theme_button"
+APPEARANCE_SECTION: str = "appearance_section"
+LAYERS_SECTION: str = "layers_section"

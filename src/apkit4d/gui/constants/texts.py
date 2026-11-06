@@ -36,5 +36,8 @@ BUTTON_PAUSE: str = "Pause"
 BUTTON_NEXT: str = ">"
 
 # side panels
+SECTION_APPEARANCE: str = "Appearance"
+SECTION_LAYERS: str = "Layers"
+LAYERS_EMPTY: str = "No layers yet"
 BUTTON_THEME: str = "Switch theme"
 RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel has its controls
