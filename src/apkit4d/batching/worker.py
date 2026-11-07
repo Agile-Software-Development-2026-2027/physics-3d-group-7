@@ -77,7 +77,8 @@ def detect_frame(
         t: Zero-based frame timepoint index.
         pp: Preprocessing parameters (PreprocParams or dict).
         bp: Blob detection parameters (BlobParams or dict).
-        roi: Optional RegionOfInterest or dictionary specifying ROI bounds.
+        roi: Optional RegionOfInterest (world coordinates, micrometers) or dictionary
+            specifying ROI bounds. None processes the whole volume.
         include_time: If True, inserts timestamp 't_s' at column index 1.
 
     Returns:
@@ -88,25 +89,31 @@ def detect_frame(
     """
     volume = src.read(t)
 
-    roi_obj: RegionOfInterest
-    if roi is None:
-        roi_obj = RegionOfInterest()
+    roi_obj: RegionOfInterest | None
+    if not roi:
+        roi_obj = None
     elif isinstance(roi, RegionOfInterest):
         roi_obj = roi
     elif isinstance(roi, dict):
         roi_obj = RegionOfInterest.from_dict(roi)
     else:
         roi_obj = RegionOfInterest(
-            z0=getattr(roi, "z0", None),
-            z1=getattr(roi, "z1", None),
-            y0=getattr(roi, "y0", None),
-            y1=getattr(roi, "y1", None),
-            x0=getattr(roi, "x0", None),
-            x1=getattr(roi, "x1", None),
+            x_min=roi.x_min,
+            x_max=roi.x_max,
+            y_min=roi.y_min,
+            y_max=roi.y_max,
+            z_min=roi.z_min,
+            z_max=roi.z_max,
         )
 
-    slices = roi_obj.slices(volume.shape)
-    offset = roi_obj.offset(volume.shape)
+    if roi_obj is None:
+        # no ROI: the whole volume is processed
+        slices = (slice(None), slice(None), slice(None))
+        offset = (0, 0, 0)
+    else:
+        # the ROI is in micrometers, so it is converted to voxel indices (Z, Y, X)
+        slices, _ = roi_obj.to_voxel_slices(volume.shape, src.info.voxel)
+        offset = (slices[0].start, slices[1].start, slices[2].start)
     vol_roi = volume[slices]
 
     preproc_obj: PreprocParams
@@ -204,7 +211,7 @@ def _detect_frames_worker(
     if isinstance(roi, RegionOfInterest) or roi is None:
         roi_params = roi
     elif isinstance(roi, dict):
-        roi_params = RegionOfInterest.from_dict(roi)
+        roi_params = RegionOfInterest.from_dict(roi) if roi else None
     else:
         roi_params = roi
 
