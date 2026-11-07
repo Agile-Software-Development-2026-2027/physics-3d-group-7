@@ -34,6 +34,10 @@ BUTTON_PREVIOUS: str = "<"
 BUTTON_PLAY: str = "Play"
 BUTTON_PAUSE: str = "Pause"
 BUTTON_NEXT: str = ">"
+TOOLTIP_PREVIOUS: str = "Previous frame"
+TOOLTIP_PLAY: str = "Play"
+TOOLTIP_PAUSE: str = "Pause"
+TOOLTIP_NEXT: str = "Next frame"
 
 # side panels
 SECTION_APPEARANCE: str = "Appearance"
