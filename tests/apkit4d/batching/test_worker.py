@@ -137,19 +137,19 @@ class TestDetectFrame:
 
     def test_detect_frame_with_region_of_interest(self, mock_czi_source: MagicMock) -> None:
         """Verify detect_frame with RegionOfInterest instance."""
-        roi = RegionOfInterest(z0=2, z1=8, y0=5, y1=15, x0=5, x1=15)
+        roi = RegionOfInterest(x_min=5.0, x_max=15.0, y_min=5.0, y_max=15.0, z_min=2.0, z_max=8.0)
         df = detect_frame(mock_czi_source, t=0, pp=None, bp=None, roi=roi)
         assert isinstance(df, pd.DataFrame)
 
     def test_detect_frame_with_dict_roi(self, mock_czi_source: MagicMock) -> None:
         """Verify detect_frame with dictionary ROI."""
-        roi_dict = {"z0": 1, "z1": 8, "y0": 2, "y1": 18, "x0": 2, "x1": 18}
+        roi_dict = {"x_min": 2.0, "x_max": 18.0, "y_min": 2.0, "y_max": 18.0, "z_min": 1.0, "z_max": 8.0}
         df = detect_frame(mock_czi_source, t=0, pp=None, bp=None, roi=roi_dict)
         assert isinstance(df, pd.DataFrame)
 
     def test_detect_frame_with_duck_typed_roi(self, mock_czi_source: MagicMock) -> None:
         """Verify detect_frame with duck-typed object possessing coordinate attributes."""
-        roi_obj = SimpleNamespace(z0=1, z1=8, y0=2, y1=18, x0=2, x1=18)
+        roi_obj = SimpleNamespace(x_min=2.0, x_max=18.0, y_min=2.0, y_max=18.0, z_min=1.0, z_max=8.0)
         df = detect_frame(mock_czi_source, t=0, pp=None, bp=None, roi=roi_obj)
         assert isinstance(df, pd.DataFrame)
 
@@ -232,7 +232,7 @@ class TestDetectFrame:
             dt_source="test",
         )
         mock_source.read.return_value = np.zeros((5, 10, 10), dtype=np.uint16)
-        roi = RegionOfInterest(z0=1, z1=3)
+        roi = RegionOfInterest(x_min=0.0, x_max=10.0, y_min=0.0, y_max=10.0, z_min=1.0, z_max=3.0)
 
         with patch("apkit4d.batching.worker.CziSource", return_value=mock_source):
             results = _detect_frames_worker(
@@ -266,7 +266,7 @@ class TestDetectFrame:
         mock_source.read.return_value = np.zeros((5, 10, 10), dtype=np.uint16)
         pp = PreprocParams(denoise_xy_scale_um=1.0)
         bp = BlobParams(threshold=0.2)
-        roi = RegionOfInterest(x0=0, x1=5)
+        roi = RegionOfInterest(x_min=0.0, x_max=5.0, y_min=0.0, y_max=10.0, z_min=0.0, z_max=5.0)
 
         with patch("apkit4d.batching.worker.CziSource", return_value=mock_source):
             results = _detect_frames_worker(
@@ -286,7 +286,7 @@ class TestDetectFrame:
 
         pp = PreprocParams(denoise_xy_scale_um=1.5, denoise_z_scale_um=2.0)
         bp = BlobParams(threshold=0.15, min_volume_um3=100.0)
-        roi = RegionOfInterest(z0=2, z1=10, y0=5, y1=25, x0=4, x1=30)
+        roi = RegionOfInterest(x_min=4.0, x_max=30.0, y_min=5.0, y_max=25.0, z_min=2.0, z_max=10.0)
 
         payload = pickle.dumps((pp, bp, roi))
         pp_out, bp_out, roi_out = pickle.loads(payload)
