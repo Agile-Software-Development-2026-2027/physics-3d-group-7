@@ -718,3 +718,175 @@ class Viewport(QWidget):
     def _on_mouse_wheel_backward(self, _obj: object, _event: str) -> None:
         self._apply_wheel_zoom(direction=-1)
         self._stop_wheel_event(self._wheel_backward_tag)
+
+    """
+        here i start the logic for the roi selection by click and drag
+        for doing this i need to use the ray concept, it identifies the line that goes from
+        the camera through the 3d space, so every point on this line.
+
+        once we identify the ray we have to find the intersection with the volume
+    """
+
+    # i could refactor get_cursor_target_3d using this func, but i'll do it in the future
+    # this is like the abstracted version of the code in get_cursor_target_3d
+    def _display_to_world(self, x: float, y: float, depth: float) -> Vec3D | None:
+        """
+        This function converts a 2d point at a certain depth in display space to 3d world coordinates.
+
+        Parameters:
+            x: first coordinate in display space
+            y: second coordinate in display space
+            depth: the depth value in display space
+
+        Returns:
+            the 3D coordinates in world space as a numpy array of shape (3,)
+            or None if the conversion is not possible
+        """
+        renderer = self.plotter.renderer
+        # we set the display point to the given coordinates
+        renderer.SetDisplayPoint(float(x), float(y), float(depth))
+        # convert the coordinates
+        renderer.DisplayToWorld()
+        # get the world coordinates
+        world_pt = renderer.GetWorldPoint()
+
+        if world_pt[3] == 0.0:
+            return None
+        # we divide the first three coordinates by the fourth to get the 3D coordinates in world space
+        # as i already mentioned we have a 4th coordinate because of GetWorldPoint,
+        # which returns a 4D point in homogeneous coordinates
+        return np.array(world_pt[:3], dtype=np.float64) / world_pt[3]
+
+    def _get_cursor_ray_3d(self, screen_pos: tuple[int, int] | None = None) -> tuple[Vec3D, Vec3D] | None:
+        """
+        This function computes the 3D ray in the world space corresponding to the 2d cursor position
+
+        Parameters:
+            screen_pos: optional tuple of (x, y) coordinates in display space
+
+        Returns:
+            a tuple of two numpy arrays (ray_start, ray_end) representing the ray in 3D space
+            this ray goes from Near plane(depth = 0.0) to Far plane(depth = 1.0)
+        """
+
+        if screen_pos is None:
+            iren = self.plotter.iren.interactor
+            if iren is None:
+                return None
+            x, y = iren.GetEventPosition()
+        else:
+            x, y = screen_pos
+
+        ray_start = self._display_to_world(x, y, 0.0)
+        ray_end = self._display_to_world(x, y, 1.0)
+        if ray_start is None or ray_end is None:
+            return None
+
+        return ray_start, ray_end
+
+    @staticmethod
+    def _ray_intersects_bounds(ray_start: Vec3D, ray_end: Vec3D, bounds: Bounds6D) -> Vec3D | None:
+        """
+        this function calculates the first 3d point of intersection between a ray and the
+        volume bounds aligned with the axes.
+        it uses the slab method.
+
+        SLAB METHOD: the idea is to consider the volume as the intersection of three slabs, one for each axis.
+        a ray intersects the volume if and only if the time interval during which it travels inside all
+        three slabs simultaneously is valid and overlapping
+
+        Parameters:
+            ray_start: the starting point of the ray in 3D space
+            ray_end: the ending point of the ray in 3D space
+            bounds: the bounds of the volume as a tuple (xmin, xmax, ymin, ymax, zmin, zmax)
+
+        Returns:
+            the first intersection point of the ray with the volume bounds as a numpy array of shape (3,)
+            or None if there is no intersection
+        """
+
+        start = np.asarray(ray_start, dtype=np.float64)
+        end = np.asarray(ray_end, dtype=np.float64)
+
+        direction = end - start
+
+        # box_min and box_max are the minimum and maximum coordinates of the volume bounds
+        box_min = np.array([bounds[0], bounds[2], bounds[4]], dtype=np.float64)
+        box_max = np.array([bounds[1], bounds[3], bounds[5]], dtype=np.float64)
+
+        t_enter = 0.0
+        t_exit = 1.0
+
+        # now we iterate over the three axes (x, y, z) to compute the intersection intervals
+        for i in range(3):
+            # first case: ray parallel to the slab
+            if abs(direction[i]) < 1e-12:
+                # we check if the ray is outside the slab, if it is we return None, otherwise we continue
+                if start[i] < box_min[i] or start[i] > box_max[i]:
+                    return None
+
+            # second case: ray not parallel to the slab
+            else:
+                # the ray is P(t) = start + t * direction,
+                # in the i axes we have start[i] + t * direction[i]
+                # i use inv_d just for efficiency
+                inv_d = 1.0 / direction[i]
+                # t value when it intersects box_min and box_max in the i axes, box[i] is our P(t)
+                # we just resolve box_[i] = start[i] + t * direction[i] for t
+                t1 = (box_min[i] - start[i]) * inv_d
+                t2 = (box_max[i] - start[i]) * inv_d
+                # we don't know which one is the near and which one is the far intersection
+                # (dir could be negative), so we take the min and max
+                t_near = min(t1, t2)
+                t_far = max(t1, t2)
+
+                # update t_enter and t_exit
+                t_enter = max(t_enter, t_near)
+                t_exit = min(t_exit, t_far)
+
+                # if the enter time is greater than the exit time, the ray misses the box,
+                # so we return None
+                if t_enter > t_exit:
+                    return None
+
+        # we now return the first intersection point of the ray with the volume
+        return start + t_enter * direction
+
+    def pick_volume_bounds_point(
+        self,
+        screen_pos: tuple[int, int] | None = None,
+        *,
+        clamp_if_outside: bool = False,
+    ) -> Vec3D | None:
+        """
+        find the 3D point on `self.volume_bounds` under the mouse cursor.
+
+
+        Parameters:
+            screen_pos: coordinates (x, y) in pixel optional (se None usa GetEventPosition()).
+            clamp_if_outside:
+                - False (used on the first click): returns None if the user clicks outside the volume.
+                - True (used during the drag): if the cursor goes outside the volume's bounds,
+                  it still projects the point and clamps it to the edges of `self.volume_bounds`.
+
+        Returns:
+            the 3D coordinates of the point on the volume bounds under the cursor, or None
+            if the cursor is outside the volume and `clamp_if_outside` is False
+        """
+        if self.volume_bounds is None:
+            return None
+
+        ray = self._get_cursor_ray_3d(screen_pos)
+        if ray is None:
+            return None
+
+        hit = self._ray_intersects_bounds(ray[0], ray[1], self.volume_bounds)
+        if hit is not None:
+            return hit
+
+        if not clamp_if_outside:
+            return None
+
+        # Fallback during the drag outside the volume:
+        # we use the point projected on the focal plane and already clamped to self.volume_bounds
+        return self._get_cursor_target_3d()
