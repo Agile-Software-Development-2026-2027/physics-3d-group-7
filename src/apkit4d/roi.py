@@ -108,29 +108,7 @@ class RegionOfInterest:
             - RegionOfInterest instance with valid coordinates
 
         """
-        x0, x1 = float(min(bounds[0], bounds[1])), float(max(bounds[0], bounds[1]))
-        y0, y1 = float(min(bounds[2], bounds[3])), float(max(bounds[2], bounds[3]))
-        z0, z1 = float(min(bounds[4], bounds[5])), float(max(bounds[4], bounds[5]))
-
-        if volume_bounds is not None:
-            # clamp the ROI inside the volume bounds and ensure a minimum size
-            vx0, vx1 = min(volume_bounds[0], volume_bounds[1]), max(volume_bounds[0], volume_bounds[1])
-            vy0, vy1 = min(volume_bounds[2], volume_bounds[3]), max(volume_bounds[2], volume_bounds[3])
-            vz0, vz1 = min(volume_bounds[4], volume_bounds[5]), max(volume_bounds[4], volume_bounds[5])
-
-            x0, x1 = _clamp_and_ensure_span(x0, x1, vx0, vx1, min_size)
-            y0, y1 = _clamp_and_ensure_span(y0, y1, vy0, vy1, min_size)
-            z0, z1 = _clamp_and_ensure_span(z0, z1, vz0, vz1, min_size)
-        else:
-            # if no volume bounds are provided, we still ensure a minimum size for the ROI
-            if x1 - x0 < min_size:
-                x1 = x0 + min_size
-            if y1 - y0 < min_size:
-                y1 = y0 + min_size
-            if z1 - z0 < min_size:
-                z1 = z0 + min_size
-
-        # return a new RegionOfInterest instance with the validated and adjusted coordinates
+        x0, x1, y0, y1, z0, z1 = _clamp_bounds_6d(bounds, volume_bounds, min_size)
         return cls(x_min=x0, x_max=x1, y_min=y0, y_max=y1, z_min=z0, z_max=z1)
 
     @classmethod
@@ -167,14 +145,19 @@ class RegionOfInterest:
         Returns:
             - RegionOfInterest instance with valid coordinates
         """
-        x0, x1 = float(min(point_a[0], point_b[0])), float(max(point_a[0], point_b[0]))
-        y0, y1 = float(min(point_a[1], point_b[1])), float(max(point_a[1], point_b[1]))
-        z0, z1 = float(min(point_a[2], point_b[2])), float(max(point_a[2], point_b[2]))
+        x0, x1, y0, y1, z0, z1 = _normalize_bounds(
+            (
+                float(point_a[0]),
+                float(point_b[0]),
+                float(point_a[1]),
+                float(point_b[1]),
+                float(point_a[2]),
+                float(point_b[2]),
+            )
+        )
 
         if volume_bounds is not None:
-            vx0, vx1 = min(volume_bounds[0], volume_bounds[1]), max(volume_bounds[0], volume_bounds[1])
-            vy0, vy1 = min(volume_bounds[2], volume_bounds[3]), max(volume_bounds[2], volume_bounds[3])
-            vz0, vz1 = min(volume_bounds[4], volume_bounds[5]), max(volume_bounds[4], volume_bounds[5])
+            vx0, vx1, vy0, vy1, vz0, vz1 = _normalize_bounds(volume_bounds)
 
             if view_direction is not None:
                 # find the axis most aligned with the view direction and extend it to the
@@ -381,3 +364,40 @@ def _world_to_index_pair(
             idx_min -= 1
 
     return idx_min, idx_max
+
+
+def _normalize_bounds(bounds: Bounds6D) -> Bounds6D:
+    """Orders each (min, max) pair in a 6D bounds tuple."""
+    return (
+        float(min(bounds[0], bounds[1])),
+        float(max(bounds[0], bounds[1])),
+        float(min(bounds[2], bounds[3])),
+        float(max(bounds[2], bounds[3])),
+        float(min(bounds[4], bounds[5])),
+        float(max(bounds[4], bounds[5])),
+    )
+
+
+def _clamp_bounds_6d(
+    bounds: Bounds6D,
+    volume_bounds: Bounds6D | None,
+    min_size: float,
+) -> Bounds6D:
+    """Orders, clamps to volume_bounds (if provided), and enforces min_size on all 3 axes."""
+    x0, x1, y0, y1, z0, z1 = _normalize_bounds(bounds)
+    if volume_bounds is None:
+        return (
+            x0,
+            max(x1, x0 + min_size),
+            y0,
+            max(y1, y0 + min_size),
+            z0,
+            max(z1, z0 + min_size),
+        )
+
+    vx0, vx1, vy0, vy1, vz0, vz1 = _normalize_bounds(volume_bounds)
+    return (
+        *_clamp_and_ensure_span(x0, x1, vx0, vx1, min_size),
+        *_clamp_and_ensure_span(y0, y1, vy0, vy1, min_size),
+        *_clamp_and_ensure_span(z0, z1, vz0, vz1, min_size),
+    )
