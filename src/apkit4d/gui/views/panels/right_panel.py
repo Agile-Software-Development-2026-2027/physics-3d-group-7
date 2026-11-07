@@ -33,6 +33,7 @@ from apkit4d.gui.theme import (
     ThemeColors,
 )
 from apkit4d.gui.views.panels.side_panel import SidePanel
+from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -393,37 +394,41 @@ class RightPanel(SidePanel):
 
         for step, title in stage_definitions:
             sec = AccordionSection(title)
+
+            match step:
+                case PipelineStep.DETECTION:
+                    sec.add_widget(BlobDetectionInspector())
+                case _:
+                    # Number field
+                    param_row = QWidget()
+                    param_layout = QHBoxLayout(param_row)
+                    param_layout.setContentsMargins(0, 0, 0, 0)
+                    param_label = QLabel(texts.LABEL_STAGE_VALUE)
+                    num_box = QSpinBox()
+                    num_box.setObjectName(names.STAGE_NUMBER_FIELD)
+                    num_box.setRange(0, 1000)
+                    num_box.setValue(10)
+                    num_box.valueChanged.connect(
+                        lambda val, s=step: self.step_param_changed.emit(s.value, "value", val)
+                    )
+                    param_layout.addWidget(param_label)
+                    param_layout.addWidget(num_box)
+                    sec.add_widget(param_row)
+                    self._number_fields[step] = num_box
+
+                    # Complete this button (testing helper)
+                    complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
+                    complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+                    complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+                    complete_btn.clicked.connect(lambda _, s=step: self.complete_stage_requested.emit(s))
+                    sec.add_widget(complete_btn)
+                    self._complete_buttons[step] = complete_btn
+
             play_btn = sec.enable_play_button(
                 callback=lambda s=step: self._on_play_clicked(s),
                 tooltip=texts.TOOLTIP_PLAY_STAGE,
             )
             self._play_buttons[step] = play_btn
-            self._plan_buttons[step] = play_btn
-
-            # Number field
-            param_row = QWidget()
-            param_layout = QHBoxLayout(param_row)
-            param_layout.setContentsMargins(0, 0, 0, 0)
-            param_label = QLabel(texts.LABEL_STAGE_VALUE)
-            num_box = QSpinBox()
-            num_box.setObjectName(names.STAGE_NUMBER_FIELD)
-            num_box.setRange(0, 1000)
-            num_box.setValue(10)
-            num_box.valueChanged.connect(
-                lambda val, s=step: self.step_param_changed.emit(s.value, "value", val)
-            )
-            param_layout.addWidget(param_label)
-            param_layout.addWidget(num_box)
-            sec.add_widget(param_row)
-            self._number_fields[step] = num_box
-
-            # Complete this button (testing helper)
-            complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
-            complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
-            complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-            complete_btn.clicked.connect(lambda _, s=step: self.complete_stage_requested.emit(s))
-            sec.add_widget(complete_btn)
-            self._complete_buttons[step] = complete_btn
 
             self._register_stage(step.value, sec)
 
