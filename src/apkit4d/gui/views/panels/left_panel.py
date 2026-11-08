@@ -43,6 +43,10 @@ class LeftPanel(SidePanel):
         self._appearance_section = AccordionSection(texts.SECTION_APPEARANCE)
         self._appearance_section.setObjectName(names.APPEARANCE_SECTION)
         self._appearance_section.add_widget(theme_button)
+        self._colormap_box = self._add_box(texts.BOX_COLORMAP, names.COLORMAP_BOX)
+        self._opacity_box = self._add_box(texts.BOX_OPACITY, names.OPACITY_BOX)
+        self._background_box = self._add_box(texts.BOX_BACKGROUND, names.BACKGROUND_BOX)
+        self._outline_box = self._add_box(texts.BOX_OUTLINE, names.OUTLINE_BOX)
 
         self._layers_section = AccordionSection(texts.SECTION_LAYERS)
         self._layers_section.setObjectName(names.LAYERS_SECTION)
@@ -72,6 +76,26 @@ class LeftPanel(SidePanel):
         """Section with the layers of the 3D view."""
         return self._layers_section
 
+    @property
+    def colormap_box(self) -> QWidget:
+        """Box for the choice of the colormap of the volume."""
+        return self._colormap_box
+
+    @property
+    def opacity_box(self) -> QWidget:
+        """Box for the opacity of the volume."""
+        return self._opacity_box
+
+    @property
+    def background_box(self) -> QWidget:
+        """Box for the background color of the 3D view."""
+        return self._background_box
+
+    @property
+    def outline_box(self) -> QWidget:
+        """Box for the color of the outline of the volume."""
+        return self._outline_box
+
     def set_theme(self, theme: Theme) -> None:
         """
         Paint the sections with `theme`, because the palette of the application does not reach them.
@@ -83,3 +107,12 @@ class LeftPanel(SidePanel):
         self._scroll_area.apply_theme(colors)
         self._appearance_section.apply_theme(colors)
         self._layers_section.apply_theme(colors)
+
+    def _add_box(self, title: str, name: str) -> QWidget:
+        box = QWidget()
+        box.setObjectName(name)
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(QLabel(title))
+        self._appearance_section.add_widget(box)
+        return box

@@ -4,7 +4,7 @@ Unit tests for LeftPanel.
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QLabel, QPushButton, QWidget
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
@@ -37,6 +37,27 @@ def test_only_the_appearance_section_starts_open(panel) -> None:
 def test_open_section_is_tall_enough_for_its_content(panel) -> None:
     content = panel.appearance_section.content_area
     assert content.maximumHeight() >= content.sizeHint().height()
+
+
+@pytest.mark.parametrize(
+    ("name", "title"),
+    [
+        (names.COLORMAP_BOX, texts.BOX_COLORMAP),
+        (names.OPACITY_BOX, texts.BOX_OPACITY),
+        (names.BACKGROUND_BOX, texts.BOX_BACKGROUND),
+        (names.OUTLINE_BOX, texts.BOX_OUTLINE),
+    ],
+)
+def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> None:
+    box = panel.appearance_section.findChild(QWidget, name)
+    assert box.findChild(QLabel).text() == title
+
+
+def test_box_properties_give_the_boxes_of_the_section(panel) -> None:
+    assert panel.colormap_box.objectName() == names.COLORMAP_BOX
+    assert panel.opacity_box.objectName() == names.OPACITY_BOX
+    assert panel.background_box.objectName() == names.BACKGROUND_BOX
+    assert panel.outline_box.objectName() == names.OUTLINE_BOX
 
 
 def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:

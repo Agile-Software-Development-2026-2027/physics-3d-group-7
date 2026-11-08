@@ -45,6 +45,10 @@ COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no reco
 SECTION_APPEARANCE: str = "Appearance"
 SECTION_LAYERS: str = "Layers"
 LAYERS_EMPTY: str = "No layers yet"
+BOX_COLORMAP: str = "Colormap"
+BOX_OPACITY: str = "Opacity"
+BOX_BACKGROUND: str = "Background"
+BOX_OUTLINE: str = "Outline"
 BUTTON_THEME: str = "Switch theme"
 RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel has its controls
 

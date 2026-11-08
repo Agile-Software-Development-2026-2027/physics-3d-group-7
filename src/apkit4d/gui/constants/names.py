@@ -30,6 +30,10 @@ FRAME_COUNTER: str = "frame_counter"
 THEME_BUTTON: str = "theme_button"
 APPEARANCE_SECTION: str = "appearance_section"
 LAYERS_SECTION: str = "layers_section"
+COLORMAP_BOX: str = "colormap_box"
+OPACITY_BOX: str = "opacity_box"
+BACKGROUND_BOX: str = "background_box"
+OUTLINE_BOX: str = "outline_box"
 
 # right panel controls and containers
 RIGHT_PANEL_TOP_BAR: str = "right_panel_top_bar"
