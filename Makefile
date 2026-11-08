@@ -21,10 +21,10 @@ pre-push:
 	uv run pre-commit run --hook-stage pre-push --all-files
 
 gui:
-	uv run python -m legacy.gui
+	uv run apkit4d gui
 
 cli:
-	uv run python -m legacy.cli
+	uv run apkit4d
 
 check: lint test
 

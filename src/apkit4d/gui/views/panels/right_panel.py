@@ -1,27 +1,37 @@
 """
 Right column of the main window.
 
-Houses the top control bar (e.g. toggle all), the scrollable accordion sections,
-and a collapsible statistics and diagnostics section docked at the bottom.
+Houses the top control bar (Toggle All), the 5 consolidated
+pipeline accordion stages with interactive demo controls (number field,
+plan up to this, complete this), and a collapsible bottom statistics
+and diagnostics section.
 """
 
-import random
+from typing import Any
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from apkit4d.gui.constants import names
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
-from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, Theme, ThemeColors
+from apkit4d.gui.theme import (
+    DEFAULT_THEME,
+    THEME_COLORS,
+    RightPanelStyler,
+    Theme,
+    ThemeColors,
+)
 from apkit4d.gui.views.panels.side_panel import SidePanel
 
 __all__ = ["BottomStatsSection", "RightPanel"]
@@ -41,7 +51,7 @@ class BottomStatsSection(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("bottomStatsSection")
+        self.setObjectName(names.BOTTOM_STATS_SECTION)
         self._is_expanded: bool = False
 
         self._main_layout = QVBoxLayout(self)
@@ -49,36 +59,34 @@ class BottomStatsSection(QFrame):
         self._main_layout.setSpacing(0)
         self._main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Summary header (always visible)
+        # 1. Summary header (always visible)
         self._header = QFrame(self)
-        self._header.setObjectName("bottomStatsHeader")
+        self._header.setObjectName(names.BOTTOM_STATS_HEADER)
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(8, 6, 8, 6)
         header_layout.setSpacing(6)
 
-        self._summary_label = QLabel("Working: 15%")
-        self._summary_label.setObjectName("bottomStatsSummaryLabel")
+        self._summary_label = QLabel(texts.STATS_DEFAULT_SUMMARY)
+        self._summary_label.setObjectName(names.BOTTOM_STATS_SUMMARY_LABEL)
 
-        self._toggle_btn = QPushButton("▲")
-        self._toggle_btn.setObjectName("bottomStatsToggleBtn")
+        self._toggle_btn = QPushButton(texts.STATS_ARROW_COLLAPSED)
+        self._toggle_btn.setObjectName(names.BOTTOM_STATS_TOGGLE_BUTTON)
         self._toggle_btn.setFixedSize(24, 20)
-        self._toggle_btn.setToolTip("Toggle statistics details")
+        self._toggle_btn.setToolTip(texts.TOOLTIP_STATS_TOGGLE)
         self._toggle_btn.clicked.connect(lambda: self.toggle(animate=True))
 
         header_layout.addWidget(self._summary_label, stretch=1)
         header_layout.addWidget(self._toggle_btn)
 
-        # Details container (collapsible)
+        # 2. Details container (collapsible)
         self._details_frame = QFrame(self)
-        self._details_frame.setObjectName("bottomStatsDetailsFrame")
+        self._details_frame.setObjectName(names.BOTTOM_STATS_DETAILS_FRAME)
         self._details_layout = QVBoxLayout(self._details_frame)
         self._details_layout.setContentsMargins(8, 6, 8, 6)
         self._details_layout.setSpacing(4)
 
-        self._details_label = QLabel(
-            "Task: Processing Volume Data\nProgress: 15%\nElapsed: 00:01:24\nStatus: Active"
-        )
-        self._details_label.setObjectName("bottomStatsDetailsLabel")
+        self._details_label = QLabel(texts.STATS_DEFAULT_DETAILS)
+        self._details_label.setObjectName(names.BOTTOM_STATS_DETAILS_LABEL)
         self._details_label.setWordWrap(True)
         self._details_layout.addWidget(self._details_label)
 
@@ -114,7 +122,6 @@ class BottomStatsSection(QFrame):
 
     def set_details(self, text: str) -> None:
         """Update the detailed stats text."""
-        # TODO: we migth want to switch this to a custom Widget to have more control over it
         self._details_label.setText(text)
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
@@ -128,7 +135,7 @@ class BottomStatsSection(QFrame):
         if self._is_expanded == expanded:
             return
         self._is_expanded = expanded
-        self._toggle_btn.setText("▼" if expanded else "▲")
+        self._toggle_btn.setText(texts.STATS_ARROW_EXPANDED if expanded else texts.STATS_ARROW_COLLAPSED)
 
         target_height = self._details_layout.sizeHint().height() + 12 if expanded else 0
 
@@ -147,44 +154,7 @@ class BottomStatsSection(QFrame):
 
     def apply_theme(self, colors: ThemeColors) -> None:
         """Apply theme colors to header, labels, borders, and details frame."""
-        self.setStyleSheet(f"""
-            QFrame#apply_themebottomStatsSection {{
-                background-color: {colors.window};
-                border-top: 1px solid {colors.alternate_base};
-            }}
-            QFrame#bottomStatsHeader {{
-                background-color: transparent;
-                border: none;
-            }}
-            QLabel#bottomStatsSummaryLabel {{
-                color: {colors.window_text};
-                font-weight: bold;
-                font-size: 12px;
-                background-color: transparent;
-                border: none;
-            }}
-            QPushButton#bottomStatsToggleBtn {{
-                background-color: {colors.button};
-                color: {colors.button_text};
-                border: 1px solid {colors.alternate_base};
-                border-radius: 3px;
-                font-size: 10px;
-                padding: 0px;
-            }}
-            QPushButton#bottomStatsToggleBtn:hover {{
-                background-color: {colors.alternate_base};
-            }}
-            QFrame#bottomStatsDetailsFrame {{
-                background-color: {colors.base};
-                border-top: 1px solid {colors.alternate_base};
-            }}
-            QLabel#bottomStatsDetailsLabel {{
-                color: {colors.text};
-                font-size: 11px;
-                background-color: transparent;
-                border: none;
-            }}
-        """)
+        RightPanelStyler.apply_bottom_stats(self, colors)
 
 
 class RightPanel(SidePanel):
@@ -192,58 +162,81 @@ class RightPanel(SidePanel):
     Right column of the main window.
 
     Houses:
-    - Top bar: action controls such as 'Toggle All'.
-    - Middle: collapsible accordion sections inside a full-height modern scroll area.
-    - Bottom: collapsible statistics panel supporting summary and detailed states.
+    - Top bar: action controls ('Toggle All').
+    - Middle: 5 consolidated pipeline stages, each equipped with demo controls:
+      - number field (parameter modification)
+      - plan up to this (queues stages up to target as PENDING)
+      - complete this (marks stage as COMPLETED and advances pipeline)
+    - Bottom: collapsible statistics panel with summary and detailed states.
+
+    Signals:
+        run_stage_requested: Emitted with (PipelineStep) when a stage header play button is clicked.
+        plan_stage_requested: Emitted with (PipelineStep) to plan stages up to target as PENDING without
+            starting execution.
+        complete_stage_requested: Emitted with (PipelineStep) when 'Complete this' is clicked.
+        step_param_changed: Emitted with (step_name, param_name, value) when a setting changes.
     """
+
+    run_stage_requested = Signal(object)
+    plan_stage_requested = Signal(object)
+    complete_stage_requested = Signal(object)
+    step_param_changed = Signal(str, str, object)
 
     def __init__(self) -> None:
         super().__init__(names.RIGHT_PANEL)
         self._theme: Theme = DEFAULT_THEME
         self._sections: list[AccordionSection] = []
+        self._stage_sections: dict[str, AccordionSection] = {}
+        self._number_fields: dict[PipelineStep, QSpinBox] = {}
+        self._play_buttons: dict[PipelineStep, QPushButton] = {}
+        self._plan_buttons: dict[PipelineStep, QPushButton] = {}
+        self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
-        # Occupy all available space in the main window
+        # Remove the inherited bottom stretch
         while self._layout.count() > 0:
             self._layout.takeAt(0)
+
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
+
+        # Top Controls Bar
         self.top_bar = QFrame(self)
-        self.top_bar.setObjectName("rightPanelTopBar")
+        self.top_bar.setObjectName(names.RIGHT_PANEL_TOP_BAR)
         top_layout = QHBoxLayout(self.top_bar)
         top_layout.setContentsMargins(6, 6, 6, 6)
         top_layout.setSpacing(6)
 
-        # Top Area (Controls)
-        self.toggle_all_btn = QPushButton("Toggle All", self.top_bar)
-        self.toggle_all_btn.setObjectName("toggleAllButton")
-        self.toggle_all_btn.setToolTip("Toggle collapse/expand state of all accordion sections")
+        self.toggle_all_btn = QPushButton(texts.BUTTON_TOGGLE_ALL, self.top_bar)
+        self.toggle_all_btn.setObjectName(names.TOGGLE_ALL_BUTTON)
+        self.toggle_all_btn.setToolTip(texts.TOOLTIP_TOGGLE_ALL)
         self.toggle_all_btn.clicked.connect(self.toggle_all)
+
         top_layout.addWidget(self.toggle_all_btn)
 
-        # Middle Area
+        # Middle Scroll Area with Accordion Sections
         self.scroll_area = ModernScrollArea(self)
+        self.scroll_area.setObjectName(names.MODERN_SCROLL_AREA)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._scroll_content = QWidget()
-        self._scroll_content.setObjectName("accordionScrollContent")
+        self._scroll_content.setObjectName(names.SCROLL_CONTENT)
         self.accordion_layout = QVBoxLayout(self._scroll_content)
         self.accordion_layout.setContentsMargins(4, 4, 4, 4)
         self.accordion_layout.setSpacing(6)
 
-        # Bottom stretch inside scroll content keeps collapsed sections pinned to the top
         self.accordion_layout.addStretch()
         self.scroll_area.setWidget(self._scroll_content)
 
-        # Bottom Area (Info)
+        # Bottom Stats Section
         self._bottom_stats = BottomStatsSection(self)
 
-        # Assemble
         self._layout.addWidget(self.top_bar)
         self._layout.addWidget(self.scroll_area, stretch=1)
         self._layout.addWidget(self._bottom_stats)
 
-        self._populate_default_sections()
+        # Build the 5 consolidated pipeline stages
+        self._build_pipeline_stages()
         self.set_theme(DEFAULT_THEME)
 
     @property
@@ -261,12 +254,49 @@ class RightPanel(SidePanel):
         """The collapsible statistics section at the bottom."""
         return self._bottom_stats
 
-    def toggle_all(self) -> None:
+    def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
-        Toggle all accordion sections.
+        Return the AccordionSection associated with `step`.
 
-        If all sections are currently expanded, collapses them; otherwise expands all sections.
+        Args:
+            step: Step identifier or enum member.
         """
+        key = step.value if isinstance(step, PipelineStep) else str(step)
+        return self._stage_sections.get(key)
+
+    def get_number_field(self, step: str | PipelineStep) -> QSpinBox | None:
+        """Return the parameter QSpinBox associated with `step`."""
+        enum_step = PipelineStep(step) if isinstance(step, str) else step
+        return self._number_fields.get(enum_step)
+
+    def get_play_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the play QPushButton on the header associated with `step`."""
+        enum_step = PipelineStep(step) if isinstance(step, str) else step
+        return self._play_buttons.get(enum_step)
+
+    def get_plan_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the play/plan QPushButton associated with `step`."""
+        return self.get_play_button(step)
+
+    def get_complete_button(self, step: str | PipelineStep) -> QPushButton | None:
+        """Return the 'Complete this' QPushButton associated with `step`."""
+        enum_step = PipelineStep(step) if isinstance(step, str) else step
+        return self._complete_buttons.get(enum_step)
+
+    def set_step_status(self, step: str | PipelineStep, status: StepStatus) -> None:
+        """
+        Update the status and visual styling of a pipeline section.
+
+        Args:
+            step: The step identifier.
+            status: New StepStatus (IDLE, PENDING, RUNNING, COMPLETED).
+        """
+        section = self.get_section(step)
+        if section is not None:
+            section.set_status(status)
+
+    def toggle_all(self) -> None:
+        """Toggle all accordion sections."""
         all_expanded = bool(self._sections) and all(s.is_expanded() for s in self._sections)
         self.set_all_expanded(not all_expanded)
 
@@ -279,62 +309,31 @@ class RightPanel(SidePanel):
         self.set_all_expanded(False)
 
     def set_all_expanded(self, expanded: bool, animate: bool = True) -> None:
-        """
-        Set expanded state on all accordion sections.
-
-        Args:
-            expanded: True to expand all, False to collapse all.
-            animate: Whether to animate the transition.
-        """
+        """Set expanded state on all accordion sections."""
         for section in self._sections:
             section.set_expanded(expanded, animate=animate)
 
     def set_stats_summary(self, text: str) -> None:
-        """
-        Update the summary text of the bottom statistics section.
-
-        Args:
-            text: Summary text to show.
-        """
+        """Update summary text in bottom stats bar."""
         self._bottom_stats.set_summary(text)
 
     def set_stats_details(self, text: str) -> None:
-        """
-        Update the detailed statistics text of the bottom section.
-
-        Args:
-            text: Detailed statistics text to show.
-        """
+        """Update detailed text in bottom stats bar."""
         self._bottom_stats.set_details(text)
 
     def toggle_stats(self, animate: bool = True) -> None:
-        """
-        Toggle between collapsed and expanded states of the bottom statistics section.
-
-        Args:
-            animate: Whether to animate the transition.
-        """
+        """Toggle bottom stats expansion state."""
         self._bottom_stats.toggle(animate=animate)
 
     def add_section(self, section: AccordionSection) -> None:
-        """
-        Add an accordion section above the bottom stretch.
-
-        Args:
-            section: Section to add.
-        """
+        """Add an accordion section above the bottom stretch."""
         self._sections.append(section)
         stretch_index = max(self.accordion_layout.count() - 1, 0)
         self.accordion_layout.insertWidget(stretch_index, section)
         section.apply_theme(THEME_COLORS[self._theme])
 
     def remove_section(self, section: AccordionSection) -> None:
-        """
-        Remove an accordion section from the panel.
-
-        Args:
-            section: Section to remove.
-        """
+        """Remove an accordion section from the panel."""
         if section in self._sections:
             self._sections.remove(section)
             self.accordion_layout.removeWidget(section)
@@ -343,36 +342,26 @@ class RightPanel(SidePanel):
 
     def clear_sections(self) -> None:
         """Remove all accordion sections from the panel."""
+        self._stage_sections.clear()
+        self._number_fields.clear()
+        self._play_buttons.clear()
+        self._plan_buttons.clear()
+        self._complete_buttons.clear()
         for section in list(self._sections):
             self.remove_section(section)
 
     def add_control(self, widget: QWidget) -> None:
-        """
-        Add a generic control widget inside the scrollable layout.
-
-        Args:
-            widget: Widget to add.
-        """
+        """Add a generic control widget inside the scrollable layout."""
         stretch_index = max(self.accordion_layout.count() - 1, 0)
         self.accordion_layout.insertWidget(stretch_index, widget)
 
     def set_theme(self, theme: Theme) -> None:
-        """
-        Apply theme to the right panel, top bar, scroll area, sections, and stats.
-
-        Args:
-            theme: Theme to apply.
-        """
+        """Apply theme to all right panel components."""
         self._theme = theme
         self.apply_theme(THEME_COLORS[theme])
 
     def apply_theme(self, colors: ThemeColors) -> None:
-        """
-        Apply theme colors to all components.
-
-        Args:
-            colors: Colors of the active theme.
-        """
+        """Apply theme colors to all components."""
         self._style_top_bar(colors)
         self.scroll_area.apply_theme(colors)
         for section in self._sections:
@@ -381,33 +370,68 @@ class RightPanel(SidePanel):
 
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
-        self.top_bar.setStyleSheet(f"""
-            QFrame#rightPanelTopBar {{
-                background-color: {colors.window};
-                border-bottom: 1px solid {colors.alternate_base};
-            }}
-            QPushButton#toggleAllButton {{
-                background-color: {colors.button};
-                color: {colors.button_text};
-                border: 1px solid {colors.alternate_base};
-                border-radius: 4px;
-                padding: 6px 10px;
-                font-size: 12px;
-                font-weight: bold;
-            }}
-            QPushButton#toggleAllButton:hover {{
-                background-color: {colors.alternate_base};
-            }}
-            QPushButton#toggleAllButton:pressed {{
-                background-color: {colors.highlight};
-                color: {colors.highlighted_text};
-            }}
-        """)
+        self.top_bar.setStyleSheet(RightPanelStyler.top_bar_stylesheet(colors))
 
-    def _populate_default_sections(self) -> None:
-        """Populate initial accordion sections."""
-        for i in range(1, 10):
-            section = AccordionSection(f"Section {i}")
-            for j in range(1, random.randint(3 + i, 10 + i)):
-                section.add_widget(QLabel(f"Item {j} in Section {i}"))
-            self.add_section(section)
+    def _on_play_clicked(self, step: PipelineStep) -> None:
+        """Handle play button click on stage header."""
+        self.run_stage_requested.emit(step)
+
+    def _build_pipeline_stages(self) -> None:
+        """
+        Construct the 5 consolidated pipeline stages with interactive controls:
+        1. Play button on accordion header: plans and starts execution up to this stage
+        2. Number field (parameter input)
+        3. Complete this button (testing helper to advance stage)
+        """
+        stage_definitions: tuple[tuple[PipelineStep, str], ...] = (
+            (PipelineStep.ROI, texts.STAGE_TITLE_ROI),
+            (PipelineStep.PREPROCESSING, texts.STAGE_TITLE_PREPROCESSING),
+            (PipelineStep.DETECTION, texts.STAGE_TITLE_DETECTION),
+            (PipelineStep.TRACKING, texts.STAGE_TITLE_TRACKING),
+            (PipelineStep.BATCH, texts.STAGE_TITLE_BATCH),
+        )
+
+        for step, title in stage_definitions:
+            sec = AccordionSection(title)
+            play_btn = sec.enable_play_button(
+                callback=lambda s=step: self._on_play_clicked(s),
+                tooltip=texts.TOOLTIP_PLAY_STAGE,
+            )
+            self._play_buttons[step] = play_btn
+            self._plan_buttons[step] = play_btn
+
+            # Number field
+            param_row = QWidget()
+            param_layout = QHBoxLayout(param_row)
+            param_layout.setContentsMargins(0, 0, 0, 0)
+            param_label = QLabel(texts.LABEL_STAGE_VALUE)
+            num_box = QSpinBox()
+            num_box.setObjectName(names.STAGE_NUMBER_FIELD)
+            num_box.setRange(0, 1000)
+            num_box.setValue(10)
+            num_box.valueChanged.connect(
+                lambda val, s=step: self.step_param_changed.emit(s.value, "value", val)
+            )
+            param_layout.addWidget(param_label)
+            param_layout.addWidget(num_box)
+            sec.add_widget(param_row)
+            self._number_fields[step] = num_box
+
+            # Complete this button (testing helper)
+            complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
+            complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+            complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+            complete_btn.clicked.connect(lambda _, s=step: self.complete_stage_requested.emit(s))
+            sec.add_widget(complete_btn)
+            self._complete_buttons[step] = complete_btn
+
+            self._register_stage(step.value, sec)
+
+    def _register_stage(self, stage_id: str, section: AccordionSection) -> None:
+        """Register a stage section in lookup dictionary and add to layout."""
+        self._stage_sections[stage_id] = section
+        self.add_section(section)
+
+    def notify_param_changed(self, step: str, param: str, value: Any) -> None:
+        """Notify listeners that a stage parameter changed."""
+        self.step_param_changed.emit(step, param, value)

@@ -4,15 +4,21 @@ Unit tests for the AccordionSection, ModernScrollArea, and AccordionDemo compone
 
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
+from apkit4d.gui.constants import names
+from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.shared.components.accordion import (
     AccordionDemo,
     AccordionSection,
 )
-from apkit4d.gui.shared.components.scroll_area import (
-    ModernScrollArea,
-    get_scrollbar_stylesheet,
+from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
+from apkit4d.gui.theme.style import get_scrollbar_stylesheet
+from apkit4d.gui.theme.themes import (
+    DARK_COLORS,
+    DARK_STATUS_COLORS,
+    LIGHT_COLORS,
+    LIGHT_STATUS_COLORS,
+    Theme,
 )
-from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 
 
 def test_accordion_section_init(qtbot) -> None:
@@ -21,8 +27,10 @@ def test_accordion_section_init(qtbot) -> None:
 
     assert section.title == "Test Section"
     assert not section.is_expanded()
+    assert section.status == StepStatus.IDLE
     assert section.toggle_button.text() == "▼ Test Section"
-    assert section.content_area.objectName() == "accordionContentArea"
+    assert section.toggle_button.objectName() == names.ACCORDION_TOGGLE_BUTTON
+    assert section.content_area.objectName() == names.ACCORDION_CONTENT_AREA
     assert section.content_area.maximumHeight() == 0
 
 
@@ -46,9 +54,9 @@ def test_accordion_section_add_widget_and_qlabel_styling(qtbot) -> None:
 
     assert section.content_layout.count() == 2
     # Ensure content_area has the isolated object name selector
-    assert "QFrame#accordionContentArea" in section.content_area.styleSheet()
+    assert f"QFrame#{names.ACCORDION_CONTENT_AREA}" in section.content_area.styleSheet()
     assert "QLabel" in section.content_area.styleSheet()
-    assert label.objectName() != "accordionContentArea"
+    assert label.objectName() != names.ACCORDION_CONTENT_AREA
 
 
 def test_accordion_section_expand_and_collapse(qtbot) -> None:
@@ -115,6 +123,48 @@ def test_accordion_section_theme_application(qtbot) -> None:
     assert LIGHT_COLORS.base in section.content_area.styleSheet()
 
 
+def test_accordion_section_status_colors(qtbot) -> None:
+    section = AccordionSection("Status Section")
+    qtbot.addWidget(section)
+
+    # Initially IDLE
+    assert section.status == StepStatus.IDLE
+
+    # Transition to PENDING (Muted Blue) in dark theme
+    section.apply_theme(DARK_COLORS)
+    section.set_status(StepStatus.PENDING)
+    assert section.status == StepStatus.PENDING
+    assert DARK_STATUS_COLORS.pending_bg in section.toggle_button.styleSheet()
+    # Confirm no left accent border
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Same status call is a no-op
+    section.set_status(StepStatus.PENDING)
+    assert section.status == StepStatus.PENDING
+
+    # Transition to RUNNING (Muted Orange)
+    section.set_status(StepStatus.RUNNING)
+    assert section.status == StepStatus.RUNNING
+    assert DARK_STATUS_COLORS.running_bg in section.toggle_button.styleSheet()
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Transition to COMPLETED (Muted Green)
+    section.set_status(StepStatus.COMPLETED)
+    assert section.status == StepStatus.COMPLETED
+    assert DARK_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
+    assert "border-left" not in section.toggle_button.styleSheet()
+
+    # Switch to Light theme while COMPLETED
+    section.apply_theme(LIGHT_COLORS)
+    assert LIGHT_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
+    assert LIGHT_STATUS_COLORS.completed_text in section.toggle_button.styleSheet()
+
+    # Back to IDLE
+    section.set_status(StepStatus.IDLE)
+    assert section.status == StepStatus.IDLE
+    assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
+
+
 def test_modern_scrollbar_stylesheet() -> None:
     qss = get_scrollbar_stylesheet(DARK_COLORS)
     assert "QScrollBar:vertical" in qss
@@ -132,7 +182,7 @@ def test_modern_scroll_area(qtbot) -> None:
 
     assert scroll_area.frameShape() == QFrame.Shape.NoFrame
     assert scroll_area.widgetResizable()
-    assert scroll_area.objectName() == "modernScrollArea"
+    assert scroll_area.objectName() == names.MODERN_SCROLL_AREA
 
     scroll_area.apply_theme(LIGHT_COLORS)
     assert LIGHT_COLORS.placeholder_text in scroll_area.styleSheet()
@@ -152,3 +202,58 @@ def test_accordion_demo(qtbot) -> None:
     # Set explicit theme
     demo.set_theme(Theme.DARK)
     assert demo.active_theme == Theme.DARK
+
+
+def test_accordion_section_configurable_header_actions(qtbot) -> None:
+    section = AccordionSection("Actions Test")
+    qtbot.addWidget(section)
+
+    assert section.play_button is None
+    assert section.right_widget is None
+
+    # Enable play button with callback
+    callback_calls = []
+    play_btn = section.enable_play_button(callback=lambda: callback_calls.append("play"))
+    assert play_btn is not None
+    assert section.play_button is play_btn
+    assert section.right_widget is play_btn
+    assert play_btn.parent() is section.header_frame
+
+    # Clicking play button triggers signal and callback without toggling expansion
+    with qtbot.waitSignal(section.play_clicked):
+        play_btn.click()
+    assert callback_calls == ["play"]
+    assert not section.is_expanded()
+
+    # Clicking toggle button toggles expansion without calling play callback
+    section.toggle_button.click()
+    assert section.is_expanded()
+    assert callback_calls == ["play"]
+
+    # Re-calling enable_play_button is idempotent
+    assert section.enable_play_button() is play_btn
+
+    # Add custom action button with custom callback
+    custom_calls = []
+    custom_btn = section.add_header_action(
+        text="⚙",
+        callback=lambda: custom_calls.append("gear"),
+        tooltip="Settings",
+        object_name="custom_gear_btn",
+    )
+    assert section.right_widget is custom_btn
+    assert section.play_button is None
+    assert custom_btn.objectName() == "custom_gear_btn"
+    assert custom_btn.toolTip() == "Settings"
+
+    custom_btn.click()
+    assert custom_calls == ["gear"]
+
+    # Set custom arbitrary QWidget
+    custom_widget = QLabel("STATUS")
+    section.set_right_widget(custom_widget)
+    assert section.right_widget is custom_widget
+
+    # Clear right widget
+    section.set_right_widget(None)
+    assert section.right_widget is None
