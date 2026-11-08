@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -22,21 +24,21 @@ from apkit4d.gui.shared.components.v_separator import VSeparator
 
 
 class BlobDetectionInspector(QWidget):
-    start_frame_changed: Signal = Signal()
-    end_frame_changed: Signal = Signal()
-    output_folder_changed: Signal = Signal()
-    workers_changed: Signal = Signal()
-    output_format_changed: Signal = Signal()
-    diameter_xy_changed: Signal = Signal()
-    diameter_z_changed: Signal = Signal()
-    diameter_z_equal_to_xy_toggled: Signal = Signal()
-    lo_g_changed: Signal = Signal()
-    seed_separation_changed: Signal = Signal()
-    boundary_changed: Signal = Signal()
-    min_volume_changed: Signal = Signal()
-    max_volume_changed: Signal = Signal()
-    update_blob_on_every_change_toggled: Signal = Signal()
-    show_segments_toggled: Signal = Signal()
+    frame_start_changed: Signal = Signal(int)
+    frame_end_changed: Signal = Signal(int)
+    output_folder_changed: Signal = Signal(Path)
+    workers_changed: Signal = Signal(int)
+    output_format_changed: Signal = Signal(OutputType)
+    diameter_xy_changed: Signal = Signal(float)
+    diameter_z_changed: Signal = Signal(float)
+    diameter_z_equal_to_xy_toggled: Signal = Signal(bool)
+    lo_g_changed: Signal = Signal(float)
+    seed_separation_changed: Signal = Signal(float)
+    boundary_changed: Signal = Signal(float)
+    min_volume_changed: Signal = Signal(float)
+    max_volume_changed: Signal = Signal(float)
+    update_on_change_toggled: Signal = Signal(bool)
+    show_segments_toggled: Signal = Signal(bool)
     find_blob_clicked: Signal = Signal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -48,6 +50,8 @@ class BlobDetectionInspector(QWidget):
 
         self._build_batch_processing_section()
         self._build_detection_parameters_section()
+
+        print(self._output_format.currentData)
 
     def _create_double_spinbox(
         self,
@@ -78,9 +82,11 @@ class BlobDetectionInspector(QWidget):
         # frame selection
         self._frame_start = QSpinBox()
         self._frame_start.setRange(0, 999999)
+        self._frame_start.valueChanged.connect(self.frame_start_changed.emit)
 
         self._frame_end = QSpinBox()
         self._frame_end.setRange(0, 999999)
+        self._frame_end.valueChanged.connect(self.frame_end_changed.emit)
 
         frame_range_widget = QWidget()
         frame_layout = QHBoxLayout(frame_range_widget)
@@ -107,13 +113,10 @@ class BlobDetectionInspector(QWidget):
         )
 
         # batch
-        self._batch_content = QWidget()
-        batch_layout = QVBoxLayout(self._batch_content)
-        batch_layout.setContentsMargins(0, 8, 0, 0)
-
         self._output_folder = QLineEdit()
         self._output_folder.setText(str(DEFAULT_PROCESSED_DATA_DIR))
         self._output_folder.setPlaceholderText(texts.INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER)
+        self._output_folder.textChanged.connect(lambda path: self.output_folder_changed.emit(Path(path)))
 
         self.output_browse_button = QPushButton("...")
         self.output_browse_button.setFixedWidth(32)
@@ -130,20 +133,19 @@ class BlobDetectionInspector(QWidget):
         self._workers = QSpinBox()
         self._workers.setRange(1, 256)
         self._workers.setValue(4)
+        self._workers.valueChanged.connect(self.workers_changed.emit)
 
         form.addRow(texts.INSPECTOR_LABEL_WORKERS, self._workers)
 
         self._output_format = QComboBox()
-        self._output_format.addItems([texts.get_output_type_label(type) for type in OutputType])
+        for item_type in OutputType:
+            label = texts.get_output_type_label(item_type)
+            self._output_format.addItem(label, item_type)
+        self._output_format.currentIndexChanged.connect(
+            lambda _: self.output_format_changed.emit(self._output_format.currentData())
+        )
 
         form.addRow(texts.INSPECTOR_LABEL_FORMAT, self._output_format)
-
-        batch_layout.addLayout(form)
-
-        self._run_batch_button = QPushButton(texts.INSPECTOR_BUTTON_RUN_BATCH)
-        self._run_batch_button.setToolTip(texts.INSPECTOR_TOOLTIP_RUN_BATCH)
-
-        batch_layout.addWidget(self._run_batch_button)
 
         self._main_layout.addWidget(group)
 
@@ -157,6 +159,7 @@ class BlobDetectionInspector(QWidget):
             self._diameter_xy,
             texts.INSPECTOR_TOOLTIP_DIAMETER_XY,
         )
+        self._diameter_xy.valueChanged.connect(self.diameter_xy_changed.emit)
 
         self._diameter_z = self._create_double_spinbox(5.0, minimum=1, maximum=500)
         self._add_field(
@@ -165,6 +168,7 @@ class BlobDetectionInspector(QWidget):
             self._diameter_z,
             texts.INSPECTOR_TOOLTIP_DIAMETER_Z,
         )
+        self._diameter_z.valueChanged.connect(self.diameter_z_changed.emit)
 
         self._diameter_z_equals_xy = QCheckBox()
         self._add_field(
@@ -173,14 +177,16 @@ class BlobDetectionInspector(QWidget):
             self._diameter_z_equals_xy,
             texts.INSPECTOR_TOOLTIP_DIAMETER_Z_EQUALS_XY,
         )
+        self._diameter_z_equals_xy.toggled.connect(self.diameter_z_equal_to_xy_toggled.emit)
 
-        self._log_threshold = self._create_double_spinbox(0.1, minimum=0, maximum=5, step=0.01)
+        self._lo_g_threshold = self._create_double_spinbox(0.1, minimum=0, maximum=5, step=0.01)
         self._add_field(
             form,
             texts.INSPECTOR_LABEL_LOG_THRESHOLD,
-            self._log_threshold,
+            self._lo_g_threshold,
             texts.INSPECTOR_TOOLTIP_LOG_THRESHOLD,
         )
+        self._lo_g_threshold.valueChanged.connect(self.lo_g_changed.emit)
 
         self._seed_separation = self._create_double_spinbox(0.1, minimum=0.1, maximum=3, step=0.05)
         self._add_field(
@@ -189,6 +195,7 @@ class BlobDetectionInspector(QWidget):
             self._seed_separation,
             texts.INSPECTOR_TOOLTIP_SEED_SEPARATION,
         )
+        self._seed_separation.valueChanged.connect(self.seed_separation_changed.emit)
 
         self._boundary = self._create_double_spinbox(0.0, minimum=0.01, maximum=0.99, step=0.05)
         self._add_field(
@@ -197,6 +204,7 @@ class BlobDetectionInspector(QWidget):
             self._boundary,
             texts.INSPECTOR_TOOLTIP_BOUNDARY,
         )
+        self._boundary.valueChanged.connect(self.boundary_changed.emit)
 
         self._min_volume = self._create_double_spinbox(200, maximum=10_000_000, step=100)
         self._add_field(
@@ -205,6 +213,7 @@ class BlobDetectionInspector(QWidget):
             self._min_volume,
             texts.INSPECTOR_TOOLTIP_MIN_VOLUME,
         )
+        self._min_volume.valueChanged.connect(self.min_volume_changed.emit)
 
         self._max_volume = self._create_double_spinbox(1_000_000, maximum=1_000_000_000, step=1000)
         self._add_field(
@@ -213,6 +222,7 @@ class BlobDetectionInspector(QWidget):
             self._max_volume,
             texts.INSPECTOR_TOOLTIP_MAX_VOLUME,
         )
+        self._max_volume.valueChanged.connect(self.max_volume_changed.emit)
 
         self._main_layout.addWidget(group)
 
@@ -226,6 +236,7 @@ class BlobDetectionInspector(QWidget):
             self._update_on_change,
             texts.INSPECTOR_TOOLTIP_UPDATE_ON_CHANGE,
         )
+        self._update_on_change.toggled.connect(self.update_on_change_toggled.emit)
 
         self._show_segments = QCheckBox()
         self._add_field(
@@ -234,9 +245,11 @@ class BlobDetectionInspector(QWidget):
             self._show_segments,
             texts.INSPECTOR_TOOLTIP_SHOW_SEGMENTS,
         )
+        self._show_segments.toggled.connect(self.show_segments_toggled.emit)
 
         self._find_blobs_button = QPushButton(texts.INSPECTOR_BUTTON_FIND_BLOBS)
         self._find_blobs_button.setToolTip(texts.INSPECTOR_TOOLTIP_FIND_BLOBS)
+        self._find_blobs_button.clicked.connect(self.find_blob_clicked.emit)
 
         form.addRow(self._find_blobs_button)
 
