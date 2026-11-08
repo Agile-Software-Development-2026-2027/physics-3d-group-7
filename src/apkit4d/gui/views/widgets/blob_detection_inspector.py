@@ -24,6 +24,30 @@ from apkit4d.gui.shared.components.v_separator import VSeparator
 
 
 class BlobDetectionInspector(QWidget):
+    """Inspector widget for configuring blob detection parameters and batch processing settings.
+
+    Args:
+        parent: Optional parent widget.
+
+    Signals:
+        frame_start_changed: Emitted when the start frame changes.
+        frame_end_changed: Emitted when the end frame changes.
+        output_folder_changed: Emitted when the output folder path changes.
+        workers_changed: Emitted when the worker count changes.
+        output_format_changed: Emitted when the output format changes.
+        diameter_xy_changed: Emitted when the XY diameter changes.
+        diameter_z_changed: Emitted when the Z diameter changes.
+        diameter_z_equal_to_xy_toggled: Emitted when the Z equals XY toggle state changes.
+        lo_g_changed: Emitted when the Laplacian of Gaussian threshold changes.
+        seed_separation_changed: Emitted when the seed separation changes.
+        boundary_changed: Emitted when the boundary changes.
+        min_volume_changed: Emitted when the minimum volume changes.
+        max_volume_changed: Emitted when the maximum volume changes.
+        update_on_change_toggled: Emitted when the update-on-change toggle state changes.
+        show_segments_toggled: Emitted when the show-segments toggle state changes.
+        find_blob_clicked: Emitted when the find blobs button is clicked.
+    """
+
     frame_start_changed: Signal = Signal(int)
     frame_end_changed: Signal = Signal(int)
     output_folder_changed: Signal = Signal(Path)
@@ -283,4 +307,10 @@ class BlobDetectionInspector(QWidget):
             self._output_folder.setText(directory)
 
     def set_detection_status(self, status: str):
+        """Updates the status text displayed in the blob detection status label.
+
+        Args:
+            status: The status message string to display to the user.
+        """
+
         self._detection_status.setText(status)
