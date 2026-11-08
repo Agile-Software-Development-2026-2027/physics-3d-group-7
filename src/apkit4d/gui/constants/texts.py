@@ -13,7 +13,7 @@ PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
 STATUS_NO_FILE: str = "No file open"
 STATUS_OPENING: str = "Opening {name}..."
-STATUS_OPENED: str = "{path} | frames: {frames}"
+STATUS_OPENED: str = "{path}"
 STATUS_OPEN_FAILED: str = "Cannot open {name}: {reason}"
 STATUS_INVALID_VOXEL: str = "Cannot show {name}: invalid voxel size {voxel}"
 STATUS_FRAME_FAILED: str = "Cannot read frame {frame}: {reason}"
@@ -38,6 +38,8 @@ TOOLTIP_PREVIOUS: str = "Previous frame"
 TOOLTIP_PLAY: str = "Play"
 TOOLTIP_PAUSE: str = "Pause"
 TOOLTIP_NEXT: str = "Next frame"
+COUNTER_SEPARATOR: str = " / "
+COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no recording
 
 # side panels
 SECTION_APPEARANCE: str = "Appearance"

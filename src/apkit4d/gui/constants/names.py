@@ -24,6 +24,7 @@ PREVIOUS_BUTTON: str = "previous_button"
 PLAY_BUTTON: str = "play_button"
 NEXT_BUTTON: str = "next_button"
 FRAME_SLIDER: str = "frame_slider"
+FRAME_COUNTER: str = "frame_counter"
 
 # controls of the side panels
 THEME_BUTTON: str = "theme_button"

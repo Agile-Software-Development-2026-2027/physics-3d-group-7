@@ -10,6 +10,7 @@ from PySide6.QtCore import Signal, SignalInstance
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from apkit4d.gui.constants import appearance, names, texts
+from apkit4d.gui.views.widgets.frame_counter import FrameCounter
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
@@ -60,10 +61,14 @@ class PlaybackBar(QWidget):
             names.NEXT_BUTTON, texts.BUTTON_NEXT, texts.TOOLTIP_NEXT, Icon.NEXT, self.next_requested
         )
 
+        self._counter = FrameCounter()
+
         buttons = QHBoxLayout()
         buttons.setSpacing(appearance.BAR_ITEMS_SPACING)
         for button in (self._previous_button, self._play_button, self._next_button):
             buttons.addWidget(button)
+        buttons.addSpacing(appearance.COUNTER_SPACING)
+        buttons.addWidget(self._counter)
         buttons.addStretch(1)
 
         layout = QVBoxLayout(self)
@@ -84,6 +89,7 @@ class PlaybackBar(QWidget):
         self._slider.blockSignals(True)  # a change made by the program is not a user request
         self._slider.setRange(0, max(count - 1, 0))
         self._slider.blockSignals(False)
+        self._counter.set_frame_count(count)
 
     def set_frame(self, frame: int) -> None:
         """
@@ -95,6 +101,7 @@ class PlaybackBar(QWidget):
         self._slider.blockSignals(True)
         self._slider.setValue(frame)
         self._slider.blockSignals(False)
+        self._counter.set_frame(frame)
 
     def set_playing(self, playing: bool) -> None:
         """
