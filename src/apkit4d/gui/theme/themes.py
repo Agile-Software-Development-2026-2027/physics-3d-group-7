@@ -38,6 +38,42 @@ class ThemeColors:
     disabled_text: str
 
 
+@dataclass(frozen=True)
+class StatusColors:
+    """Muted status colors for pipeline step execution states."""
+
+    idle_bg: str
+    idle_text: str
+    pending_bg: str
+    pending_text: str
+    running_bg: str
+    running_text: str
+    completed_bg: str
+    completed_text: str
+
+
+DARK_STATUS_COLORS: StatusColors = StatusColors(
+    idle_bg="#383b41",
+    idle_text="#dcdfe4",
+    pending_bg="#1c2838",
+    pending_text="#dcdfe4",
+    running_bg="#2d2216",
+    running_text="#dcdfe4",
+    completed_bg="#162e22",
+    completed_text="#dcdfe4",
+)
+
+LIGHT_STATUS_COLORS: StatusColors = StatusColors(
+    idle_bg="#e6e8eb",
+    idle_text="#1f2328",
+    pending_bg="#f0f7ff",
+    pending_text="#1e3a8a",
+    running_bg="#fffbeb",
+    running_text="#78350f",
+    completed_bg="#f0fdf4",
+    completed_text="#064e3b",
+)
+
 LIGHT_COLORS: ThemeColors = ThemeColors(
     window="#f2f3f5",
     window_text="#1f2328",
@@ -73,4 +109,8 @@ DARK_COLORS: ThemeColors = ThemeColors(
 )
 
 THEME_COLORS: dict[Theme, ThemeColors] = {Theme.LIGHT: LIGHT_COLORS, Theme.DARK: DARK_COLORS}
+STATUS_THEME_COLORS: dict[Theme, StatusColors] = {
+    Theme.LIGHT: LIGHT_STATUS_COLORS,
+    Theme.DARK: DARK_STATUS_COLORS,
+}
 DEFAULT_THEME: Theme = Theme.DARK  # the theme the application starts with
