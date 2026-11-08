@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 import pyvista as pv
+from matplotlib import colormaps
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
@@ -29,6 +30,13 @@ FULL_QUALITY_DELAY = 0.2
 # it is about 2 times faster when zoomed in and the blobs keep their shape, only a bit softer
 MOVING_IMAGE_SAMPLE_DISTANCE = 2.0
 
+# how the view looks until the user changes it from the left panel
+DEFAULT_COLORMAP = "inferno"
+DEFAULT_VOLUME_OPACITY = 1.0
+DEFAULT_BACKGROUND = "gray"
+DEFAULT_OUTLINE_COLOR = "white"
+DEFAULT_TEXT_COLOR = "black"
+
 
 class Viewport(QWidget):
     def __init__(self, parent=None):
@@ -54,7 +62,7 @@ class Viewport(QWidget):
         self.main_layout.addWidget(self.plotter.interactor)
 
         # set up of some viewport things
-        self.plotter.set_background("gray")
+        self.plotter.set_background(DEFAULT_BACKGROUND)
         self.plotter.add_axes()
         self.plotter.enable_terrain_style()
         self.min_zoom_dist: float = 0.0
@@ -63,6 +71,15 @@ class Viewport(QWidget):
         # we store the center and bounds
         self.volume_center: np.ndarray[tuple[int], np.dtype[np.float64]] | None = None
         self.volume_bounds: Bounds6D | None = None
+
+        # the look of the volume chosen by the user. we keep it here because a volume of another size
+        # is added again from scratch, and without these it would go back to the defaults
+        self._colormap: str = DEFAULT_COLORMAP
+        self._volume_opacity: float = DEFAULT_VOLUME_OPACITY
+        self._outline_color: str = DEFAULT_OUTLINE_COLOR
+        self._text_color: str = DEFAULT_TEXT_COLOR
+        # opacity unit distance that PyVista gives to the volume, set_volume_opacity scales it
+        self._base_opacity_unit_distance: float = 1.0
 
         # they are used in the zoom acceleration function
         self.last_zoom_time: float = 0.0
@@ -105,8 +122,6 @@ class Viewport(QWidget):
         # so the wheel zoom is kept inside the limits by the clamp in compute_local_zoom_step
         for event in ("InteractionEvent", "EndInteractionEvent"):
             iren.AddObserver(event, self._limit_zoom, -1.0)
-
-        # TODO: decide how we are going to handle colors and other stuff like axes, grid, coordinates, etc.
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
@@ -165,7 +180,7 @@ class Viewport(QWidget):
         # we draw it once at the end
         actor = self.plotter.add_volume(
             self._volume_grid,
-            cmap="inferno",
+            cmap=self._colormap,
             opacity="linear",
             name="volume",
             mapper="gpu",
@@ -178,9 +193,18 @@ class Viewport(QWidget):
         # spacing, as the smart mapper does, the still image is the same as before
         actor.mapper.LockSampleDistanceToInputSpacingOn()
 
+        # the new volume and its scalar bar get the opacity and the text color chosen by the user
+        self._base_opacity_unit_distance = actor.prop.opacity_unit_distance
+        self._apply_volume_opacity(actor)
+        self._paint_text()
+
         # with this we can see the cube borders
         self.plotter.add_mesh(
-            self._volume_grid.outline(), color="white", line_width=2, name="outline", render=False
+            self._volume_grid.outline(),
+            color=self._outline_color,
+            line_width=2,
+            name="outline",
+            render=False,
         )
 
         # store the center and bounds
@@ -203,8 +227,136 @@ class Viewport(QWidget):
 
         self._request_render()
 
-        # TODO: here we will need to handle the color map and the opacity
-        # but for now we will use default values to try
+    def set_colormap(self, name: str) -> None:
+        """
+        This function changes the colors of the volume. the scalar bar uses the same colors,
+        so it changes too.
+
+        Parameters:
+            name (str): name of a matplotlib colormap, for example "inferno" or "viridis"
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: if matplotlib has no colormap with this name
+        """
+        # we check the name now: a wrong one would break the next volume we add
+        if name not in colormaps:
+            raise ValueError(f"unknown colormap: {name}")
+
+        self._colormap = name
+        actor = self.plotter.actors.get("volume")
+        if actor is not None:
+            # the lookup table builds the new colors and keeps the opacity it already has
+            actor.mapper.lookup_table.cmap = name
+            self._request_render()
+
+    def set_volume_opacity(self, opacity: float) -> None:
+        """
+        This function makes the volume more or less opaque.
+
+        Parameters:
+            opacity (float): 1.0 is the default look, 2.0 is twice as opaque, 0.5 half as opaque
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: if the opacity is not greater than 0
+        """
+        if opacity <= 0:
+            raise ValueError(f"the opacity must be greater than 0, got {opacity}")
+
+        self._volume_opacity = opacity
+        actor = self.plotter.actors.get("volume")
+        if actor is not None:
+            self._apply_volume_opacity(actor)
+            self._request_render()
+
+    def set_background(self, color: str) -> None:
+        """
+        This function changes the background color of the view.
+
+        Parameters:
+            color (str): a color name or a hex string, for example "black" or "#2b2d31"
+
+        Returns:
+            None
+        """
+        # the background stays when the volume is added again, so we don't need to keep it
+        self.plotter.set_background(color)
+        self._request_render()
+
+    def set_outline_color(self, color: str) -> None:
+        """
+        This function changes the color of the lines around the volume.
+
+        Parameters:
+            color (str): a color name or a hex string, for example "white" or "#1f2328"
+
+        Returns:
+            None
+        """
+        self._outline_color = color
+        actor = self.plotter.actors.get("outline")
+        if actor is not None:
+            actor.prop.color = color
+            self._request_render()
+
+    def set_text_color(self, color: str) -> None:
+        """
+        This function changes the color of the text of the scalar bar and of the axes,
+        so that it can be read on the background.
+
+        Parameters:
+            color (str): a color name or a hex string, for example "black" or "#dcdfe4"
+
+        Returns:
+            None
+        """
+        self._text_color = color
+        self._paint_text()
+        self._request_render()
+
+    def _apply_volume_opacity(self, actor: pv.Actor) -> None:
+        """
+        This function gives the volume the opacity chosen by the user.
+
+        the opacity unit distance is how thick the volume must be to have the opacity of its colors:
+        when it is smaller, the light goes through less volume and the volume looks more solid.
+        so dividing it by the opacity makes the volume more opaque when the opacity grows.
+        we don't touch the opacity of the colors: changing it with a list of values blanks the volume.
+
+        Parameters:
+            actor (pv.Actor): the actor of the volume
+
+        Returns:
+            None
+        """
+        actor.prop.opacity_unit_distance = self._base_opacity_unit_distance / self._volume_opacity
+
+    def _paint_text(self) -> None:
+        """
+        This function paints the text of the scalar bar and of the axes with the text color.
+        PyVista has no option to change it after they are added, so we change it on the VTK objects.
+
+        Returns:
+            None
+        """
+        rgb = pv.Color(self._text_color).float_rgb
+        for scalar_bar in self.plotter.scalar_bars.values():
+            scalar_bar.GetLabelTextProperty().SetColor(rgb)
+            scalar_bar.GetTitleTextProperty().SetColor(rgb)
+
+        axes = self.plotter.renderer.axes_actor
+        if axes is not None:
+            for caption in (
+                axes.GetXAxisCaptionActor2D(),
+                axes.GetYAxisCaptionActor2D(),
+                axes.GetZAxisCaptionActor2D(),
+            ):
+                caption.GetCaptionTextProperty().SetColor(rgb)
 
     def show_blobs(self, poly: pv.PolyData) -> None:
         """
