@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import texts
+from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
 from apkit4d.gui.models.output_type import OutputType
 from apkit4d.gui.shared.components.v_separator import VSeparator
 
@@ -111,6 +112,7 @@ class BlobDetectionInspector(QWidget):
         batch_layout.setContentsMargins(0, 8, 0, 0)
 
         self._output_folder = QLineEdit()
+        self._output_folder.setText(str(DEFAULT_PROCESSED_DATA_DIR))
         self._output_folder.setPlaceholderText(texts.INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER)
 
         self.output_browse_button = QPushButton("...")
