@@ -62,3 +62,15 @@ DISABLED_GROOVE_MIX: float = 0.14
 DISABLED_RING_MIX: float = 0.24
 ACCENT_HOVER_MIX: float = 0.15  # mix of the accent color (0) and of white (1) while the mouse is over it
 ACCENT_PRESSED_DARKER: int = 115  # percentage of darkening of the accent color while it is pressed
+
+# preview that follows the mouse on the slider: a marker on the groove and a bubble above it
+HOVER_MARKER_WIDTH: int = 2
+HOVER_MARKER_HALF_HEIGHT: int = 8
+HOVER_MARKER_OPACITY: int = 230  # from 0 (invisible) to 255 (solid)
+BUBBLE_HEIGHT: int = 24  # of the body of the bubble, without the pointer
+BUBBLE_POINTER_HEIGHT: int = 6
+BUBBLE_POINTER_WIDTH: int = 10
+BUBBLE_GAP: int = 3  # between the tip of the pointer and the groove
+BUBBLE_RADIUS: int = 7
+BUBBLE_PADDING: int = 11  # on the left and on the right of the text
+BUBBLE_FONT_POINTS: float = 9.5
