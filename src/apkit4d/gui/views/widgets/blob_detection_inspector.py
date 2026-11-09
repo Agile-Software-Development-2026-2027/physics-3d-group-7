@@ -221,7 +221,7 @@ class BlobDetectionInspector(QWidget):
         )
         self._seed_separation.valueChanged.connect(self.seed_separation_changed.emit)
 
-        self._boundary = self._create_double_spinbox(0.0, minimum=0.01, maximum=0.99, step=0.05)
+        self._boundary = self._create_double_spinbox(0.01, minimum=0.01, maximum=0.99, step=0.05)
         self._add_field(
             form,
             texts.INSPECTOR_LABEL_BOUNDARY,

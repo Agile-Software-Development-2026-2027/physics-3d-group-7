@@ -12,6 +12,7 @@ from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
+from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 
 
 def test_right_panel_init(qtbot) -> None:
@@ -36,25 +37,21 @@ def test_right_panel_init(qtbot) -> None:
     assert not panel.bottom_stats.is_expanded()
     assert panel.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
-    # Verify each section has number field, plan up to this button, and complete this button
+    # Verify each section has plan up to this button and its inspector
     for step in PipelineStep:
         assert panel.get_section(step) is not None
         assert panel.get_section(step.value) is not None
-
-        num_field = panel.get_number_field(step)
-        assert num_field is not None
-        assert num_field.objectName() == names.STAGE_NUMBER_FIELD
-        assert num_field.value() == 10
 
         play_btn = panel.get_play_button(step)
         assert play_btn is not None
         assert play_btn.text() == texts.BUTTON_PLAY_STAGE
         assert play_btn.objectName() == names.PLAY_STAGE_BUTTON
 
-        complete_btn = panel.get_complete_button(step)
-        assert complete_btn is not None
-        assert complete_btn.text() == texts.BUTTON_COMPLETE_STAGE
-        assert complete_btn.objectName() == names.COMPLETE_STAGE_BUTTON
+        # TODO: add other inspector once they're available
+        match step:
+            case PipelineStep.DETECTION:
+                inspector = panel.findChild(BlobDetectionInspector)
+                assert inspector is not None
 
 
 def test_right_panel_theme_switch(qtbot) -> None:
