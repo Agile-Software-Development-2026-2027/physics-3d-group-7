@@ -475,6 +475,50 @@ class TestWheelRendering:
         assert dist(camera.position, camera.focal_point) == pytest.approx(viewport.min_zoom_dist)
 
 
+class TestViewportRayPicking:
+    def test_intersect_ray_bounds_hits_front_face(self, viewport):
+        bounds = (0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+        # ray that starts at z=20 and points straight to the center of the box (5, 5, -5)
+        ray_start = np.array([5.0, 5.0, 20.0])
+        ray_end = np.array([5.0, 5.0, -5.0])
+
+        hit = viewport._ray_intersects_bounds(ray_start, ray_end, bounds)
+        assert hit is not None
+        # need to hit the front face of the box at z=10.0, in the point (5, 5, 10)
+        np.testing.assert_allclose(hit, [5.0, 5.0, 10.0])
+
+    def test_intersect_ray_bounds_returns_none_when_missing_box(self, viewport):
+        bounds = (0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+        # ray that go outside the box, starting at (50, 50, 20) and pointing to (50, 50, -5)
+        ray_start = np.array([50.0, 50.0, 20.0])
+        ray_end = np.array([50.0, 50.0, -5.0])
+
+        hit = viewport._ray_intersects_bounds(ray_start, ray_end, bounds)
+        assert hit is None
+
+    def test_pick_volume_bounds_point_returns_none_without_volume(self, viewport):
+        assert viewport.pick_volume_bounds_point((100, 100)) is None
+
+    def test_pick_volume_bounds_point_hits_center_and_handles_outside(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+        # place the camera in front of the volume, looking at its center
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        # get coordinates of the center of the volume in world space
+        renderer = viewport.plotter.renderer
+        renderer.SetWorldPoint(2.0, 2.0, 2.0, 1.0)
+        renderer.WorldToDisplay()
+        cx, cy, _ = renderer.GetDisplayPoint()
+
+        hit = viewport.pick_volume_bounds_point((int(round(cx)), int(round(cy))))
+        assert hit is not None
+        # the center of make_grid() (5x5x5 with spacing 1) is at (2.0, 2.0, 2.0)
+        np.testing.assert_allclose(hit, [2.0, 2.0, 4.0], atol=0.2)
+
+
 def lut_colors(viewport) -> np.ndarray:
     lut = viewport.plotter.actors["volume"].mapper.lookup_table
     return np.array(lut.values)[:, :3]
