@@ -6,6 +6,7 @@ from apkit4d.visualization.viewport import (
     FAST_SCROLL_THRESHOLD,
     FULL_QUALITY_DELAY,
     MOVING_IMAGE_SAMPLE_DISTANCE,
+    RoiMode,
     Viewport,
 )
 
@@ -516,3 +517,63 @@ class TestViewportRayPicking:
         assert hit is not None
         # the center of make_grid() (5x5x5 with spacing 1) is at (2.0, 2.0, 2.0)
         np.testing.assert_allclose(hit, [2.0, 2.0, 4.0], atol=0.2)
+
+
+class TestViewportRoiDragSelection:
+    def test_start_roi_selection_ignored_without_volume(self, viewport):
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+
+    def test_full_click_drag_release_creates_3d_roi_preview(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        # place the camera in front of the volume on the z-axis,
+        # above the center of the volume (2, 2, 2)
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+        renderer = viewport.plotter.renderer
+
+        def world_to_px(wx, wy, wz):
+            renderer.SetWorldPoint(wx, wy, wz, 1.0)
+            renderer.WorldToDisplay()
+            dx, dy, _ = renderer.GetDisplayPoint()
+            return int(round(dx)), int(round(dy))
+
+        iren = viewport.plotter.iren.interactor
+
+        # Click on point (1.0, 1.0, 4.0)
+        px1, py1 = world_to_px(1.0, 1.0, 4.0)
+        iren.SetEventPosition(px1, py1)
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.roi_mode == RoiMode.DRAGGING
+
+        # drag to point (3.0, 3.0, 4.0)
+        px2, py2 = world_to_px(3.0, 3.0, 4.0)
+        iren.SetEventPosition(px2, py2)
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+
+        assert "roi_preview" in viewport.plotter.actors
+        assert viewport.current_roi is not None
+        np.testing.assert_allclose(
+            viewport.current_roi.bounds,
+            (1.0, 3.0, 1.0, 3.0, 0.0, 4.0),
+            atol=0.25,
+        )
+
+        # mouse release should finalize the ROI selection
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.roi_mode == RoiMode.EDITING
+
+        # canceling the ROI selection should remove the preview and reset the mode
+        viewport.cancel_roi_selection()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+        assert "roi_preview" not in viewport.plotter.actors
