@@ -6,6 +6,7 @@ from apkit4d.visualization.viewport import (
     FAST_SCROLL_THRESHOLD,
     FULL_QUALITY_DELAY,
     MOVING_IMAGE_SAMPLE_DISTANCE,
+    RoiMode,
     Viewport,
 )
 
@@ -521,7 +522,7 @@ class TestViewportRayPicking:
 class TestViewportRoiDragSelection:
     def test_start_roi_selection_ignored_without_volume(self, viewport):
         viewport.start_roi_selection()
-        assert viewport.roi_mode == "inactive"
+        assert viewport.roi_mode == RoiMode.INACTIVE
 
     def test_full_click_drag_release_creates_3d_roi_preview(self, viewport):
         viewport.resize(600, 600)
@@ -536,7 +537,7 @@ class TestViewportRoiDragSelection:
         viewport.plotter.renderer.ResetCameraClippingRange()
 
         viewport.start_roi_selection()
-        assert viewport.roi_mode == "waiting_first_point"
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
 
         renderer = viewport.plotter.renderer
 
@@ -552,7 +553,7 @@ class TestViewportRoiDragSelection:
         px1, py1 = world_to_px(1.0, 1.0, 4.0)
         iren.SetEventPosition(px1, py1)
         viewport._on_left_button_press(None, "LeftButtonPressEvent")
-        assert viewport.roi_mode == "dragging"
+        assert viewport.roi_mode == RoiMode.DRAGGING
 
         # drag to point (3.0, 3.0, 4.0)
         px2, py2 = world_to_px(3.0, 3.0, 4.0)
@@ -569,10 +570,10 @@ class TestViewportRoiDragSelection:
 
         # mouse release should finalize the ROI selection
         viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
-        assert viewport.roi_mode == "editing"
+        assert viewport.roi_mode == RoiMode.EDITING
 
         # canceling the ROI selection should remove the preview and reset the mode
         viewport.cancel_roi_selection()
-        assert viewport.roi_mode == "inactive"
+        assert viewport.roi_mode == RoiMode.INACTIVE
         assert viewport.current_roi is None
         assert "roi_preview" not in viewport.plotter.actors

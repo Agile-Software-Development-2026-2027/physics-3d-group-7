@@ -1,4 +1,5 @@
 import time
+from enum import Enum, auto
 
 import numpy as np
 import pyvista as pv
@@ -30,6 +31,13 @@ FULL_QUALITY_DELAY = 0.2
 # while the view moves the volume is drawn with one ray every 2x2 pixels, scaled up to the whole view.
 # it is about 2 times faster when zoomed in and the blobs keep their shape, only a bit softer
 MOVING_IMAGE_SAMPLE_DISTANCE = 2.0
+
+
+class RoiMode(Enum):
+    INACTIVE = auto()
+    WAITING_FIRST_POINT = auto()
+    DRAGGING = auto()
+    EDITING = auto()
 
 
 class Viewport(QWidget):
@@ -71,7 +79,7 @@ class Viewport(QWidget):
         self.current_zoom_factor: float = 0.01
 
         # state for the ROI selection
-        self._roi_mode: str = "inactive"
+        self._roi_mode: RoiMode = RoiMode.INACTIVE
         self._roi_start_point: Vec3D | None = None
         self._current_roi: RegionOfInterest | None = None
         self._roi_box_poly: pv.PolyData | None = None
@@ -289,7 +297,7 @@ class Viewport(QWidget):
         self._request_full_quality_render()
 
         # clear the ROI selection
-        self._roi_mode = "inactive"
+        self._roi_mode = RoiMode.INACTIVE
         self._roi_start_point = None
         self._current_roi = None
         self._roi_box_poly = None
@@ -917,16 +925,16 @@ class Viewport(QWidget):
     # ROI selection methods
 
     @property
-    def roi_mode(self) -> str:
+    def roi_mode(self) -> RoiMode:
         """
         This property returns the current ROI selection mode.
 
         Returns:
             str: The current ROI selection mode, which can be one of the following:
-                - "inactive": No ROI selection is active.
-                - "waiting_first_point": waiting the first click to start the ROI selection.
-                - "dragging": the user is dragging the mouse to select the ROI.
-                - "editing": the user is editing the ROI after it has been created.
+                - RoiMode.INACTIVE: No ROI selection is active.
+                - RoiMode.WAITING_FIRST_POINT: waiting the first click to start the ROI selection.
+                - RoiMode.DRAGGING: the user is dragging the mouse to select the ROI.
+                - RoiMode.EDITING: the user is editing the ROI after it has been created.
         """
         return self._roi_mode
 
@@ -956,7 +964,7 @@ class Viewport(QWidget):
         self._remove_roi_preview_actor()
         self._roi_start_point = None
         self._current_roi = None
-        self._roi_mode = "waiting_first_point"
+        self._roi_mode = RoiMode.WAITING_FIRST_POINT
         self.setCursor(Qt.CursorShape.CrossCursor)
         self._request_render()
 
@@ -968,7 +976,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        self._roi_mode = "inactive"
+        self._roi_mode = RoiMode.INACTIVE
         self._roi_start_point = None
         self._current_roi = None
         self._remove_roi_preview_actor()
@@ -1031,7 +1039,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != "waiting_first_point":
+        if self._roi_mode != RoiMode.WAITING_FIRST_POINT:
             return
 
         # just for comodity, i use stop_wheel_event here and in the func below,
@@ -1047,7 +1055,7 @@ class Viewport(QWidget):
             return
 
         self._roi_start_point = hit
-        self._roi_mode = "dragging"
+        self._roi_mode = RoiMode.DRAGGING
 
     def _on_mouse_move(self, _obj: object, _event: str) -> None:
         """
@@ -1061,7 +1069,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != "dragging" or self._roi_start_point is None or self.volume_bounds is None:
+        if self._roi_mode != RoiMode.DRAGGING or self._roi_start_point is None or self.volume_bounds is None:
             return
 
         self._stop_wheel_event(self._mouse_move_tag)
@@ -1094,7 +1102,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != "dragging":
+        if self._roi_mode != RoiMode.DRAGGING:
             return
 
         self._stop_wheel_event(self._left_release_tag)
@@ -1112,7 +1120,7 @@ class Viewport(QWidget):
             )
             self._update_roi_preview_box(self._current_roi.bounds)
 
-        self._roi_mode = "editing"
+        self._roi_mode = RoiMode.EDITING
         self.unsetCursor()
         self._full_quality_timer.stop()
         self._request_full_quality_render()
