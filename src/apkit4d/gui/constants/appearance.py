@@ -33,7 +33,7 @@ GRIP_OPACITY: int = 90
 GRIP_ARROW_OPACITY: int = 210
 
 # playback bar
-BAR_MARGINS: tuple[int, int, int, int] = (18, 12, 18, 14)  # left, top, right, bottom
+BAR_MARGINS: tuple[int, int, int, int] = (18, 0, 18, 14)  # left, top, right, bottom
 BAR_ROWS_SPACING: int = 10  # between the slider and the row of buttons
 BAR_ITEMS_SPACING: int = 8  # between the items of a row
 TRANSPORT_BUTTON_SIZE: int = 36
@@ -74,3 +74,7 @@ BUBBLE_GAP: int = 3  # between the tip of the pointer and the groove
 BUBBLE_RADIUS: int = 7
 BUBBLE_PADDING: int = 11  # on the left and on the right of the text
 BUBBLE_FONT_POINTS: float = 9.5
+# the slider keeps some room above its groove, where the bubble of the preview is drawn
+SLIDER_HEADROOM: int = (
+    BUBBLE_HEIGHT + BUBBLE_POINTER_HEIGHT + BUBBLE_GAP - (SLIDER_HEIGHT - SLIDER_GROOVE_HEIGHT) // 2 + 1
+)  # the last pixel is a margin, so that the smoothed edge of the bubble is not cut

@@ -1,99 +1,74 @@
 """
-Little bubble that floats above the slider and tells which frame the mouse is over.
+Bubble that tells which frame the mouse is over, drawn by the slider just above its groove.
+
+It is drawn inside the slider and not in a window of its own, because the position and the life of a
+separate window depend on the window system: on some of them it cannot be moved after it appears, and it
+disappears when the user clicks somewhere else.
 """
 
-from typing import override
-
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
-from PySide6.QtGui import QFont, QFontMetrics, QGuiApplication, QPainter, QPaintEvent, QPalette, QPolygonF
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPalette, QPolygonF
 
 from apkit4d.gui.constants import appearance
 
 ColorRole = QPalette.ColorRole
 
 
-class FrameBubble(QWidget):
+def make_bubble_font(base: QFont) -> QFont:
     """
-    Bubble with a text and a pointer, shown above a point of the screen.
-
-    It is a window of its own, like the tooltips, because it has to float over the 3D view while the bar
-    is only a few pixels tall. The mouse goes through it, so it never gets in the way.
+    Return the font of the bubble.
 
     Args:
-        parent: A widget of the window that the bubble belongs to.
+        base: The font of the widget, which gives the family.
     """
+    font = QFont(base)
+    font.setPointSizeF(appearance.BUBBLE_FONT_POINTS)
+    font.setWeight(QFont.Weight.DemiBold)
+    return font
 
-    def __init__(self, parent: QWidget) -> None:
-        flags = (
-            Qt.WindowType.ToolTip
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowTransparentForInput
-        )
-        super().__init__(parent, flags)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        font = QFont(self.font())
-        font.setPointSizeF(appearance.BUBBLE_FONT_POINTS)
-        font.setWeight(QFont.Weight.DemiBold)
-        self.setFont(font)
-        self._text = ""
-        self._pointer_x = 0
 
-    @property
-    def text(self) -> str:
-        """The text that the bubble shows."""
-        return self._text
+def paint_bubble(
+    painter: QPainter,
+    palette: QPalette,
+    font: QFont,
+    text: str,
+    tip: QPointF,
+    limits: tuple[float, float],
+) -> None:
+    """
+    Draw a bubble with `text` above `tip`, with its pointer touching `tip`.
 
-    def point_at(self, text: str, tip: QPoint) -> None:
-        """
-        Show `text` in a bubble above `tip`, with the pointer touching it.
+    The bubble is the inverse of the window, so it stands out in every theme. It stays between the two
+    limits, and when it has to move to do so, the pointer keeps pointing at `tip`.
 
-        The bubble stays inside the screen. When it has to move to do so, the pointer keeps pointing at `tip`.
+    Args:
+        painter: Painter of the widget where the bubble is drawn.
+        palette: Palette that gives the colors.
+        font: Font of the text, from `make_bubble_font`.
+        text: What to say.
+        tip: Point that the pointer touches.
+        limits: Smallest and largest horizontal position that the bubble can cover.
+    """
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
 
-        Args:
-            text: What to say.
-            tip: Position on the screen, in global coordinates, that the pointer must touch.
-        """
-        self._text = text
-        width = QFontMetrics(self.font()).horizontalAdvance(text) + 2 * appearance.BUBBLE_PADDING
-        height = appearance.BUBBLE_HEIGHT + appearance.BUBBLE_POINTER_HEIGHT
-        left = tip.x() - width // 2
-        screen = QGuiApplication.screenAt(tip)
-        if screen is not None:
-            area = screen.availableGeometry()
-            left = min(max(left, area.left()), area.right() - width + 1)
-        self._pointer_x = tip.x() - left
-        self.resize(width, height)
-        self.move(left, tip.y() - height)
-        self.update()
-        self.show()
+    width = QFontMetrics(font).horizontalAdvance(text) + 2 * appearance.BUBBLE_PADDING
+    left = min(max(tip.x() - width / 2, limits[0]), limits[1] - width)
+    top = tip.y() - appearance.BUBBLE_POINTER_HEIGHT - appearance.BUBBLE_HEIGHT
+    body = QRectF(left, top, width, appearance.BUBBLE_HEIGHT)
 
-    @override
-    def paintEvent(self, _event: QPaintEvent) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(palette.color(ColorRole.WindowText))
+    painter.drawRoundedRect(body, appearance.BUBBLE_RADIUS, appearance.BUBBLE_RADIUS)
 
-        palette = self.palette()
-        painter.setBrush(palette.color(ColorRole.WindowText))  # the bubble is the inverse of the window
-        body = QRectF(0, 0, self.width(), appearance.BUBBLE_HEIGHT)
-        painter.drawRoundedRect(body, appearance.BUBBLE_RADIUS, appearance.BUBBLE_RADIUS)
+    half = appearance.BUBBLE_POINTER_WIDTH / 2
+    margin = appearance.BUBBLE_RADIUS + half
+    x = min(max(tip.x(), body.left() + margin), body.right() - margin)
+    base = body.bottom() - 0.5  # overlaps the body, so that there is no seam
+    painter.drawPolygon(QPolygonF([QPointF(x - half, base), QPointF(x + half, base), QPointF(x, tip.y())]))
 
-        half = appearance.BUBBLE_POINTER_WIDTH / 2
-        margin = appearance.BUBBLE_RADIUS + half
-        x = min(max(self._pointer_x, margin), self.width() - margin)
-        base = appearance.BUBBLE_HEIGHT - 0.5  # overlaps the body, so that there is no seam
-        painter.drawPolygon(
-            QPolygonF(
-                [
-                    QPointF(x - half, base),
-                    QPointF(x + half, base),
-                    QPointF(x, appearance.BUBBLE_HEIGHT + appearance.BUBBLE_POINTER_HEIGHT),
-                ]
-            )
-        )
-
-        painter.setPen(palette.color(ColorRole.Window))
-        painter.drawText(body, Qt.AlignmentFlag.AlignCenter, self._text)
+    painter.setFont(font)
+    painter.setPen(palette.color(ColorRole.Window))
+    painter.drawText(body, Qt.AlignmentFlag.AlignCenter, text)
+    painter.restore()

@@ -4,13 +4,13 @@ Slider to choose a frame: a thin groove that fills up with the accent color and 
 
 from typing import override
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QHideEvent, QMouseEvent, QPainter, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QSlider, QStyle, QWidget
 
 from apkit4d.gui.constants import appearance, texts
 from apkit4d.gui.views.widgets.colors import mix
-from apkit4d.gui.views.widgets.frame_bubble import FrameBubble
+from apkit4d.gui.views.widgets.frame_bubble import make_bubble_font, paint_bubble
 
 ColorRole = QPalette.ColorRole
 
@@ -22,8 +22,9 @@ class FrameSlider(QSlider):
     Pressing anywhere on the groove jumps to that value, and the value follows the mouse while the
     button is held down. A standard Qt slider would move by a whole page instead.
 
-    While the mouse is over the groove, a marker shows the frame under it and a bubble above the slider
-    says its number, counting from 1, as the frame counter does.
+    While the mouse is over the slider, a marker shows the frame under it and a bubble above the groove
+    says its number, counting from 1, as the frame counter does. The bubble is drawn in the room that the
+    slider keeps above the groove, so it follows the mouse in every window system.
 
     Args:
         parent: Qt parent.
@@ -31,10 +32,10 @@ class FrameSlider(QSlider):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
-        self.setFixedHeight(appearance.SLIDER_HEIGHT)
+        self.setFixedHeight(appearance.SLIDER_HEADROOM + appearance.SLIDER_HEIGHT)
         self.setMouseTracking(True)  # to follow the mouse also when no button is pressed
         self._hover: int | None = None
-        self._bubble: FrameBubble | None = None
+        self._bubble_font = make_bubble_font(self.font())
 
     @override
     def paintEvent(self, _event: QPaintEvent) -> None:
@@ -50,7 +51,7 @@ class FrameSlider(QSlider):
 
         pad = appearance.SLIDER_PADDING
         groove = appearance.SLIDER_GROOVE_HEIGHT
-        top = self.height() / 2 - groove / 2
+        top = self._center_y() - groove / 2
         x = self._position_of(self.value())
         radius = groove / 2
 
@@ -67,10 +68,14 @@ class FrameSlider(QSlider):
         painter.setPen(QPen(ring, appearance.SLIDER_HANDLE_RING))
         painter.setBrush(Qt.GlobalColor.white if enabled else window)
         painter.drawEllipse(
-            QPointF(x, self.height() / 2),
+            QPointF(x, self._center_y()),
             appearance.SLIDER_HANDLE_RADIUS,
             appearance.SLIDER_HANDLE_RADIUS,
         )
+        if self._hover is not None and enabled:
+            tip = QPointF(self._position_of(self._hover), top - appearance.BUBBLE_GAP)
+            text = texts.HOVER_FRAME.format(frame=self._hover + 1)
+            paint_bubble(painter, palette, self._bubble_font, text, tip, (0, self.width()))
 
     @override
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -114,22 +119,14 @@ class FrameSlider(QSlider):
     def _follow(self, x: float) -> None:
         """Show the marker and the bubble for the frame under the horizontal position `x`."""
         frame = self._value_at(x)
-        if frame == self._hover:
-            return
-        self._hover = frame
-        self.update()
-        groove_top = self.height() / 2 - appearance.SLIDER_GROOVE_HEIGHT / 2
-        tip = self.mapToGlobal(QPoint(self._position_of(frame), int(groove_top) - appearance.BUBBLE_GAP))
-        if self._bubble is None:
-            self._bubble = FrameBubble(self.window())
-        self._bubble.point_at(texts.HOVER_FRAME.format(frame=frame + 1), tip)
+        if frame != self._hover:
+            self._hover = frame
+            self.update()
 
     def _stop_following(self) -> None:
         if self._hover is not None:
             self._hover = None
             self.update()
-        if self._bubble is not None:
-            self._bubble.hide()
 
     def _paint_marker(self, painter: QPainter, x: int, ink: QColor) -> None:
         color = QColor(ink)
@@ -137,9 +134,13 @@ class FrameSlider(QSlider):
         painter.setPen(
             QPen(color, appearance.HOVER_MARKER_WIDTH, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         )
-        middle = self.height() / 2
+        middle = self._center_y()
         half = appearance.HOVER_MARKER_HALF_HEIGHT
         painter.drawLine(QPointF(x, middle - half), QPointF(x, middle + half))
+
+    def _center_y(self) -> float:
+        """Vertical position of the middle of the groove, under the room kept for the bubble."""
+        return appearance.SLIDER_HEADROOM + appearance.SLIDER_HEIGHT / 2
 
     def _span(self) -> int:
         return self.width() - 2 * appearance.SLIDER_PADDING
