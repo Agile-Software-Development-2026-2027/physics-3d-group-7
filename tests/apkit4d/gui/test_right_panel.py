@@ -13,6 +13,7 @@ from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from tests.apkit4d.gui.helper import find_widget
 
 
 def test_right_panel_init(qtbot) -> None:
@@ -50,7 +51,7 @@ def test_right_panel_init(qtbot) -> None:
         # TODO: add other inspector once they're available
         match step:
             case PipelineStep.DETECTION:
-                inspector = panel.findChild(BlobDetectionInspector)
+                inspector = find_widget(panel, BlobDetectionInspector, names.DETECTION_INSPECTOR_STEP)
                 assert inspector is not None
 
 

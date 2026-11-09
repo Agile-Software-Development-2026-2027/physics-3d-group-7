@@ -397,7 +397,9 @@ class RightPanel(SidePanel):
 
             match step:
                 case PipelineStep.DETECTION:
-                    sec.add_widget(BlobDetectionInspector())
+                    detection_inspector = BlobDetectionInspector()
+                    detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    sec.add_widget(detection_inspector)
                 case _:
                     # Number field
                     param_row = QWidget()
