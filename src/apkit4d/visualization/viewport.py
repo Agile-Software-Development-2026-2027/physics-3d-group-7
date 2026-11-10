@@ -7,6 +7,8 @@ from matplotlib import colormaps
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
+from vtkmodules.vtkCommonCore import vtkCommand
+from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
 
 from apkit4d.roi import RegionOfInterest
 
@@ -100,6 +102,14 @@ class Viewport(QWidget):
         self._roi_start_point: Vec3D | None = None
         self._current_roi: RegionOfInterest | None = None
         self._roi_box_poly: pv.PolyData | None = None
+
+        """
+            i'll use vtkBoxWidget2 and vtkBoxRepresentation to show the ROI as a 3D box 
+            with handles that can be dragged to modify it. we will have 6 handels + 1
+            at the center to drag the entire box
+        """
+        self._roi_box_rep: vtkBoxRepresentation | None = None
+        self._roi_box_widget: vtkBoxWidget2 | None = None
 
         iren = self.plotter.iren.interactor  # vtkRenderWindowInteractor
 
@@ -439,6 +449,7 @@ class Viewport(QWidget):
         self.volume_bounds = None
         self.min_zoom_dist = 0.0
         self.max_zoom_dist = float("inf")
+        self._disable_roi_box_widget()
         self.plotter.clear()
         # the reset_camera of the renderer as in show_volume, so the view is drawn only once, below
         self.plotter.renderer.reset_camera(render=False)
@@ -1113,6 +1124,7 @@ class Viewport(QWidget):
         if self.volume_bounds is None:
             return
 
+        self._disable_roi_box_widget()
         self._remove_roi_preview_actor()
         self._roi_start_point = None
         self._current_roi = None
@@ -1131,6 +1143,7 @@ class Viewport(QWidget):
         self._roi_mode = RoiMode.INACTIVE
         self._roi_start_point = None
         self._current_roi = None
+        self._disable_roi_box_widget()
         self._remove_roi_preview_actor()
         self.unsetCursor()
         self._full_quality_timer.stop()
@@ -1272,7 +1285,125 @@ class Viewport(QWidget):
             )
             self._update_roi_preview_box(self._current_roi.bounds)
 
+        if self._current_roi is not None:
+            self._enable_roi_box_widget(self._current_roi.bounds)
         self._roi_mode = RoiMode.EDITING
         self.unsetCursor()
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
+
+    def _ensure_roi_box_widget(self) -> None:
+        """
+        Creates and configures the VTK box widget and its representation the first time
+        they are needed. Rotation is disabled so the box always stays axis-aligned
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+        if self._roi_box_widget is not None and self._roi_box_rep is not None:
+            return
+
+        iren = self.plotter.iren.interactor
+        if iren is None:
+            return
+
+        rep = vtkBoxRepresentation()
+        # if i don't put 1.0, the default is 0.5 so every time it would be like half the size
+        rep.SetPlaceFactor(1.0)
+        # we want the box to be drawn from the inside, so the user can see the volume inside it
+        # normally the box is drawn from the outside, so it occludes the volume inside it
+        rep.InsideOutOn()
+
+        widget = vtkBoxWidget2()
+        widget.SetInteractor(iren)
+        widget.SetRepresentation(rep)
+
+        # disable rotation so the user can only resize faces or translate the box along X, Y, Z
+        widget.SetRotationEnabled(False)
+
+        # while the user drags a handle, update and clamp the ROI at moving quality
+        widget.AddObserver(vtkCommand.InteractionEvent, self._on_box_widget_interaction)
+        # when the user releases the handle, draw the volume at full quality
+        widget.AddObserver(vtkCommand.EndInteractionEvent, self._on_box_widget_end_interaction)
+
+        self._roi_box_rep = rep
+        self._roi_box_widget = widget
+
+    def _enable_roi_box_widget(self, bounds: Bounds6D) -> None:
+        """
+        Places the VTK box widget on `bounds` and turns it on for interactive editing.
+
+        Parameters:
+            bounds: The bounds of the ROI to visualize as a 3D box.
+
+        Returns:
+            None
+        """
+        self._ensure_roi_box_widget()
+        if self._roi_box_rep is None or self._roi_box_widget is None:
+            return
+
+        # PlaceWidget take the bounds and positions the handles
+        self._roi_box_rep.PlaceWidget(list(bounds))
+        self._roi_box_widget.On()
+
+    def _disable_roi_box_widget(self) -> None:
+        """
+        Turns off the VTK box widget handles if they are active.
+
+        Parameters:
+            None
+        Returns:
+            None
+        """
+        if self._roi_box_widget is not None:
+            self._roi_box_widget.Off()
+
+    def _on_box_widget_interaction(self, _obj: object, _event: str) -> None:
+        """
+        Called by VTK whenever the user drags one of the 6 handles
+        of the box widget. Reads the new bounds, clamps them to `self.volume_bounds`,
+        and updates both the widget and the cyan preview box.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if self._roi_mode != RoiMode.EDITING or self._roi_box_rep is None or self.volume_bounds is None:
+            return
+
+        # get bound returns the position of the handles right now
+        raw_bounds = self._roi_box_rep.GetBounds()
+        self._current_roi = RegionOfInterest.from_bounds(
+            raw_bounds,
+            volume_bounds=self.volume_bounds,
+        )
+
+        # snap the widget handles back inside volume_bounds if the user dragged past the volume edge
+        self._roi_box_rep.PlaceWidget(list(self._current_roi.bounds))
+        self._update_roi_preview_box(self._current_roi.bounds)
+        self._request_moving_render()
+
+    def _on_box_widget_end_interaction(self, _obj: object, _event: str) -> None:
+        """
+        Called by VTK when the user finishes dragging a handle on the box widget.
+        Requests a full-quality render of the volume.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if self._roi_mode != RoiMode.EDITING:
+            return
+
         self._full_quality_timer.stop()
         self._request_full_quality_render()
