@@ -3,6 +3,7 @@ import pytest
 import pyvista as pv
 
 from apkit4d.visualization.viewport import (
+    DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,
     FULL_QUALITY_DELAY,
     MOVING_IMAGE_SAMPLE_DISTANCE,
@@ -577,3 +578,129 @@ class TestViewportRoiDragSelection:
         assert viewport.roi_mode == RoiMode.INACTIVE
         assert viewport.current_roi is None
         assert "roi_preview" not in viewport.plotter.actors
+
+
+def lut_colors(viewport) -> np.ndarray:
+    lut = viewport.plotter.actors["volume"].mapper.lookup_table
+    return np.array(lut.values)[:, :3]
+
+
+def colormap_colors(name: str) -> np.ndarray:
+    return np.array(pv.LookupTable(cmap=name).values)[:, :3]
+
+
+def text_colors(viewport) -> list[tuple[float, float, float]]:
+    scalar_bar = viewport.plotter.scalar_bars["values"]
+    axes = viewport.plotter.renderer.axes_actor
+    return [
+        scalar_bar.GetLabelTextProperty().GetColor(),
+        scalar_bar.GetTitleTextProperty().GetColor(),
+        axes.GetXAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+        axes.GetYAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+        axes.GetZAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+    ]
+
+
+class TestAppearance:
+    def test_volume_starts_with_the_default_colormap(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors(DEFAULT_COLORMAP))
+
+    def test_set_colormap_changes_the_colors_and_keeps_the_opacity(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        lut = viewport.plotter.actors["volume"].mapper.lookup_table
+        alpha = np.array(lut.values)[:, 3]
+
+        viewport.set_colormap("viridis")
+
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+        assert np.array_equal(np.array(lut.values)[:, 3], alpha)
+        assert viewport.plotter.scalar_bars["values"].GetLookupTable() is lut
+
+    def test_colormap_chosen_before_the_volume_is_used_by_it(self, viewport):
+        viewport.set_colormap("viridis")
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+    def test_colormap_stays_on_the_next_frames(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_colormap("viridis")
+
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+    def test_set_colormap_rejects_an_unknown_name(self, viewport):
+        with pytest.raises(ValueError):
+            viewport.set_colormap("not_a_colormap")
+
+    def test_set_volume_opacity_scales_the_opacity_unit_distance(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        prop = viewport.plotter.actors["volume"].prop
+        base = prop.opacity_unit_distance
+
+        viewport.set_volume_opacity(4.0)
+        assert prop.opacity_unit_distance == pytest.approx(base / 4)
+
+        viewport.set_volume_opacity(0.5)
+        assert prop.opacity_unit_distance == pytest.approx(base * 2)
+
+    def test_volume_opacity_stays_on_a_volume_of_another_size(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_volume_opacity(2.0)
+
+        viewport.show_volume(make_grid(9), reset_camera=False)
+
+        grid = make_grid(9)
+        base = grid.length / (np.mean(grid.dimensions) - 1)
+        prop = viewport.plotter.actors["volume"].prop
+        assert prop.opacity_unit_distance == pytest.approx(base / 2)
+
+    @pytest.mark.parametrize("opacity", [0.0, -1.0])
+    def test_set_volume_opacity_rejects_values_not_above_zero(self, viewport, opacity):
+        with pytest.raises(ValueError):
+            viewport.set_volume_opacity(opacity)
+
+    def test_set_background_changes_the_background(self, viewport):
+        viewport.set_background("#2b2d31")
+        assert viewport.plotter.renderer.background_color.hex_rgb == "#2b2d31"
+
+    def test_outline_color_is_used_and_kept(self, viewport):
+        viewport.set_outline_color("#1f2328")
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#1f2328"
+
+        viewport.set_outline_color("red")
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#ff0000"
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#ff0000"
+
+    def test_text_color_paints_the_scalar_bar_and_the_axes(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_text_color("white")
+        assert all(color == pytest.approx((1.0, 1.0, 1.0)) for color in text_colors(viewport))
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert all(color == pytest.approx((1.0, 1.0, 1.0)) for color in text_colors(viewport))
+
+    @pytest.mark.parametrize(
+        ("method", "value"),
+        [
+            ("set_colormap", "viridis"),
+            ("set_volume_opacity", 2.0),
+            ("set_background", "black"),
+            ("set_outline_color", "red"),
+            ("set_text_color", "white"),
+        ],
+    )
+    def test_changes_ask_for_a_redraw(self, viewport, monkeypatch, method, value):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        calls = []
+        monkeypatch.setattr(viewport, "_request_render", lambda: calls.append(True))
+
+        getattr(viewport, method)(value)
+
+        assert calls
