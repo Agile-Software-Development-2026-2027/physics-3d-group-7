@@ -3,15 +3,18 @@ Controller of the main window.
 
 It is the only place where the view meets the rest of the application. It creates the other controllers
 and connects them: the `FileController` opens the files, the `PlaybackController` moves through the
-frames, the `VolumeController` shows them in the 3D view, the `ThemeController` changes the look of the
-application, and the `PipelineController` orchestrates the analysis pipeline.
+frames, the `VolumeController` shows them in the 3D view, the `AppearanceController` changes how the
+3D view looks, the `ThemeController` changes the look of the application, and the `PipelineController`
+orchestrates the analysis pipeline.
 """
 
 from pathlib import Path
+from typing import Protocol
 
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
+from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
@@ -20,6 +23,10 @@ from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeVi
 from apkit4d.gui.models.pipeline_model import PipelineModel
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.czi import CziSource
+
+
+class SceneView(VolumeView, AppearanceView, Protocol):
+    """What the controllers need from the 3D view: showing the frames and changing how they look."""
 
 
 class MainController(QObject):
@@ -42,7 +49,7 @@ class MainController(QObject):
         parent: QObject | None = None,
         *,
         open_source: SourceOpener = CziSource,
-        view: VolumeView | None = None,
+        view: SceneView | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window
@@ -58,6 +65,14 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
+
+        self._appearance_controller = (
+            AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
+            if view is not None
+            else None
+        )
+        if self._appearance_controller is not None:
+            self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
         self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
@@ -65,8 +80,6 @@ class MainController(QObject):
         window.right_panel.set_theme(self._theme_controller.theme)
         self._theme_controller.theme_changed.connect(window.left_panel.set_theme)
         window.left_panel.set_theme(self._theme_controller.theme)
-        # TODO: the 3D view does not follow the theme yet: it needs a method to change its background,
-        # and then `self._theme_controller.theme_changed.connect(view.set_theme)`
 
     @property
     def file_controller(self) -> FileController:
@@ -87,6 +100,11 @@ class MainController(QObject):
     def volume_controller(self) -> VolumeController | None:
         """Controller of the 3D view, None if the application has no 3D view."""
         return self._volume_controller
+
+    @property
+    def appearance_controller(self) -> AppearanceController | None:
+        """Controller of the look of the 3D view, None if the application has no 3D view."""
+        return self._appearance_controller
 
     @property
     def pipeline_model(self) -> PipelineModel:

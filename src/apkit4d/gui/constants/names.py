@@ -34,6 +34,11 @@ COLORMAP_BOX: str = "colormap_box"
 OPACITY_BOX: str = "opacity_box"
 BACKGROUND_BOX: str = "background_box"
 OUTLINE_BOX: str = "outline_box"
+COLORMAP_COMBO: str = "colormap_combo"
+OPACITY_SLIDER: str = "opacity_slider"
+OPACITY_VALUE: str = "opacity_value"
+BACKGROUND_BUTTON: str = "background_button"
+OUTLINE_BUTTON: str = "outline_button"
 
 # right panel controls and containers
 RIGHT_PANEL_TOP_BAR: str = "right_panel_top_bar"
