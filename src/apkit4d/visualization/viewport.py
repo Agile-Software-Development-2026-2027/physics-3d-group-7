@@ -1,11 +1,14 @@
 import time
+from enum import Enum, auto
 
 import numpy as np
 import pyvista as pv
 from matplotlib import colormaps
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
+
+from apkit4d.roi import RegionOfInterest
 
 """
     in this file we define the viewport class, that is the widget that will be placed 
@@ -36,6 +39,13 @@ DEFAULT_VOLUME_OPACITY = 1.0
 DEFAULT_BACKGROUND = "gray"
 DEFAULT_OUTLINE_COLOR = "white"
 DEFAULT_TEXT_COLOR = "black"
+
+
+class RoiMode(Enum):
+    INACTIVE = auto()
+    WAITING_FIRST_POINT = auto()
+    DRAGGING = auto()
+    EDITING = auto()
 
 
 class Viewport(QWidget):
@@ -85,6 +95,12 @@ class Viewport(QWidget):
         self.last_zoom_time: float = 0.0
         self.current_zoom_factor: float = 0.01
 
+        # state for the ROI selection
+        self._roi_mode: RoiMode = RoiMode.INACTIVE
+        self._roi_start_point: Vec3D | None = None
+        self._current_roi: RegionOfInterest | None = None
+        self._roi_box_poly: pv.PolyData | None = None
+
         iren = self.plotter.iren.interactor  # vtkRenderWindowInteractor
 
         # disable the default zoom so i can implement mine.
@@ -122,6 +138,14 @@ class Viewport(QWidget):
         # so the wheel zoom is kept inside the limits by the clamp in compute_local_zoom_step
         for event in ("InteractionEvent", "EndInteractionEvent"):
             iren.AddObserver(event, self._limit_zoom, -1.0)
+
+        # observers for the ROI selection, they have a high priority
+        # so that we can block the rotation of the camera
+        self._left_press_tag = iren.AddObserver("LeftButtonPressEvent", self._on_left_button_press, 10.0)
+        self._mouse_move_tag = iren.AddObserver("MouseMoveEvent", self._on_mouse_move, 10.0)
+        self._left_release_tag = iren.AddObserver(
+            "LeftButtonReleaseEvent", self._on_left_button_release, 10.0
+        )
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
@@ -423,6 +447,13 @@ class Viewport(QWidget):
         # we stop it and draw the empty view at full quality now
         self._full_quality_timer.stop()
         self._request_full_quality_render()
+
+        # clear the ROI selection
+        self._roi_mode = RoiMode.INACTIVE
+        self._roi_start_point = None
+        self._current_roi = None
+        self._roi_box_poly = None
+        self.unsetCursor()
 
     def clamp_point_to_bounds(self, point: Vec3D, bounds: Bounds6D | None) -> Vec3D:
         """
@@ -1042,3 +1073,206 @@ class Viewport(QWidget):
         # Fallback during the drag outside the volume:
         # we use the point projected on the focal plane and already clamped to self.volume_bounds
         return self._get_cursor_target_3d()
+
+    # ROI selection methods
+
+    @property
+    def roi_mode(self) -> RoiMode:
+        """
+        This property returns the current ROI selection mode.
+
+        Returns:
+            str: The current ROI selection mode, which can be one of the following:
+                - RoiMode.INACTIVE: No ROI selection is active.
+                - RoiMode.WAITING_FIRST_POINT: waiting the first click to start the ROI selection.
+                - RoiMode.DRAGGING: the user is dragging the mouse to select the ROI.
+                - RoiMode.EDITING: the user is editing the ROI after it has been created.
+        """
+        return self._roi_mode
+
+    @property
+    def current_roi(self) -> RegionOfInterest | None:
+        """
+        This property returns the current Region of Interest being selected or edited or None.
+
+        Returns:
+            RegionOfInterest | None: The current ROI object if one is being selected or edited,
+            otherwise None.
+        """
+        return self._current_roi
+
+    def start_roi_selection(self) -> None:
+        """
+        This method starts the ROI selection process.
+        It sets the ROI mode to "waiting_first_point" and prepares the viewport for ROI selection.
+        if there is no volume loaded, it does nothing.
+
+        Returns:
+            None
+        """
+        if self.volume_bounds is None:
+            return
+
+        self._remove_roi_preview_actor()
+        self._roi_start_point = None
+        self._current_roi = None
+        self._roi_mode = RoiMode.WAITING_FIRST_POINT
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self._request_render()
+
+    def cancel_roi_selection(self) -> None:
+        """
+        This method cancels the ROI selection process.
+        It resets the ROI mode to "inactive" and removes any ROI preview from the viewport.
+
+        Returns:
+            None
+        """
+        self._roi_mode = RoiMode.INACTIVE
+        self._roi_start_point = None
+        self._current_roi = None
+        self._remove_roi_preview_actor()
+        self.unsetCursor()
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
+
+    def _remove_roi_preview_actor(self) -> None:
+        """
+        removes the ROI preview actor from the plotter if it exists
+        """
+        if "roi_preview" in self.plotter.actors:
+            self.plotter.remove_actor("roi_preview", render=False)
+        self._roi_box_poly = None
+
+    def _update_roi_preview_box(self, bounds: Bounds6D) -> None:
+        """
+        Creates or updates in-place the roi_preview that shows the ROI in 3D space.
+        Parameters:
+            bounds: The bounds of the ROI to visualize as a 3D box.
+
+        Returns:
+            None
+        """
+        # we create a box from the bounds and extract its edges to visualize it as a wireframe
+        box_edges = pv.Box(bounds=bounds).extract_all_edges()
+
+        # if the roi_preview already exists, we update it in-place to avoid creating a new actor
+        if self._roi_box_poly is not None and "roi_preview" in self.plotter.actors:
+            self._roi_box_poly.shallow_copy(box_edges)
+            self._roi_box_poly.Modified()
+            return
+
+        # if the roi_preview does not exist, we create it and add it to the plotter
+        self._roi_box_poly = pv.PolyData(box_edges)
+        self.plotter.add_mesh(
+            self._roi_box_poly,
+            color="cyan",
+            line_width=2.5,
+            name="roi_preview",
+            render=False,
+        )
+
+    def _get_camera_view_direction(self) -> Vec3D:
+        """Returns the view direction of the camera (focal_point - position)"""
+        camera = self.plotter.camera
+        pos = np.array(camera.GetPosition(), dtype=np.float64)
+        focal = np.array(camera.GetFocalPoint(), dtype=np.float64)
+        return focal - pos
+
+    def _on_left_button_press(self, _obj: object, _event: str) -> None:
+        """
+        when the user left-clicks, we check if we are in ROI selection mode and
+        if we are waiting for the first point, if so, we block the camera rotation
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if self._roi_mode != RoiMode.WAITING_FIRST_POINT:
+            return
+
+        # just for comodity, i use stop_wheel_event here and in the func below,
+        # to abort the default vtk event, we could refactor the func and make it more generic
+        # but it is not a big deal for now
+        self._stop_wheel_event(self._left_press_tag)
+
+        # we pick the 3D point on the volume bounds under the cursor, without clamping it
+        # if the user clicks outside the volume, we don't start the ROI selection as i said
+        # in the function pick_volume_bounds_point
+        hit = self.pick_volume_bounds_point(clamp_if_outside=False)
+        if hit is None:
+            return
+
+        self._roi_start_point = hit
+        self._roi_mode = RoiMode.DRAGGING
+
+    def _on_mouse_move(self, _obj: object, _event: str) -> None:
+        """
+        during mouse movement, if we are in ROI dragging mode, we calculate the second 3D point on the volume,
+        construct the ROI with extended depth, and update the preview box on screen.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if self._roi_mode != RoiMode.DRAGGING or self._roi_start_point is None or self.volume_bounds is None:
+            return
+
+        self._stop_wheel_event(self._mouse_move_tag)
+
+        # we pick the 3D point on the volume bounds under the cursor, clamping it if it's outside
+        second_point = self.pick_volume_bounds_point(clamp_if_outside=True)
+        if second_point is None:
+            return
+
+        # we construct the ROI with the two points and the current view direction
+        view_dir = self._get_camera_view_direction()
+        self._current_roi = RegionOfInterest.from_points(
+            self._roi_start_point,
+            second_point,
+            volume_bounds=self.volume_bounds,
+            view_direction=view_dir,
+        )
+        self._update_roi_preview_box(self._current_roi.bounds)
+        self._request_moving_render()
+
+    def _on_left_button_release(self, _obj: object, _event: str) -> None:
+        """
+        on left mouse button release, if we are in ROI dragging mode, we finalize the ROI selection.
+        it passes to 'editing' mode, restores the cursor, and requests a full quality render of the viewport.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if self._roi_mode != RoiMode.DRAGGING:
+            return
+
+        self._stop_wheel_event(self._left_release_tag)
+
+        # if the user did not move the mouse, we still create a valid initial ROI around the clicked point
+        # we are covered by the min size of the ROI, so we don't need to worry about it being too small
+        # the user could restart the selection it is his fault don't blame me for that
+        if self._current_roi is None and self._roi_start_point is not None and self.volume_bounds is not None:
+            view_dir = self._get_camera_view_direction()
+            self._current_roi = RegionOfInterest.from_points(
+                self._roi_start_point,
+                self._roi_start_point,
+                volume_bounds=self.volume_bounds,
+                view_direction=view_dir,
+            )
+            self._update_roi_preview_box(self._current_roi.bounds)
+
+        self._roi_mode = RoiMode.EDITING
+        self.unsetCursor()
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
