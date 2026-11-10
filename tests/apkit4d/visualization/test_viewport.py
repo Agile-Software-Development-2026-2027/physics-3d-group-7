@@ -3,9 +3,11 @@ import pytest
 import pyvista as pv
 
 from apkit4d.visualization.viewport import (
+    DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,
     FULL_QUALITY_DELAY,
     MOVING_IMAGE_SAMPLE_DISTANCE,
+    RoiMode,
     Viewport,
 )
 
@@ -472,3 +474,233 @@ class TestWheelRendering:
         camera.position = tuple(focal + direction * viewport.min_zoom_dist / 2)
         viewport.plotter.iren.interactor.InvokeEvent(event)
         assert dist(camera.position, camera.focal_point) == pytest.approx(viewport.min_zoom_dist)
+
+
+class TestViewportRayPicking:
+    def test_intersect_ray_bounds_hits_front_face(self, viewport):
+        bounds = (0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+        # ray that starts at z=20 and points straight to the center of the box (5, 5, -5)
+        ray_start = np.array([5.0, 5.0, 20.0])
+        ray_end = np.array([5.0, 5.0, -5.0])
+
+        hit = viewport._ray_intersects_bounds(ray_start, ray_end, bounds)
+        assert hit is not None
+        # need to hit the front face of the box at z=10.0, in the point (5, 5, 10)
+        np.testing.assert_allclose(hit, [5.0, 5.0, 10.0])
+
+    def test_intersect_ray_bounds_returns_none_when_missing_box(self, viewport):
+        bounds = (0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+        # ray that go outside the box, starting at (50, 50, 20) and pointing to (50, 50, -5)
+        ray_start = np.array([50.0, 50.0, 20.0])
+        ray_end = np.array([50.0, 50.0, -5.0])
+
+        hit = viewport._ray_intersects_bounds(ray_start, ray_end, bounds)
+        assert hit is None
+
+    def test_pick_volume_bounds_point_returns_none_without_volume(self, viewport):
+        assert viewport.pick_volume_bounds_point((100, 100)) is None
+
+    def test_pick_volume_bounds_point_hits_center_and_handles_outside(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+        # place the camera in front of the volume, looking at its center
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        # get coordinates of the center of the volume in world space
+        renderer = viewport.plotter.renderer
+        renderer.SetWorldPoint(2.0, 2.0, 2.0, 1.0)
+        renderer.WorldToDisplay()
+        cx, cy, _ = renderer.GetDisplayPoint()
+
+        hit = viewport.pick_volume_bounds_point((int(round(cx)), int(round(cy))))
+        assert hit is not None
+        # the center of make_grid() (5x5x5 with spacing 1) is at (2.0, 2.0, 2.0)
+        np.testing.assert_allclose(hit, [2.0, 2.0, 4.0], atol=0.2)
+
+
+class TestViewportRoiDragSelection:
+    def test_start_roi_selection_ignored_without_volume(self, viewport):
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+
+    def test_full_click_drag_release_creates_3d_roi_preview(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        # place the camera in front of the volume on the z-axis,
+        # above the center of the volume (2, 2, 2)
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+        renderer = viewport.plotter.renderer
+
+        def world_to_px(wx, wy, wz):
+            renderer.SetWorldPoint(wx, wy, wz, 1.0)
+            renderer.WorldToDisplay()
+            dx, dy, _ = renderer.GetDisplayPoint()
+            return int(round(dx)), int(round(dy))
+
+        iren = viewport.plotter.iren.interactor
+
+        # Click on point (1.0, 1.0, 4.0)
+        px1, py1 = world_to_px(1.0, 1.0, 4.0)
+        iren.SetEventPosition(px1, py1)
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.roi_mode == RoiMode.DRAGGING
+
+        # drag to point (3.0, 3.0, 4.0)
+        px2, py2 = world_to_px(3.0, 3.0, 4.0)
+        iren.SetEventPosition(px2, py2)
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+
+        assert "roi_preview" in viewport.plotter.actors
+        assert viewport.current_roi is not None
+        np.testing.assert_allclose(
+            viewport.current_roi.bounds,
+            (1.0, 3.0, 1.0, 3.0, 0.0, 4.0),
+            atol=0.25,
+        )
+
+        # mouse release should finalize the ROI selection
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.roi_mode == RoiMode.EDITING
+
+        # canceling the ROI selection should remove the preview and reset the mode
+        viewport.cancel_roi_selection()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+        assert "roi_preview" not in viewport.plotter.actors
+
+
+def lut_colors(viewport) -> np.ndarray:
+    lut = viewport.plotter.actors["volume"].mapper.lookup_table
+    return np.array(lut.values)[:, :3]
+
+
+def colormap_colors(name: str) -> np.ndarray:
+    return np.array(pv.LookupTable(cmap=name).values)[:, :3]
+
+
+def text_colors(viewport) -> list[tuple[float, float, float]]:
+    scalar_bar = viewport.plotter.scalar_bars["values"]
+    axes = viewport.plotter.renderer.axes_actor
+    return [
+        scalar_bar.GetLabelTextProperty().GetColor(),
+        scalar_bar.GetTitleTextProperty().GetColor(),
+        axes.GetXAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+        axes.GetYAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+        axes.GetZAxisCaptionActor2D().GetCaptionTextProperty().GetColor(),
+    ]
+
+
+class TestAppearance:
+    def test_volume_starts_with_the_default_colormap(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors(DEFAULT_COLORMAP))
+
+    def test_set_colormap_changes_the_colors_and_keeps_the_opacity(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        lut = viewport.plotter.actors["volume"].mapper.lookup_table
+        alpha = np.array(lut.values)[:, 3]
+
+        viewport.set_colormap("viridis")
+
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+        assert np.array_equal(np.array(lut.values)[:, 3], alpha)
+        assert viewport.plotter.scalar_bars["values"].GetLookupTable() is lut
+
+    def test_colormap_chosen_before_the_volume_is_used_by_it(self, viewport):
+        viewport.set_colormap("viridis")
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+    def test_colormap_stays_on_the_next_frames(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_colormap("viridis")
+
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+    def test_set_colormap_rejects_an_unknown_name(self, viewport):
+        with pytest.raises(ValueError):
+            viewport.set_colormap("not_a_colormap")
+
+    def test_set_volume_opacity_scales_the_opacity_unit_distance(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        prop = viewport.plotter.actors["volume"].prop
+        base = prop.opacity_unit_distance
+
+        viewport.set_volume_opacity(4.0)
+        assert prop.opacity_unit_distance == pytest.approx(base / 4)
+
+        viewport.set_volume_opacity(0.5)
+        assert prop.opacity_unit_distance == pytest.approx(base * 2)
+
+    def test_volume_opacity_stays_on_a_volume_of_another_size(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_volume_opacity(2.0)
+
+        viewport.show_volume(make_grid(9), reset_camera=False)
+
+        grid = make_grid(9)
+        base = grid.length / (np.mean(grid.dimensions) - 1)
+        prop = viewport.plotter.actors["volume"].prop
+        assert prop.opacity_unit_distance == pytest.approx(base / 2)
+
+    @pytest.mark.parametrize("opacity", [0.0, -1.0])
+    def test_set_volume_opacity_rejects_values_not_above_zero(self, viewport, opacity):
+        with pytest.raises(ValueError):
+            viewport.set_volume_opacity(opacity)
+
+    def test_set_background_changes_the_background(self, viewport):
+        viewport.set_background("#2b2d31")
+        assert viewport.plotter.renderer.background_color.hex_rgb == "#2b2d31"
+
+    def test_outline_color_is_used_and_kept(self, viewport):
+        viewport.set_outline_color("#1f2328")
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#1f2328"
+
+        viewport.set_outline_color("red")
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#ff0000"
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert viewport.plotter.actors["outline"].prop.color.hex_rgb == "#ff0000"
+
+    def test_text_color_paints_the_scalar_bar_and_the_axes(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.set_text_color("white")
+        assert all(color == pytest.approx((1.0, 1.0, 1.0)) for color in text_colors(viewport))
+
+        viewport.show_volume(make_grid(8), reset_camera=False)
+        assert all(color == pytest.approx((1.0, 1.0, 1.0)) for color in text_colors(viewport))
+
+    @pytest.mark.parametrize(
+        ("method", "value"),
+        [
+            ("set_colormap", "viridis"),
+            ("set_volume_opacity", 2.0),
+            ("set_background", "black"),
+            ("set_outline_color", "red"),
+            ("set_text_color", "white"),
+        ],
+    )
+    def test_changes_ask_for_a_redraw(self, viewport, monkeypatch, method, value):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        calls = []
+        monkeypatch.setattr(viewport, "_request_render", lambda: calls.append(True))
+
+        getattr(viewport, method)(value)
+
+        assert calls

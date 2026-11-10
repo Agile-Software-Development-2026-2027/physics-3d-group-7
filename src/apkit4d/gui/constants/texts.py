@@ -4,7 +4,10 @@ Every text shown to the user.
 Texts with `{...}` are templates: fill them with `str.format`.
 """
 
+from typing import assert_never
+
 from apkit4d.gui.constants.application import CZI_SUFFIX
+from apkit4d.gui.models.output_type import OutputType
 
 # center panel
 PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
@@ -13,7 +16,7 @@ PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
 STATUS_NO_FILE: str = "No file open"
 STATUS_OPENING: str = "Opening {name}..."
-STATUS_OPENED: str = "{path} | frames: {frames}"
+STATUS_OPENED: str = "{path}"
 STATUS_OPEN_FAILED: str = "Cannot open {name}: {reason}"
 STATUS_INVALID_VOXEL: str = "Cannot show {name}: invalid voxel size {voxel}"
 STATUS_FRAME_FAILED: str = "Cannot read frame {frame}: {reason}"
@@ -34,6 +37,12 @@ BUTTON_PREVIOUS: str = "<"
 BUTTON_PLAY: str = "Play"
 BUTTON_PAUSE: str = "Pause"
 BUTTON_NEXT: str = ">"
+TOOLTIP_PREVIOUS: str = "Previous frame"
+TOOLTIP_PLAY: str = "Play"
+TOOLTIP_PAUSE: str = "Pause"
+TOOLTIP_NEXT: str = "Next frame"
+COUNTER_SEPARATOR: str = " / "
+COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no recording
 
 # side panels
 SECTION_APPEARANCE: str = "Appearance"
@@ -94,3 +103,75 @@ STATS_COMPLETED_PROGRESS_DETAILS: str = (
 )
 STATS_COMPLETED_SUMMARY: str = "Pipeline: Completed"
 STATS_COMPLETED_DETAILS: str = "All 5 pipeline stages are complete."
+
+
+# output types labels
+def get_output_type_label(output_type: OutputType) -> str:
+    match output_type:
+        case OutputType.PARQUET:
+            return "Parquet"
+        case OutputType.CSV:
+            return "CSV"
+        case _:
+            assert_never(output_type)
+
+
+# blob detection inspector
+INSPECTOR_LABEL_FRAME_RANGE: str = "Frame range"
+START_TIME_LABEL: str = "t₀"
+END_TIME_LABEL: str = "t₁"
+INSPECTOR_TOOLTIP_FRAME_RANGE: str = "The frames range used by batch and linking (0-based, inclusive)."
+
+INSPECTOR_SECTION_DETECTION_PARAMETERS: str = "Detection parameters"
+INSPECTOR_LABEL_DIAMETER_XY: str = "Diameter XY (µm)"
+INSPECTOR_TOOLTIP_DIAMETER_XY: str = "Expected cell diameter in X and Y."
+INSPECTOR_LABEL_DIAMETER_Z: str = "Diameter Z (µm)"
+INSPECTOR_TOOLTIP_DIAMETER_Z: str = (
+    "Expected extent in Z. Much larger than the real cell,\n because the axial PSF stretches it."
+)
+
+INSPECTOR_LABEL_DIAMETER_Z_EQUALS_XY: str = "Diameter Z = Diameter XY"
+INSPECTOR_TOOLTIP_DIAMETER_Z_EQUALS_XY: str = "Use a single diameter for all axes."
+INSPECTOR_LABEL_LOG_THRESHOLD: str = "LoG threshold"
+INSPECTOR_TOOLTIP_LOG_THRESHOLD: str = "Minimum LoG response for a candidate to count. Higher = fewer blobs."
+INSPECTOR_LABEL_SEED_SEPARATION: str = "Seed separation (× diameter)"
+INSPECTOR_TOOLTIP_SEED_SEPARATION: str = (
+    "Minimum distance between two candidates,\n as a fraction of the diameter."
+)
+INSPECTOR_LABEL_BOUNDARY: str = "Boundary (× peak)"
+INSPECTOR_TOOLTIP_BOUNDARY: str = (
+    "Each region keeps the voxels above this fraction of its own peak\n. Lower = larger blobs."
+)
+INSPECTOR_LABEL_MIN_VOLUME: str = "Min volume (µm³)"
+INSPECTOR_TOOLTIP_MIN_VOLUME: str = "Discard blobs smaller than this."
+INSPECTOR_LABEL_MAX_VOLUME: str = "Max volume (µm³)"
+INSPECTOR_TOOLTIP_MAX_VOLUME: str = "Discard blobs larger than this."
+
+INSPECTOR_LABEL_UPDATE_ON_CHANGE: str = "Update blobs on every change"
+INSPECTOR_TOOLTIP_UPDATE_ON_CHANGE: str = (
+    "Compute blobs on every parameter or frame change,\n even before pressing Find blobs."
+)
+INSPECTOR_LABEL_SHOW_SEGMENTS: str = "Show segments"
+INSPECTOR_TOOLTIP_SHOW_SEGMENTS: str = (
+    "Add a segments layer with the watershed regions.\n Toggling it recomputes the blobs."
+)
+INSPECTOR_BUTTON_FIND_BLOBS: str = "Find blobs (current frame)"
+INSPECTOR_TOOLTIP_FIND_BLOBS: str = (
+    "Run preprocessing and blob detection on the current\n "
+    "frame, using the current ROI and parameters.\n "
+    "Nothing is saved to file."
+)
+INSPECTOR_STATUS_NO_BLOBS: str = "No blobs detected"
+
+INSPECTOR_SECTION_BATCH_PROCESSING: str = "Batch Processing"
+INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER: str = "Choose output folder"
+INSPECTOR_DIALOG_OUTPUT_FOLDER: str = "Choose output folder"
+INSPECTOR_LABEL_OUTPUT_FOLDER: str = "Output folder"
+INSPECTOR_LABEL_WORKERS: str = "Workers"
+INSPECTOR_LABEL_FORMAT: str = "Format"
+INSPECTOR_BUTTON_RUN_BATCH: str = "Run batch t₀..t₁"
+INSPECTOR_TOOLTIP_RUN_BATCH: str = (
+    "Run detection on every frame from t0 to t1,\n "
+    "using the current ROI and detection parameters.\n "
+    "Runs in a separate process."
+)
