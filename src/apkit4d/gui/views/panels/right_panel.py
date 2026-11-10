@@ -32,6 +32,7 @@ from apkit4d.gui.theme import (
     Theme,
     ThemeColors,
 )
+from apkit4d.gui.views.panels.right_panel_preproc import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 
 __all__ = ["BottomStatsSection", "RightPanel"]
@@ -392,6 +393,9 @@ class RightPanel(SidePanel):
         )
 
         for step, title in stage_definitions:
+            if step == PipelineStep.PREPROCESSING:  # FIXME: refactor
+                self._register_stage(step, PreprocessingSection(self))
+                continue
             sec = AccordionSection(title)
             play_btn = sec.enable_play_button(
                 callback=lambda s=step: self._on_play_clicked(s),

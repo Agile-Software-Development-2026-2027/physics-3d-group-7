@@ -1,0 +1,292 @@
+"""Preprocessing section accordion of the right panel"""
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from apkit4d.gui.views.panels.right_panel import RightPanel
+
+from PySide6.QtCore import QSignalBlocker
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QWidget
+
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.models.pipeline_model import PipelineStep
+from apkit4d.gui.shared.components.accordion import AccordionSection
+from apkit4d.gui.theme.apply import ColorRole
+from apkit4d.preprocessing import BgMode, PreprocParams
+
+
+def create_param_row(label_text: str, widget: QWidget) -> QWidget:
+    row = QWidget()
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    label = QLabel(label_text)
+    layout.addWidget(label, stretch=1)
+    layout.addWidget(widget)
+    return row
+
+
+class PreprocessingSection(AccordionSection):
+    """The preprocessing accordion"""
+
+    def __init__(self, right_panel: RightPanel):
+        super().__init__(texts.STAGE_TITLE_PREPROCESSING)
+
+        self.right_panel = right_panel
+        self.step = PipelineStep.PREPROCESSING
+        play_btn = self.enable_play_button(
+            callback=lambda s=self.step: self.right_panel._on_play_clicked(s),
+            tooltip=texts.TOOLTIP_PLAY_STAGE,
+        )
+        self.right_panel._play_buttons[PipelineStep.PREPROCESSING] = play_btn
+        self.right_panel._plan_buttons[PipelineStep.PREPROCESSING] = play_btn
+
+        # widgets
+        self.denoise_xy_scale_um: QDoubleSpinBox
+        self.denoise_z_scale_um: QDoubleSpinBox
+        self.bg_mode: QComboBox
+        self.bg_percentile: QDoubleSpinBox
+        self.bg_sigma_xy_um: QDoubleSpinBox
+        self.lowest_intensity: QDoubleSpinBox
+        self.highest_intensity: QDoubleSpinBox
+        self.logarithmic_compression_enabled: QCheckBox
+        self.gamma_correction_to_apply: QDoubleSpinBox
+        self.clahe_enabled: QCheckBox
+        self.clahe_clip: QDoubleSpinBox
+        self.clahe_kernel_xy_um: QDoubleSpinBox
+
+        self._widgets()
+
+    def get_preproc_params(self) -> PreprocParams:
+        """Retrieve the preprocessing parameters."""
+
+        try:
+            bg_mode = BgMode(self.bg_mode.currentText())
+        except ValueError:
+            bg_mode = BgMode.NONE
+
+        return PreprocParams(
+            denoise_xy_scale_um=self.denoise_xy_box.value(),
+            denoise_z_scale_um=self.denoise_z_box.value(),
+            bg_mode=bg_mode,
+            bg_percentile=self.bg_percentile.value(),
+            bg_sigma_xy_um=self.bg_sigma_xy_um.value(),
+            lowest_intensity=self.lowest_instensity.value(),
+            highest_intensity=self.highest_intensity.value(),
+            logarithmic_compression_enabled=self.logarithmic_compression_enabled.isChecked(),
+            gamma_correction_to_apply=self.gamma_correction_to_apply.value(),
+            clahe_enabled=self.clahe_enabled.isChecked(),
+            clahe_clip=self.clahe_clip.value(),
+            clahe_kernel_xy_um=self.clahe_kernel_xy_um.value(),
+        )
+
+    def set_preproc_params(self, params: PreprocParams) -> None:
+        """Update preprocessing widget values from `params` without triggering change signals."""
+
+        with QSignalBlocker(self.denoise_xy_box):
+            self.denoise_xy_box.setValue(params.denoise_xy_scale_um)
+        with QSignalBlocker(self.denoise_z_box):
+            self.denoise_z_box.setValue(params.denoise_z_scale_um)
+        with QSignalBlocker(self.bg_mode):
+            self.bg_mode.setCurrentText(
+                params.bg_mode.value if isinstance(params.bg_mode, BgMode) else str(params.bg_mode)
+            )
+        with QSignalBlocker(self.bg_percentile):
+            self.bg_percentile.setValue(params.bg_percentile)
+        with QSignalBlocker(self.bg_sigma_xy_um):
+            self.bg_sigma_xy_um.setValue(params.bg_sigma_xy_um)
+        with QSignalBlocker(self.lowest_instensity):
+            self.lowest_instensity.setValue(params.lowest_intensity)
+        with QSignalBlocker(self.highest_intensity):
+            self.highest_intensity.setValue(params.highest_intensity)
+        with QSignalBlocker(self.logarithmic_compression_enabled):
+            self.logarithmic_compression_enabled.setChecked(params.logarithmic_compression_enabled)
+        with QSignalBlocker(self.gamma_correction_to_apply):
+            self.gamma_correction_to_apply.setValue(params.gamma_correction_to_apply)
+        with QSignalBlocker(self.clahe_enabled):
+            self.clahe_enabled.setChecked(params.clahe_enabled)
+        with QSignalBlocker(self.clahe_clip):
+            self.clahe_clip.setValue(params.clahe_clip)
+        with QSignalBlocker(self.clahe_kernel_xy_um):
+            self.clahe_kernel_xy_um.setValue(params.clahe_kernel_xy_um)
+
+        self._update_preproc_enabled_states()
+
+    def _update_preproc_enabled_states(self) -> None:
+        """Update enabled states of dependent preprocessing controls."""
+
+        bg_mode = self.bg_mode.currentText()
+        self.bg_percentile.setEnabled(bg_mode == BgMode.PERCENTILE_PER_SLICE.value)
+        self.bg_sigma_xy_um.setEnabled(bg_mode == BgMode.WIDE_GAUSSIAN.value)
+        clahe_on = self.clahe_enabled.isChecked()
+        self.clahe_clip.setEnabled(clahe_on)
+        self.clahe_clip.setForegroundRole(ColorRole.PlaceholderText)
+        self.clahe_kernel_xy_um.setEnabled(clahe_on)
+        self.clahe_kernel_xy_um.setForegroundRole(ColorRole.PlaceholderText)
+
+    def _on_bg_mode_changed(self, mode_str: str) -> None:
+        self._update_preproc_enabled_states()
+        try:
+            mode = BgMode(mode_str)
+        except ValueError:
+            mode = BgMode.NONE
+        self.right_panel.step_param_changed.emit(PipelineStep.PREPROCESSING.value, "bg_mode", mode)
+
+    def _on_clahe_toggled(self, checked: bool) -> None:
+        self._update_preproc_enabled_states()
+        self.right_panel.step_param_changed.emit(PipelineStep.PREPROCESSING.value, "clahe_enabled", checked)
+
+    def _widgets(self):
+        defaults = PreprocParams()
+
+        # 1. Denoising
+        self.denoise_xy_box = QDoubleSpinBox()
+        self.denoise_xy_box.setObjectName(names.PREPROC_DENOISE_XY_FIELD)
+        self.denoise_xy_box.setRange(0.0, 100.0)
+        self.denoise_xy_box.setSingleStep(0.5)
+        self.denoise_xy_box.setDecimals(2)
+        self.denoise_xy_box.setValue(defaults.denoise_xy_scale_um)
+        self.denoise_xy_box.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "denoise_xy_scale_um", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box))
+
+        self.denoise_z_box = QDoubleSpinBox()
+        self.denoise_z_box.setObjectName(names.PREPROC_DENOISE_Z_FIELD)
+        self.denoise_z_box.setRange(0.0, 200.0)
+        self.denoise_z_box.setSingleStep(0.5)
+        self.denoise_z_box.setDecimals(2)
+        self.denoise_z_box.setValue(defaults.denoise_z_scale_um)
+        self.denoise_z_box.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "denoise_z_scale_um", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box))
+
+        # 2. Background Removal
+        self.bg_mode = QComboBox()
+        self.bg_mode.setObjectName(names.PREPROC_BG_MODE_COMBO)
+        for mode in BgMode:
+            self.bg_mode.addItem(mode.value)
+        self.bg_mode.setCurrentText(defaults.bg_mode.value)
+        self.bg_mode.currentTextChanged.connect(self._on_bg_mode_changed)
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode))
+
+        self.bg_percentile = QDoubleSpinBox()
+        self.bg_percentile.setObjectName(names.PREPROC_BG_PERCENTILE_FIELD)
+        self.bg_percentile.setRange(0.0, 100.0)
+        self.bg_percentile.setSingleStep(1.0)
+        self.bg_percentile.setDecimals(1)
+        self.bg_percentile.setValue(defaults.bg_percentile)
+        self.bg_percentile.setEnabled(defaults.bg_mode == BgMode.PERCENTILE_PER_SLICE)
+        self.bg_percentile.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_percentile", val)
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_PERCENTILE, self.bg_percentile))
+
+        self.bg_sigma_xy_um = QDoubleSpinBox()
+        self.bg_sigma_xy_um.setObjectName(names.PREPROC_BG_SIGMA_XY_FIELD)
+        self.bg_sigma_xy_um.setRange(1.0, 1000.0)
+        self.bg_sigma_xy_um.setSingleStep(5.0)
+        self.bg_sigma_xy_um.setDecimals(1)
+        self.bg_sigma_xy_um.setValue(defaults.bg_sigma_xy_um)
+        self.bg_sigma_xy_um.setEnabled(defaults.bg_mode == BgMode.WIDE_GAUSSIAN)
+        self.bg_sigma_xy_um.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_sigma_xy_um", val)
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_SIGMA_XY, self.bg_sigma_xy_um))
+
+        # 3. Intensity Windowing
+        self.lowest_instensity = QDoubleSpinBox()
+        self.lowest_instensity.setObjectName(names.PREPROC_LOWEST_INTENSITY_FIELD)
+        self.lowest_instensity.setRange(0.0, 100000.0)
+        self.lowest_instensity.setSingleStep(10.0)
+        self.lowest_instensity.setDecimals(1)
+        self.lowest_instensity.setValue(defaults.lowest_intensity)
+        self.lowest_instensity.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "lowest_intensity", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_LOWEST_INTENSITY, self.lowest_instensity))
+
+        self.highest_intensity = QDoubleSpinBox()
+        self.highest_intensity.setObjectName(names.PREPROC_HIGHEST_INTENSITY_FIELD)
+        self.highest_intensity.setRange(0.0, 100000.0)
+        self.highest_intensity.setSingleStep(10.0)
+        self.highest_intensity.setDecimals(1)
+        self.highest_intensity.setValue(defaults.highest_intensity)
+        self.highest_intensity.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "highest_intensity", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
+
+        # 4. Logarithmic compression
+        self.logarithmic_compression_enabled = QCheckBox(texts.LABEL_PREPROC_LOG_COMPRESSION)
+        self.logarithmic_compression_enabled.setObjectName(names.PREPROC_LOG_COMPRESSION_CHECKBOX)
+        self.logarithmic_compression_enabled.setChecked(defaults.logarithmic_compression_enabled)
+        self.logarithmic_compression_enabled.toggled.connect(
+            lambda checked, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "logarithmic_compression_enabled", checked
+            )
+        )
+        self.add_widget(self.logarithmic_compression_enabled)
+
+        # 5. Gamma
+        self.gamma_correction_to_apply = QDoubleSpinBox()
+        self.gamma_correction_to_apply.setObjectName(names.PREPROC_GAMMA_FIELD)
+        self.gamma_correction_to_apply.setRange(0.1, 5.0)
+        self.gamma_correction_to_apply.setSingleStep(0.05)
+        self.gamma_correction_to_apply.setDecimals(2)
+        self.gamma_correction_to_apply.setValue(defaults.gamma_correction_to_apply)
+        self.gamma_correction_to_apply.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "gamma_correction_to_apply", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_GAMMA, self.gamma_correction_to_apply))
+
+        # 6. CLAHE
+        self.clahe_enabled = QCheckBox(texts.LABEL_PREPROC_CLAHE)
+        self.clahe_enabled.setObjectName(names.PREPROC_CLAHE_CHECKBOX)
+        self.clahe_enabled.setChecked(defaults.clahe_enabled)
+        self.clahe_enabled.toggled.connect(self._on_clahe_toggled)
+        self.add_widget(self.clahe_enabled)
+
+        self.clahe_clip = QDoubleSpinBox()
+        self.clahe_clip.setObjectName(names.PREPROC_CLAHE_CLIP_FIELD)
+        self.clahe_clip.setRange(0.001, 1.0)
+        self.clahe_clip.setSingleStep(0.005)
+        self.clahe_clip.setDecimals(3)
+        self.clahe_clip.setValue(defaults.clahe_clip)
+        self.clahe_clip.setEnabled(defaults.clahe_enabled)
+        self.clahe_clip.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "clahe_clip", val)
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip))
+
+        self.clahe_kernel_xy_um = QDoubleSpinBox()
+        self.clahe_kernel_xy_um.setObjectName(names.PREPROC_CLAHE_KERNEL_XY_FIELD)
+        self.clahe_kernel_xy_um.setRange(10.0, 2000.0)
+        self.clahe_kernel_xy_um.setSingleStep(10.0)
+        self.clahe_kernel_xy_um.setDecimals(1)
+        self.clahe_kernel_xy_um.setValue(defaults.clahe_kernel_xy_um)
+        self.clahe_kernel_xy_um.setEnabled(defaults.clahe_enabled)
+        self.clahe_kernel_xy_um.valueChanged.connect(
+            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
+                s.value, "clahe_kernel_xy_um", val
+            )
+        )
+        self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_KERNEL_XY, self.clahe_kernel_xy_um))
+
+        # Complete this button (testing helper)
+        complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
+        complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+        complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+        complete_btn.clicked.connect(lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s))
+        self.add_widget(complete_btn)
+        self.right_panel._complete_buttons[self.step] = complete_btn

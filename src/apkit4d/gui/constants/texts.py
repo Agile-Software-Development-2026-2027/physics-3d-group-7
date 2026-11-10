@@ -56,6 +56,20 @@ TOOLTIP_PLAN_UP_TO: str = "Plan execution up to this stage"
 BUTTON_COMPLETE_STAGE: str = "Complete this"
 TOOLTIP_COMPLETE_STAGE: str = "Mark this stage as completed"
 
+# preprocessing stage controls
+LABEL_PREPROC_DENOISE_XY: str = "Denoise XY (µm):"
+LABEL_PREPROC_DENOISE_Z: str = "Denoise Z (µm):"
+LABEL_PREPROC_BG_MODE: str = "Background Mode:"
+LABEL_PREPROC_BG_PERCENTILE: str = "BG Percentile (%):"
+LABEL_PREPROC_BG_SIGMA_XY: str = "BG Sigma XY (µm):"
+LABEL_PREPROC_LOWEST_INTENSITY: str = "Window Min (AU):"
+LABEL_PREPROC_HIGHEST_INTENSITY: str = "Window Max (AU):"
+LABEL_PREPROC_LOG_COMPRESSION: str = "Logarithmic Compression"
+LABEL_PREPROC_GAMMA: str = "Gamma Correction:"
+LABEL_PREPROC_CLAHE: str = "CLAHE Enhancement"
+LABEL_PREPROC_CLAHE_CLIP: str = "CLAHE Clip Limit:"
+LABEL_PREPROC_CLAHE_KERNEL_XY: str = "CLAHE Kernel XY (µm):"
+
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"
 STAGE_TITLE_PREPROCESSING: str = "2 · Preprocessing"

@@ -8,6 +8,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.preprocessing import PreprocParams
+
 
 class StepStatus(StrEnum):
     """Execution status for a pipeline step."""
@@ -63,6 +65,7 @@ class PipelineModel(QObject):
             step: StepStatus.IDLE for step in PIPELINE_STEP_ORDER
         }
         self._params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
+        self._params[PipelineStep.PREPROCESSING] = PreprocParams().to_dict()
         self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
 
     @property
@@ -216,6 +219,14 @@ class PipelineModel(QObject):
     def get_step_params(self, step: PipelineStep) -> dict[str, Any]:
         """Return a copy of the configuration dictionary for `step`."""
         return dict(self._params[step])
+
+    def get_preproc_params(self) -> PreprocParams:
+        """Return the PreprocParams dataclass instance for the preprocessing step."""
+        return PreprocParams.from_dict(self._params[PipelineStep.PREPROCESSING])
+
+    def set_preproc_params(self, params: PreprocParams) -> None:
+        """Update preprocessing parameters from a PreprocParams instance."""
+        self.update_step_params(PipelineStep.PREPROCESSING, **params.to_dict())
 
     def plan_execution(
         self,

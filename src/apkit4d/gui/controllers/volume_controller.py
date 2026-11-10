@@ -20,6 +20,7 @@ from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.views.main_window import MainWindow
+from apkit4d.preprocessing import PreprocParams, preprocess
 from apkit4d.visualization.data_mapper import create_volume_grid
 
 
@@ -65,6 +66,61 @@ class VolumeController(QObject):
         self._runner.succeeded.connect(self._on_read)
         self._runner.failed.connect(self._on_read_failed)
 
+        self._current_frame: int = 0
+        self._current_raw_volume: NDArray | None = None
+        self._preproc_params: PreprocParams | None = None
+        self._preproc_busy = False
+        self._preproc_wanted: PreprocParams | None = None
+        self._preproc_runner = TaskRunner(self)
+        self._preproc_runner.succeeded.connect(self._on_preproc_done)
+        self._preproc_runner.failed.connect(self._on_preproc_failed)
+
+    @property
+    def preproc_params(self) -> PreprocParams | None:
+        """The currently applied preprocessing parameters, or None if showing raw volume."""
+        return self._preproc_params
+
+    def apply_preproc_params(self, params: PreprocParams | None) -> None:
+        """
+        Apply preprocessing parameters to the current volume and update the 3D view.
+
+        Args:
+            params: The preprocessing parameters to apply, or None to show raw volume.
+        """
+        self._preproc_params = params
+        if self._current_raw_volume is None or not self._usable:
+            return
+
+        if params is None:
+            self._show(self._current_frame, self._current_raw_volume)
+            return
+
+        if self._preproc_busy:
+            self._preproc_wanted = params
+            return
+
+        self._start_preprocessing(self._current_raw_volume, params)
+
+    def _start_preprocessing(self, volume: NDArray, params: PreprocParams) -> None:
+        self._preproc_busy = True
+        self._preproc_runner.run(partial(preprocess, volume, params, self._voxel))
+
+    def _on_preproc_done(self, _task_id: int, volume: NDArray) -> None:
+        self._preproc_busy = False
+        if self._usable:
+            self._show(self._current_frame, volume)
+        if self._preproc_wanted is not None:
+            wanted = self._preproc_wanted
+            self._preproc_wanted = None
+            if self._current_raw_volume is not None:
+                self._start_preprocessing(self._current_raw_volume, wanted)
+
+    def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:
+        self._preproc_busy = False
+        self._preproc_wanted = None
+        reason = str(error) or type(error).__name__
+        self._window.set_status(f"Preprocessing failed: {reason}")
+
     def set_source(self, _path: Path, source: FrameSource) -> None:
         """
         Start showing a recording, from its first frame.
@@ -78,6 +134,9 @@ class VolumeController(QObject):
         self._voxel = source.info.voxel
         self._first_frame = True
         self._wanted = None
+        self._current_frame = 0
+        self._current_raw_volume = None
+        self._preproc_wanted = None
         self._usable = self._has_valid_voxel(source)
         if self._usable:
             self.show_frame(0)
@@ -106,7 +165,12 @@ class VolumeController(QObject):
     def _on_read(self, _task_id: int, volume: NDArray) -> None:
         generation, frame = self._finish_reading()
         if generation == self._generation:
-            self._show(frame, volume)
+            self._current_frame = frame
+            self._current_raw_volume = volume
+            if self._preproc_params is not None:
+                self._start_preprocessing(volume, self._preproc_params)
+            else:
+                self._show(frame, volume)
         self._read_the_next_frame()
 
     def _on_read_failed(self, _task_id: int, error: Exception) -> None:

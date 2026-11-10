@@ -36,15 +36,18 @@ def test_right_panel_init(qtbot) -> None:
     assert not panel.bottom_stats.is_expanded()
     assert panel.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
-    # Verify each section has number field, plan up to this button, and complete this button
+    # Verify each section has a play button and complete button.
+    # The PREPROCESSING step uses PreprocessingSection which manages its own widgets
+    # and does not register a generic number field.
     for step in PipelineStep:
         assert panel.get_section(step) is not None
         assert panel.get_section(step.value) is not None
 
-        num_field = panel.get_number_field(step)
-        assert num_field is not None
-        assert num_field.objectName() == names.STAGE_NUMBER_FIELD
-        assert num_field.value() == 10
+        if step != PipelineStep.PREPROCESSING:
+            num_field = panel.get_number_field(step)
+            assert num_field is not None
+            assert num_field.objectName() == names.STAGE_NUMBER_FIELD
+            assert num_field.value() == 10
 
         play_btn = panel.get_play_button(step)
         assert play_btn is not None
