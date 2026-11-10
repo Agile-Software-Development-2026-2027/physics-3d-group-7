@@ -4,7 +4,7 @@ from enum import Enum, auto
 import numpy as np
 import pyvista as pv
 from matplotlib import colormaps
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
@@ -51,6 +51,12 @@ class RoiMode(Enum):
 
 
 class Viewport(QWidget):
+    # signals emitted in the Roi selection
+    roi_selection_started = Signal()
+    roi_updated = Signal(object)
+    roi_accepted = Signal(object)
+    roi_cancelled = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -1131,6 +1137,7 @@ class Viewport(QWidget):
         self._roi_mode = RoiMode.WAITING_FIRST_POINT
         self.setCursor(Qt.CursorShape.CrossCursor)
         self._request_render()
+        self.roi_selection_started.emit()
 
     def cancel_roi_selection(self) -> None:
         """
@@ -1148,6 +1155,7 @@ class Viewport(QWidget):
         self.unsetCursor()
         self._full_quality_timer.stop()
         self._request_full_quality_render()
+        self.roi_cancelled.emit()
 
     def _remove_roi_preview_actor(self) -> None:
         """
@@ -1254,6 +1262,7 @@ class Viewport(QWidget):
         )
         self._update_roi_preview_box(self._current_roi.bounds)
         self._request_moving_render()
+        self.roi_updated.emit(self._current_roi)
 
     def _on_left_button_release(self, _obj: object, _event: str) -> None:
         """
@@ -1291,6 +1300,7 @@ class Viewport(QWidget):
         self.unsetCursor()
         self._full_quality_timer.stop()
         self._request_full_quality_render()
+        self.roi_updated.emit(self._current_roi)
 
     def _ensure_roi_box_widget(self) -> None:
         """
@@ -1389,6 +1399,7 @@ class Viewport(QWidget):
         self._roi_box_rep.PlaceWidget(list(self._current_roi.bounds))
         self._update_roi_preview_box(self._current_roi.bounds)
         self._request_moving_render()
+        self.roi_updated.emit(self._current_roi)
 
     def _on_box_widget_end_interaction(self, _obj: object, _event: str) -> None:
         """
@@ -1407,3 +1418,63 @@ class Viewport(QWidget):
 
         self._full_quality_timer.stop()
         self._request_full_quality_render()
+
+    def accept_roi_selection(self) -> RegionOfInterest | None:
+        """
+        Confirms the currently edited ROI, turns off the 3D editing handles and preview box,
+        resets the mode to INACTIVE, and emits `roi_accepted` with the final RegionOfInterest.
+
+        Parameters:
+            None
+
+        Returns:
+            RegionOfInterest | None: The confirmed ROI, or None if no ROI was in editing mode.
+        """
+        if self._roi_mode != RoiMode.EDITING or self._current_roi is None:
+            return None
+
+        # read the latest bounds from the box widget representation one last time
+        if self._roi_box_rep is not None and self.volume_bounds is not None:
+            self._current_roi = RegionOfInterest.from_bounds(
+                self._roi_box_rep.GetBounds(),
+                volume_bounds=self.volume_bounds,
+            )
+
+        accepted_roi = self._current_roi
+
+        # clean up the interactive widget and preview wireframe
+        self._roi_mode = RoiMode.INACTIVE
+        self._roi_start_point = None
+        self._disable_roi_box_widget()
+        self._remove_roi_preview_actor()
+        self.unsetCursor()
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
+
+        self.roi_accepted.emit(accepted_roi)
+        return accepted_roi
+
+    def set_roi_preview(self, roi: RegionOfInterest) -> None:
+        """
+        Sets or updates the ROI preview and 3D box widget from external coordinates
+        (for example when the user types coordinates in the UI text fields).
+
+        Parameters:
+            roi: The RegionOfInterest object containing the new bounds to visualize.
+
+        Returns:
+            None
+        """
+        if self.volume_bounds is None:
+            return
+
+        self._current_roi = RegionOfInterest.from_bounds(
+            roi.bounds,
+            volume_bounds=self.volume_bounds,
+        )
+        self._roi_mode = RoiMode.EDITING
+        self.unsetCursor()
+        self._update_roi_preview_box(self._current_roi.bounds)
+        self._enable_roi_box_widget(self._current_roi.bounds)
+        self._request_full_quality_render()
+        self.roi_updated.emit(self._current_roi)

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 
+from apkit4d.roi import RegionOfInterest
 from apkit4d.visualization.viewport import (
     DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,
@@ -629,6 +630,83 @@ class TestViewportRoiDragSelection:
         # Cancel must turn off the widget
         viewport.cancel_roi_selection()
         assert viewport._roi_box_widget.GetEnabled() == 0
+
+    def test_accept_roi_selection_emits_signal_and_cleans_up_preview(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        started_calls = []
+        updated_rois = []
+        accepted_rois = []
+
+        viewport.roi_selection_started.connect(lambda: started_calls.append(True))
+        viewport.roi_updated.connect(lambda r: updated_rois.append(r))
+        viewport.roi_accepted.connect(lambda r: accepted_rois.append(r))
+
+        # Calling accept when not in EDITING mode should return None and emit nothing
+        assert viewport.accept_roi_selection() is None
+        assert len(accepted_rois) == 0
+
+        viewport.start_roi_selection()
+        assert len(started_calls) == 1
+
+        renderer = viewport.plotter.renderer
+
+        def world_to_px(wx, wy, wz):
+            renderer.SetWorldPoint(wx, wy, wz, 1.0)
+            renderer.WorldToDisplay()
+            dx, dy, _ = renderer.GetDisplayPoint()
+            return int(round(dx)), int(round(dy))
+
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(*world_to_px(1.0, 1.0, 4.0))
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        iren.SetEventPosition(*world_to_px(3.0, 3.0, 4.0))
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+
+        assert len(updated_rois) >= 1
+
+        # Adjust bounds via the box widget representation before accepting
+        viewport._roi_box_rep.PlaceWidget([0.5, 3.5, 1.0, 3.0, 0.5, 2.5])
+        viewport._on_box_widget_interaction(None, "InteractionEvent")
+
+        # Accept the ROI
+        final_roi = viewport.accept_roi_selection()
+        assert final_roi is not None
+        assert len(accepted_rois) == 1
+        assert accepted_rois[0] == final_roi
+        np.testing.assert_allclose(final_roi.bounds, (0.5, 3.5, 1.0, 3.0, 0.5, 2.5))
+
+        # Verify state is back to INACTIVE and preview/widget are turned off
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport._roi_box_widget.GetEnabled() == 0
+        assert "roi_preview" not in viewport.plotter.actors
+
+    def test_set_roi_preview_and_cancel_signal(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        cancelled_calls = []
+        viewport.roi_cancelled.connect(lambda: cancelled_calls.append(True))
+
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport.current_roi == custom_roi
+        assert viewport._roi_box_widget is not None
+        assert viewport._roi_box_widget.GetEnabled() == 1
+        assert "roi_preview" in viewport.plotter.actors
+
+        viewport.cancel_roi_selection()
+        assert len(cancelled_calls) == 1
+        assert viewport.roi_mode == RoiMode.INACTIVE
 
 
 def lut_colors(viewport) -> np.ndarray:
