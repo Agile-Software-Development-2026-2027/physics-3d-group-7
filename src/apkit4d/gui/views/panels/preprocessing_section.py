@@ -119,9 +119,9 @@ class PreprocessingSection(AccordionSection):
         self.bg_sigma_xy_um.setEnabled(bg_mode == BgMode.WIDE_GAUSSIAN.value)
         clahe_on = self.clahe_enabled.isChecked()
         self.clahe_clip.setEnabled(clahe_on)
-        self.clahe_clip.setForegroundRole(ColorRole.PlaceholderText)
+        self.clahe_clip.setForegroundRole(ColorRole.Text if clahe_on else ColorRole.PlaceholderText)
         self.clahe_kernel_xy_um.setEnabled(clahe_on)
-        self.clahe_kernel_xy_um.setForegroundRole(ColorRole.PlaceholderText)
+        self.clahe_kernel_xy_um.setForegroundRole(ColorRole.Text if clahe_on else ColorRole.PlaceholderText)
 
     def _on_bg_mode_changed(self, mode_str: str) -> None:
         self._update_preproc_enabled_states()
@@ -282,6 +282,10 @@ class PreprocessingSection(AccordionSection):
             )
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_KERNEL_XY, self.clahe_kernel_xy_um))
+
+        window = QPushButton("Suggest window")
+        window.setObjectName("suggest_window")
+        window.setToolTip("Press this button")
 
         # Complete this button (testing helper)
         complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)

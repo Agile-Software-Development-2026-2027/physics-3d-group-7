@@ -32,7 +32,7 @@ from apkit4d.gui.theme import (
     Theme,
     ThemeColors,
 )
-from apkit4d.gui.views.panels.right_panel_preproc import PreprocessingSection
+from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 
