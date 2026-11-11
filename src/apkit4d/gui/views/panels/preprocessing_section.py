@@ -2,16 +2,25 @@
 
 from typing import TYPE_CHECKING
 
+from apkit4d.gui.shared.components.v_separator import VSeparator
+
 if TYPE_CHECKING:
     from apkit4d.gui.views.panels.right_panel import RightPanel
 
 from PySide6.QtCore import QSignalBlocker
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+)
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.shared.components.accordion import AccordionSection
-from apkit4d.gui.theme.apply import ColorRole
 from apkit4d.preprocessing import BgMode, PreprocParams
 
 
@@ -46,6 +55,7 @@ class PreprocessingSection(AccordionSection):
         self.bg_mode: QComboBox
         self.bg_percentile: QDoubleSpinBox
         self.bg_sigma_xy_um: QDoubleSpinBox
+        self.normalization_enabled: QCheckBox
         self.lowest_intensity: QDoubleSpinBox
         self.highest_intensity: QDoubleSpinBox
         self.logarithmic_compression_enabled: QCheckBox
@@ -70,6 +80,7 @@ class PreprocessingSection(AccordionSection):
             bg_mode=bg_mode,
             bg_percentile=self.bg_percentile.value(),
             bg_sigma_xy_um=self.bg_sigma_xy_um.value(),
+            normalization_enabled=self.normalization_enabled.isChecked(),
             lowest_intensity=self.lowest_instensity.value(),
             highest_intensity=self.highest_intensity.value(),
             logarithmic_compression_enabled=self.logarithmic_compression_enabled.isChecked(),
@@ -94,6 +105,8 @@ class PreprocessingSection(AccordionSection):
             self.bg_percentile.setValue(params.bg_percentile)
         with QSignalBlocker(self.bg_sigma_xy_um):
             self.bg_sigma_xy_um.setValue(params.bg_sigma_xy_um)
+        with QSignalBlocker(self.normalization_enabled):
+            self.normalization_enabled.setChecked(params.normalization_enabled)
         with QSignalBlocker(self.lowest_instensity):
             self.lowest_instensity.setValue(params.lowest_intensity)
         with QSignalBlocker(self.highest_intensity):
@@ -117,11 +130,15 @@ class PreprocessingSection(AccordionSection):
         bg_mode = self.bg_mode.currentText()
         self.bg_percentile.setEnabled(bg_mode == BgMode.PERCENTILE_PER_SLICE.value)
         self.bg_sigma_xy_um.setEnabled(bg_mode == BgMode.WIDE_GAUSSIAN.value)
-        clahe_on = self.clahe_enabled.isChecked()
+
+        normalization_on = self.normalization_enabled.isChecked()
+        self.lowest_instensity.setEnabled(normalization_on)
+        self.highest_intensity.setEnabled(normalization_on)
+        self.clahe_enabled.setEnabled(normalization_on)  # normalization is required for CLAHE
+
+        clahe_on = self.clahe_enabled.isChecked() and normalization_on
         self.clahe_clip.setEnabled(clahe_on)
-        self.clahe_clip.setForegroundRole(ColorRole.Text if clahe_on else ColorRole.PlaceholderText)
         self.clahe_kernel_xy_um.setEnabled(clahe_on)
-        self.clahe_kernel_xy_um.setForegroundRole(ColorRole.Text if clahe_on else ColorRole.PlaceholderText)
 
     def _on_bg_mode_changed(self, mode_str: str) -> None:
         self._update_preproc_enabled_states()
@@ -134,6 +151,12 @@ class PreprocessingSection(AccordionSection):
     def _on_clahe_toggled(self, checked: bool) -> None:
         self._update_preproc_enabled_states()
         self.right_panel.step_param_changed.emit(PipelineStep.PREPROCESSING.value, "clahe_enabled", checked)
+
+    def _on_normalization_toggled(self, checked: bool) -> None:
+        self._update_preproc_enabled_states()
+        self.right_panel.step_param_changed.emit(
+            PipelineStep.PREPROCESSING.value, "normalization_enabled", checked
+        )
 
     def _widgets(self):
         defaults = PreprocParams()
@@ -164,6 +187,8 @@ class PreprocessingSection(AccordionSection):
             )
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box))
+
+        self.add_widget(VSeparator())
 
         # 2. Background Removal
         self.bg_mode = QComboBox()
@@ -198,8 +223,17 @@ class PreprocessingSection(AccordionSection):
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_SIGMA_XY, self.bg_sigma_xy_um))
 
+        self.add_widget(VSeparator())
+
+        self.normalization_enabled = QCheckBox(texts.LABEL_PREPROC_NORMALIZATION_ENABLED)
+        self.normalization_enabled.setChecked(defaults.normalization_enabled)
+        self.normalization_enabled.setObjectName(names.PREPROC_NORMALIZATION_ENABLED_FIELD)
+        self.normalization_enabled.toggled.connect(self._on_normalization_toggled)
+        self.add_widget(self.normalization_enabled)
+
         # 3. Intensity Windowing
         self.lowest_instensity = QDoubleSpinBox()
+        self.lowest_instensity.setEnabled(defaults.normalization_enabled)
         self.lowest_instensity.setObjectName(names.PREPROC_LOWEST_INTENSITY_FIELD)
         self.lowest_instensity.setRange(0.0, 100000.0)
         self.lowest_instensity.setSingleStep(10.0)
@@ -214,6 +248,7 @@ class PreprocessingSection(AccordionSection):
 
         self.highest_intensity = QDoubleSpinBox()
         self.highest_intensity.setObjectName(names.PREPROC_HIGHEST_INTENSITY_FIELD)
+        self.highest_intensity.setEnabled(defaults.normalization_enabled)
         self.highest_intensity.setRange(0.0, 100000.0)
         self.highest_intensity.setSingleStep(10.0)
         self.highest_intensity.setDecimals(1)
@@ -225,6 +260,14 @@ class PreprocessingSection(AccordionSection):
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
 
+        # TODO: suggest window
+        window = QPushButton("Suggest window")
+        window.setObjectName("suggest_window")
+        window.setToolTip("Press this button")
+        self.add_widget(window)
+
+        self.add_widget(VSeparator())
+
         # 4. Logarithmic compression
         self.logarithmic_compression_enabled = QCheckBox(texts.LABEL_PREPROC_LOG_COMPRESSION)
         self.logarithmic_compression_enabled.setObjectName(names.PREPROC_LOG_COMPRESSION_CHECKBOX)
@@ -235,6 +278,8 @@ class PreprocessingSection(AccordionSection):
             )
         )
         self.add_widget(self.logarithmic_compression_enabled)
+
+        self.add_widget(VSeparator())
 
         # 5. Gamma
         self.gamma_correction_to_apply = QDoubleSpinBox()
@@ -250,11 +295,14 @@ class PreprocessingSection(AccordionSection):
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_GAMMA, self.gamma_correction_to_apply))
 
+        self.add_widget(VSeparator())
+
         # 6. CLAHE
         self.clahe_enabled = QCheckBox(texts.LABEL_PREPROC_CLAHE)
         self.clahe_enabled.setObjectName(names.PREPROC_CLAHE_CHECKBOX)
         self.clahe_enabled.setChecked(defaults.clahe_enabled)
         self.clahe_enabled.toggled.connect(self._on_clahe_toggled)
+        self.clahe_enabled.setEnabled(defaults.normalization_enabled)
         self.add_widget(self.clahe_enabled)
 
         self.clahe_clip = QDoubleSpinBox()
@@ -282,10 +330,6 @@ class PreprocessingSection(AccordionSection):
             )
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_KERNEL_XY, self.clahe_kernel_xy_um))
-
-        window = QPushButton("Suggest window")
-        window.setObjectName("suggest_window")
-        window.setToolTip("Press this button")
 
         # Complete this button (testing helper)
         complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)

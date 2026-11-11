@@ -48,6 +48,7 @@ class PreprocParams:
     bg_sigma_xy_um: float = 60.0
 
     # Intensity window for normalization. Narrower -> more contrast
+    normalization_enabled: bool = False
     lowest_intensity: float = 0.0
     highest_intensity: float = 1000.0
 
@@ -213,11 +214,12 @@ def preprocess(
     volume = vol_roi.astype(np.float32, copy=True)
     out = denoise(volume, p, voxel_dim)
     out = subtract_background(out, p, voxel_dim)
-    # out = normalize_intensity(out, p)
+    if p.normalization_enabled:
+        out = normalize_intensity(out, p)
     if p.logarithmic_compression_enabled:
         out = logarithmic_compression(out)
     out = gamma_correction(out, p)
-    if p.clahe_enabled:
+    if p.normalization_enabled and p.clahe_enabled:
         out = clahe(out, p, voxel_dim)
     return out
 
