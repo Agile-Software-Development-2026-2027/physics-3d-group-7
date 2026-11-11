@@ -579,6 +579,57 @@ class TestViewportRoiDragSelection:
         assert viewport.current_roi is None
         assert "roi_preview" not in viewport.plotter.actors
 
+    def test_box_widget_enabled_in_editing_and_clamps_handle_drag(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+
+        renderer = viewport.plotter.renderer
+
+        def world_to_px(wx, wy, wz):
+            renderer.SetWorldPoint(wx, wy, wz, 1.0)
+            renderer.WorldToDisplay()
+            dx, dy, _ = renderer.GetDisplayPoint()
+            return int(round(dx)), int(round(dy))
+
+        iren = viewport.plotter.iren.interactor
+
+        # Click and drag to create initial ROI
+        iren.SetEventPosition(*world_to_px(1.0, 1.0, 4.0))
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        iren.SetEventPosition(*world_to_px(3.0, 3.0, 4.0))
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+
+        # Verify vtkBoxWidget2 is enabled and rotation is locked
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport._roi_box_widget is not None
+        assert viewport._roi_box_widget.GetEnabled() == 1
+        assert viewport._roi_box_widget.GetRotationEnabled() == 0
+
+        # Simulate user dragging the Z handles to [1.0, 2.5] and X handle outside volume (-5.0)
+        viewport._roi_box_rep.PlaceWidget([-5.0, 3.5, 1.0, 3.0, 1.0, 2.5])
+        viewport._on_box_widget_interaction(None, "InteractionEvent")
+        viewport._on_box_widget_end_interaction(None, "EndInteractionEvent")
+
+        # X min must be clamped to 0.0, Z must be updated to [1.0, 2.5]
+        assert viewport.current_roi is not None
+        np.testing.assert_allclose(
+            viewport.current_roi.bounds,
+            (0.0, 3.5, 1.0, 3.0, 1.0, 2.5),
+        )
+
+        # Cancel must turn off the widget
+        viewport.cancel_roi_selection()
+        assert viewport._roi_box_widget.GetEnabled() == 0
+
 
 def lut_colors(viewport) -> np.ndarray:
     lut = viewport.plotter.actors["volume"].mapper.lookup_table
