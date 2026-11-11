@@ -184,3 +184,9 @@ INSPECTOR_STATUS_ROI_SELECTING: str = "Click and drag on the 3D volume, or adjus
 INSPECTOR_STATUS_ROI_ACTIVE: str = (
     "Active ROI: X=[{x0:.1f}, {x1:.1f}] Y=[{y0:.1f}, {y1:.1f}] Z=[{z0:.1f}, {z1:.1f}] µm"
 )
+INSPECTOR_BUTTON_UNDO_ROI: str = "Undo Last Crop"
+INSPECTOR_TOOLTIP_UNDO_ROI: str = "Revert to the previous Region of Interest before the last accepted crop."
+INSPECTOR_BUTTON_SAVE_ROI: str = "Save ROI"
+INSPECTOR_TOOLTIP_SAVE_ROI: str = (
+    "Save the current Region of Interest in a certain range of frames to a file."
+)

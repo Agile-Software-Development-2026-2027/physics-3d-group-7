@@ -35,6 +35,7 @@ class RoiInspector(QWidget):
     cancel_roi_clicked = Signal()
     reset_roi_clicked = Signal()
     bounds_edited = Signal(object)
+    undo_roi_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -118,18 +119,56 @@ class RoiInspector(QWidget):
         action_layout.addWidget(self._cancel_btn)
         form.addRow(action_widget)
 
+        history_widget = QWidget()
+        history_layout = QHBoxLayout(history_widget)
+        history_layout.setContentsMargins(0, 0, 0, 0)
+        history_layout.setSpacing(8)
+
+        # Undo button to revert to previous roi
+        self._undo_btn = QPushButton(texts.INSPECTOR_BUTTON_UNDO_ROI)
+        self._undo_btn.setObjectName(names.ROI_INSPECTOR_UNDO_BUTTON)
+        self._undo_btn.setToolTip(texts.INSPECTOR_TOOLTIP_UNDO_ROI)
+        self._undo_btn.setEnabled(False)  # enabled only when there is a previous ROI to revert to
+        self._undo_btn.clicked.connect(self.undo_roi_clicked.emit)
+
         # Reset to full volume button
         self._reset_btn = QPushButton(texts.INSPECTOR_BUTTON_RESET_ROI)
         self._reset_btn.setObjectName(names.ROI_INSPECTOR_RESET_BUTTON)
         self._reset_btn.setToolTip(texts.INSPECTOR_TOOLTIP_RESET_ROI)
         self._reset_btn.clicked.connect(self.reset_roi_clicked.emit)
-        form.addRow(self._reset_btn)
+
+        history_layout.addWidget(self._undo_btn)
+        history_layout.addWidget(self._reset_btn)
+        form.addRow(history_widget)
 
         # Status label
         self._status_label = QLabel(texts.INSPECTOR_STATUS_ROI_FULL)
         self._status_label.setObjectName(names.ROI_INSPECTOR_STATUS_LABEL)
         self._status_label.setWordWrap(True)
         form.addRow(self._status_label)
+        form.addRow(VSeparator())
+
+        # Orlando asked to add something like this, it's not implemented yet
+        # just buttons and spinboxes, no actual saving functionality
+        # we will implement this next sprint
+        save_widget = QWidget()
+        save_layout = QHBoxLayout(save_widget)
+        save_layout.setContentsMargins(0, 0, 0, 0)
+        save_layout.setSpacing(8)
+
+        self.min_frame = self._create_spinbox(names.ROI_INSPECTOR_MIN_FRAME)
+        self.max_frame = self._create_spinbox(names.ROI_INSPECTOR_MAX_FRAME)
+        save_layout.addWidget(QLabel("Save ROI for frames:"))
+        save_layout.addWidget(self.min_frame)
+        save_layout.addWidget(QLabel("to"))
+        save_layout.addWidget(self.max_frame)
+
+        form.addRow(save_widget)
+
+        self.save_button = QPushButton(texts.INSPECTOR_BUTTON_SAVE_ROI)
+        self.save_button.setObjectName(names.ROI_INSPECTOR_SAVE_BUTTON)
+        self.save_button.setToolTip(texts.INSPECTOR_TOOLTIP_SAVE_ROI)
+        form.addRow(self.save_button)
 
         self._main_layout.addWidget(group)
 
@@ -212,3 +251,7 @@ class RoiInspector(QWidget):
         self.set_roi_bounds(roi.bounds)
         self.set_editing_mode(True)
         self.bounds_edited.emit(roi)
+
+    def set_undo_enabled(self, enabled: bool) -> None:
+        """Enable or disable the Undo button depending on whether ROI history is available."""
+        self._undo_btn.setEnabled(enabled)

@@ -72,6 +72,7 @@ class MainController(QObject):
 
         self._roi_view: RoiSelectionView | None = view if isinstance(view, RoiSelectionView) else None
         self._full_volume_bounds: Bounds6D | None = None
+        self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
 
     @property
@@ -129,6 +130,7 @@ class MainController(QObject):
         inspector.cancel_roi_clicked.connect(self._on_cancel_roi)
         inspector.reset_roi_clicked.connect(self._on_reset_roi)
         inspector.bounds_edited.connect(self._on_inspector_bounds_edited)
+        inspector.undo_roi_clicked.connect(self._on_undo_roi)
 
         # Connect Viewport ROI signals if the 3D view supports interactive ROI selection
         if self._roi_view is not None:
@@ -144,10 +146,12 @@ class MainController(QObject):
             None
         """
         self._full_volume_bounds = bounds
+        self._roi_history.clear()
         inspector = self._window.right_panel.roi_inspector
         if inspector is not None:
             inspector.set_volume_bounds(bounds)
             inspector.set_editing_mode(False)
+            inspector.set_undo_enabled(False)
             inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
 
     def _pause_and_lock_playback_for_roi(self) -> None:
@@ -221,10 +225,15 @@ class MainController(QObject):
             roi = inspector.get_roi()
 
         if self._volume_controller is not None:
+            # here i store the prev roi for the undo thing
+            prev_roi = self._volume_controller.roi
+            if prev_roi != roi:
+                self._roi_history.append(prev_roi)
             self._volume_controller.set_roi(roi)
 
         inspector.set_roi_bounds(roi.bounds)
         inspector.set_editing_mode(False)
+        inspector.set_undo_enabled(len(self._roi_history) > 0)
         x0, x1, y0, y1, z0, z1 = roi.bounds
         inspector.set_status_text(
             texts.INSPECTOR_STATUS_ROI_ACTIVE.format(x0=x0, x1=x1, y0=y0, y1=y1, z0=z0, z1=z1)
@@ -271,11 +280,50 @@ class MainController(QObject):
         if self._volume_controller is not None:
             self._volume_controller.set_roi(None)
 
+        self._roi_history.clear()
         inspector = self._window.right_panel.roi_inspector
         if inspector is not None:
             inspector.set_editing_mode(False)
+            inspector.set_undo_enabled(False)
             if self._full_volume_bounds is not None:
                 inspector.set_roi_bounds(self._full_volume_bounds)
             inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
+
+        self._unlock_playback_after_roi()
+
+    def _on_undo_roi(self) -> None:
+        """Revert to the previous accepted ROI (or to the full volume if undoing the first crop)."""
+        if not self._roi_history:
+            return
+
+        # If the user is currently selecting or editing a ROI, cancel that operation first
+        if self._roi_view is not None:
+            self._roi_view.cancel_roi_selection()
+
+        prev_roi = self._roi_history.pop()
+
+        if self._volume_controller is not None:
+            # if prev roi is None set roi will reset to full volume
+            self._volume_controller.set_roi(prev_roi)
+
+        inspector = self._window.right_panel.roi_inspector
+        if inspector is not None:
+            inspector.set_editing_mode(False)
+            inspector.set_undo_enabled(len(self._roi_history) > 0)
+
+            if prev_roi is not None:
+                # update the spinboxes with new bounds
+                inspector.set_volume_bounds(prev_roi.bounds)
+                x0, x1, y0, y1, z0, z1 = prev_roi.bounds
+                inspector.set_status_text(
+                    texts.INSPECTOR_STATUS_ROI_ACTIVE.format(x0=x0, x1=x1, y0=y0, y1=y1, z0=z0, z1=z1)
+                )
+                self._pipeline_model.update_step_params(PipelineStep.ROI, **prev_roi.to_dict())
+            else:
+                # if prev roi is None, reset to full volume so the bounds of the
+                # spinboxes are updated to the full volume bounds
+                if self._full_volume_bounds is not None:
+                    inspector.set_volume_bounds(self._full_volume_bounds)
+                inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
 
         self._unlock_playback_after_roi()
