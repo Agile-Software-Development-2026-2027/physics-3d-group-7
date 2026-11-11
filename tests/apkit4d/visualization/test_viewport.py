@@ -708,6 +708,77 @@ class TestViewportRoiDragSelection:
         assert len(cancelled_calls) == 1
         assert viewport.roi_mode == RoiMode.INACTIVE
 
+    def test_click_outside_volume_stays_waiting_for_first_point(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+        # Click at pixel (1, 1) in the corner far outside the volume
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(1, 1)
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+        assert viewport.current_roi is None
+
+    def test_quick_click_without_mouse_move_creates_valid_roi_on_release(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+
+        renderer = viewport.plotter.renderer
+        renderer.SetWorldPoint(2.0, 2.0, 4.0, 1.0)
+        renderer.WorldToDisplay()
+        dx, dy, _ = renderer.GetDisplayPoint()
+
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(int(round(dx)), int(round(dy)))
+
+        # Press and immediately release without calling _on_mouse_move
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.roi_mode == RoiMode.DRAGGING
+        assert viewport.current_roi is None
+
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport.current_roi is not None
+        assert "roi_preview" in viewport.plotter.actors
+        assert viewport._roi_box_widget is not None
+        assert viewport._roi_box_widget.GetEnabled() == 1
+
+    def test_set_roi_preview_ignored_without_volume(self, viewport):
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+
+    def test_clear_resets_roi_editing_state_and_disables_widget(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport._roi_box_widget.GetEnabled() == 1
+
+        viewport.clear()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+        assert viewport._roi_box_widget.GetEnabled() == 0
+
 
 def lut_colors(viewport) -> np.ndarray:
     lut = viewport.plotter.actors["volume"].mapper.lookup_table

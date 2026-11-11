@@ -1327,6 +1327,11 @@ class Viewport(QWidget):
         # normally the box is drawn from the outside, so it occludes the volume inside it
         rep.InsideOutOn()
 
+        rep.SetHandleSize(14.0)
+
+        # TODO: we could make the color of handles and box choosable in the left panel
+        # and maybe also some hover effect on the handles, but for now we keep it simple
+
         widget = vtkBoxWidget2()
         widget.SetInteractor(iren)
         widget.SetRepresentation(rep)

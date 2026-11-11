@@ -4,7 +4,9 @@ import pyvista as pv
 
 
 def create_volume_grid(
-    img_array: np.ndarray, voxel_size: tuple[float, float, float], offset: tuple[int, int, int] = (0, 0, 0)
+    img_array: np.ndarray,
+    voxel_size: tuple[float, float, float],
+    offset: tuple[float, float, float] = (0, 0, 0),
 ) -> pv.ImageData:
     """
     Create a PyVista ImageData object from a 3D numpy array.

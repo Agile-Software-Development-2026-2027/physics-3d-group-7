@@ -8,9 +8,10 @@ read (dragging the slider, fast playback), the ones in between are skipped.
 """
 
 import math
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import pyvista as pv
 from numpy.typing import NDArray
@@ -20,6 +21,7 @@ from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.views.main_window import MainWindow
+from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.visualization.data_mapper import create_volume_grid
 
 
@@ -27,6 +29,26 @@ class VolumeView(Protocol):
     """What the controller needs from the 3D view. `Viewport` provides it."""
 
     def show_volume(self, grid: pv.ImageData, reset_camera: bool = True) -> None: ...
+
+
+class _SignalLike(Protocol):
+    def connect(self, slot: Callable[..., object]) -> object: ...
+
+
+@runtime_checkable
+class RoiSelectionView(Protocol):
+    """Optional interactive ROI selection contract provided by `Viewport`."""
+
+    @property
+    def roi_updated(self) -> _SignalLike: ...
+
+    def start_roi_selection(self) -> None: ...
+
+    def set_roi_preview(self, roi: RegionOfInterest) -> None: ...
+
+    def accept_roi_selection(self) -> RegionOfInterest | None: ...
+
+    def cancel_roi_selection(self) -> None: ...
 
 
 class VolumeController(QObject):
@@ -48,6 +70,8 @@ class VolumeController(QObject):
 
     failed = Signal()
 
+    volume_bounds_changed = Signal(object)
+
     def __init__(self, window: MainWindow, view: VolumeView, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._window = window
@@ -65,6 +89,10 @@ class VolumeController(QObject):
         self._runner.succeeded.connect(self._on_read)
         self._runner.failed.connect(self._on_read_failed)
 
+        self._roi: RegionOfInterest | None = None
+        self._current_frame: int = 0
+        self._current_volume: NDArray | None = None
+
     def set_source(self, _path: Path, source: FrameSource) -> None:
         """
         Start showing a recording, from its first frame.
@@ -76,10 +104,23 @@ class VolumeController(QObject):
         self._generation += 1
         self._source = source
         self._voxel = source.info.voxel
+        self._roi = None
+        self._current_volume = None
         self._first_frame = True
         self._wanted = None
         self._usable = self._has_valid_voxel(source)
         if self._usable:
+            # when we read the file we set the bounds so that the ROI inspector can show them
+            sz, sy, sx = self._voxel
+            bounds: Bounds6D = (
+                0.0,
+                max(0, source.info.n_x - 1) * sx,
+                0.0,
+                max(0, source.info.n_y - 1) * sy,
+                0.0,
+                max(0, source.info.n_z - 1) * sz,
+            )
+            self.volume_bounds_changed.emit(bounds)
             self.show_frame(0)
 
     def show_frame(self, frame: int) -> None:
@@ -130,7 +171,16 @@ class VolumeController(QObject):
         if volume.ndim != 3:
             self._fail(texts.STATUS_NOT_3D.format(frame=frame, shape=volume.shape))
             return
-        grid = create_volume_grid(volume, self._voxel)
+
+        self._current_frame = frame
+        self._current_volume = volume
+
+        # if a ROI is set, extract the subvolume and its origin, otherwise use the full volume
+        if self._roi is not None:
+            sub_vol, sub_origin = self._roi.extract_subvolume(volume, self._voxel)
+            grid = create_volume_grid(sub_vol, self._voxel, sub_origin)
+        else:
+            grid = create_volume_grid(volume, self._voxel)
         if grid.n_points == 0:
             self._fail(texts.STATUS_EMPTY_VOLUME.format(frame=frame))
             return
@@ -149,3 +199,16 @@ class VolumeController(QObject):
         name = Path(source.info.path).name
         self._window.set_status(texts.STATUS_INVALID_VOXEL.format(name=name, voxel=voxel))
         return False
+
+    @property
+    def roi(self) -> RegionOfInterest | None:
+        """Currently active RegionOfInterest used to crop displayed frames, or None for full volume."""
+        return self._roi
+
+    def set_roi(self, roi: RegionOfInterest | None) -> None:
+        """
+        Apply or clear the active RegionOfInterest and immediately refresh the current frame.
+        """
+        self._roi = roi
+        if self._current_volume is not None and self._usable:
+            self._show(self._current_frame, self._current_volume)
