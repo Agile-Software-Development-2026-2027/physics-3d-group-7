@@ -780,6 +780,81 @@ class TestViewportRoiDragSelection:
         assert viewport._roi_box_widget.GetEnabled() == 0
 
 
+VOLUME = (0.0, 4.0, 0.0, 4.0, 0.0, 4.0)
+
+
+def make_roi(bounds):
+    return RegionOfInterest.from_bounds(bounds)
+
+
+class TestSlideInsideVolume:
+    def test_translation_inside_volume_is_unchanged(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (1.5, 3.5, 1.0, 3.0, 1.0, 3.0)  # moved +0.5 on x, still inside
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        np.testing.assert_allclose(result, raw)
+
+    def test_translation_past_max_edge_keeps_size_and_stops_at_edge(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (3.0, 5.0, 1.0, 3.0, 1.0, 3.0)  # x sticks out by 1
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        # the plain clamp would give x = (3, 4), width 1: here the width stays 2
+        np.testing.assert_allclose(result, (2.0, 4.0, 1.0, 3.0, 1.0, 3.0))
+
+    def test_translation_past_min_edge_keeps_size_and_stops_at_edge(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (-1.0, 1.0, 1.0, 3.0, 1.0, 3.0)
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        np.testing.assert_allclose(result, (0.0, 2.0, 1.0, 3.0, 1.0, 3.0))
+
+    def test_translation_past_several_edges_at_once(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (3.0, 5.0, -2.0, 0.0, 1.0, 3.0)  # x over the max, y under the min
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        np.testing.assert_allclose(result, (2.0, 4.0, 0.0, 2.0, 1.0, 3.0))
+
+    def test_resize_is_returned_untouched(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (-5.0, 3.0, 1.0, 3.0, 1.0, 3.0)  # a face dragged out: the size changes
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        assert result == raw  # the normal clamp of from_bounds handles it
+
+    def test_resize_on_one_axis_is_not_treated_as_translation(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        # x is translated past the edge but z changed size: it is a resize
+        raw = (3.0, 5.0, 1.0, 3.0, 1.0, 3.5)
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        assert result == raw
+
+    def test_size_difference_below_tolerance_counts_as_translation(self):
+        previous = make_roi((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        raw = (3.0, 5.0 + 1e-9, 1.0, 3.0, 1.0, 3.0)  # floating point noise
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        np.testing.assert_allclose(result, (2.0, 4.0, 1.0, 3.0, 1.0, 3.0))
+
+    def test_roi_as_big_as_volume_does_not_move(self):
+        previous = make_roi(VOLUME)
+        raw = (1.0, 5.0, 0.0, 4.0, 0.0, 4.0)  # full-size box pushed on x
+
+        result = Viewport._slide_inside_volume(raw, previous, VOLUME)
+
+        np.testing.assert_allclose(result, VOLUME)
+
+
 def lut_colors(viewport) -> np.ndarray:
     lut = viewport.plotter.actors["volume"].mapper.lookup_table
     return np.array(lut.values)[:, :3]

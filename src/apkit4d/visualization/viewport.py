@@ -1395,6 +1395,9 @@ class Viewport(QWidget):
 
         # get bound returns the position of the handles right now
         raw_bounds = self._roi_box_rep.GetBounds()
+        # disable the shrinking behavior, we could add a toggle to decide if the user wants it or not
+        if self._current_roi is not None:
+            raw_bounds = self._slide_inside_volume(raw_bounds, self._current_roi, self.volume_bounds)
         self._current_roi = RegionOfInterest.from_bounds(
             raw_bounds,
             volume_bounds=self.volume_bounds,
@@ -1483,3 +1486,59 @@ class Viewport(QWidget):
         self._enable_roi_box_widget(self._current_roi.bounds)
         self._request_full_quality_render()
         self.roi_updated.emit(self._current_roi)
+
+    @staticmethod
+    def _slide_inside_volume(
+        raw: Bounds6D,
+        previous: RegionOfInterest,
+        volume_bounds: Bounds6D,
+        tol: float = 1e-6,
+    ) -> Bounds6D:
+        """
+        If `raw` is the previous ROI only translated (same size on all axes), moves it back
+        inside the volume without changing its size. Otherwise a face is being resized, so
+        `raw` is returned as it is and the normal clamp applies.
+
+        Parameters:
+            raw: The new bounds of the ROI as a tuple (xmin, xmax, ymin, ymax, zmin, zmax).
+            previous: The previous RegionOfInterest object before the change
+            volume_bounds: The bounds of the volume as a tuple (xmin, xmax, ymin, ymax, zmin, zmax).
+            tol: A small tolerance value to determine if the size of the ROI has changed on any axis.
+        """
+        prev = previous.bounds
+
+        """
+            we want to check if the size of the ROI on this axis has changed
+            lo and hi are the indices of the lower and upper bounds 
+            for this axis in the bounds tuple
+            ex. min_x and max_x and so on for y and z
+        """
+        for axis in range(3):
+            lo, hi = 2 * axis, 2 * axis + 1
+            # if the size has changed, we return raw and let the normal clamp apply
+            if abs((raw[hi] - raw[lo]) - (prev[hi] - prev[lo])) > tol:
+                return raw
+
+        # if the size is the same, we slide it back inside the volume bounds
+        out: list[float] = []
+        for axis in range(3):
+            lo, hi = 2 * axis, 2 * axis + 1
+            # we calculate the size of the ROI on this axis
+            size = prev[hi] - prev[lo]
+            """
+            we clamp the lower bound:
+            with min(raw .. bla bla) we ensure that the min cannot be greater
+            than volume_max (it is like the border we cannot cross it) - size 
+            because that would make the max go outside the volume bounds
+
+            then we take the max between volume_min (same as above we want to make 
+            sure that roi start before the border) and the previous result, 
+            so that the min cannot be less than volume_min for the same reason as above
+
+            i don't know if u will understand what i'm trying to say, it'd be easier to 
+            explain with a drawing, if whoever is reviewing wants one i can send it on whatsapp
+            """
+            new_lo = max(volume_bounds[lo], min(raw[lo], volume_bounds[hi] - size))
+            # the upper bound is just the lower bound plus the size, we don't need to clamp it
+            out.extend((new_lo, new_lo + size))
+        return (out[0], out[1], out[2], out[3], out[4], out[5])
