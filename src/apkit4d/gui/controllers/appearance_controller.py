@@ -17,6 +17,10 @@ from apkit4d.gui.views.panels.left_panel import LeftPanel
 # below this luminance (0 is black, 1 is white) a background counts as dark
 DARK_BACKGROUND_LUMINANCE = 0.5
 
+# how bright red, green and blue look to the eye: the weights of the ITU-R BT.601 standard for turning a
+# color into gray. HSL lightness gives 0.5 to every pure color, so it would put dark text on pure blue
+LUMA_WEIGHTS: tuple[float, float, float] = (0.299, 0.587, 0.114)
+
 
 class AppearanceView(Protocol):
     """What the controller needs from the 3D view. `Viewport` provides it."""
@@ -43,8 +47,8 @@ def readable_color(background: str) -> str:
         background: A color name or a hex code.
     """
     color = QColor(background)
-    # how bright the color looks: the eye sees green as brighter than red, and blue as the darkest
-    luminance = 0.299 * color.redF() + 0.587 * color.greenF() + 0.114 * color.blueF()
+    red, green, blue = LUMA_WEIGHTS
+    luminance = red * color.redF() + green * color.greenF() + blue * color.blueF()
     return DARK_COLORS.text if luminance < DARK_BACKGROUND_LUMINANCE else LIGHT_COLORS.text
 
 

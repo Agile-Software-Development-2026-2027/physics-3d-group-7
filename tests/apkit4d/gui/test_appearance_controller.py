@@ -102,6 +102,7 @@ def test_chosen_outline_stays_when_the_background_changes(controller, view, pane
         ("#ffffff", LIGHT_COLORS.text),
         ("#0000ff", DARK_COLORS.text),  # pure blue looks dark
         ("#ffff00", LIGHT_COLORS.text),  # yellow looks light
+        ("#00ff00", LIGHT_COLORS.text),  # bright green looks light
         (DARK_COLORS.base, DARK_COLORS.text),
         (LIGHT_COLORS.base, LIGHT_COLORS.text),
     ],
