@@ -15,6 +15,9 @@ class FakeInfo:
     voxel: tuple[float, float, float] = (1.0, 1.0, 1.0)
     path: str = "test.czi"
     n_t: int = 5
+    n_z: int = 8
+    n_y: int = 16
+    n_x: int = 16
 
 
 class FakeSource:

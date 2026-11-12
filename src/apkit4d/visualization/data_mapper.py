@@ -8,7 +8,7 @@ from apkit4d.image import Image
 def create_volume_grid(
     img_array: Image[np.uint16],
     voxel_size: tuple[float, float, float],
-    offset: tuple[int, int, int] = (0, 0, 0),
+    offset: tuple[float, float, float] = (0, 0, 0),
 ) -> pv.ImageData:
     """
     Create a PyVista ImageData object from a 3D numpy array.
