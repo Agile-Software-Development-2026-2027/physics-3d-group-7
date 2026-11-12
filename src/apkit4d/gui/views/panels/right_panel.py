@@ -35,6 +35,7 @@ from apkit4d.gui.theme import (
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
+from apkit4d.gui.views.widgets.trajectory_linking_inspector import TrajectoryLinkingInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -420,8 +421,9 @@ class RightPanel(SidePanel):
                     detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
                     sec.add_widget(detection_inspector)
                 case PipelineStep.TRACKING:
-                    # TODO: implement
-                    pass
+                    tracking_inspector = TrajectoryLinkingInspector()
+                    tracking_inspector.setObjectName(names.TRACKING_INSPECTOR_STEP)
+                    sec.add_widget(tracking_inspector)
                 case PipelineStep.BATCH:
                     # TODO: implement
                     pass

@@ -101,3 +101,10 @@ ROI_INSPECTOR_UNDO_BUTTON: str = "roi_inspector_undo_button"
 ROI_INSPECTOR_MIN_FRAME: str = "roi_inspector_min_frame"
 ROI_INSPECTOR_MAX_FRAME: str = "roi_inspector_max_frame"
 ROI_INSPECTOR_SAVE_BUTTON: str = "roi_inspector_save_button"
+
+# trajectory linking inspector
+TRACKING_INSPECTOR_PARAMETERS_GROUP = "tracking_inspector_parameters_group"
+TRACKING_INSPECTOR_MIN_LEN = "tracking_inspector_min_len"
+TRACKING_INSPECTOR_MAX_GAP = "tracking_inspector_max_gap"
+TRACKING_INSPECTOR_MAX_SPEED = "tracking_inspector_max_speed"
+TRACKING_INSPECTOR_STEP = "tracking_inspector_step"
