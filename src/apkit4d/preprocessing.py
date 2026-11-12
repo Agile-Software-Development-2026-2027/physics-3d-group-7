@@ -154,7 +154,7 @@ def normalize_intensity(volume: Image[np.float32], p: PreprocParams) -> Image[np
 
 
 def logarithmic_compression(volume: Image[np.float32]) -> Image[np.float32]:
-    """Highlights dim details and dims bright peaks."""
+    """Highlights dim details and dims bright peaks"""
 
     k = 1000.0
     np.multiply(volume, k, out=volume)

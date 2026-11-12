@@ -24,13 +24,15 @@ from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.preprocessing import BgMode, PreprocParams
 
 
-def create_param_row(label_text: str, widget: QWidget) -> QWidget:
+def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:
     row = QWidget()
+    if tooltip:
+        row.setToolTip(tooltip)
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
-    label = QLabel(label_text)
-    layout.addWidget(label, stretch=1)
-    layout.addWidget(widget)
+    layout.setSpacing(10)
+    layout.addWidget(QLabel(label_text), stretch=1)
+    layout.addWidget(widget, stretch=1)
     return row
 
 
@@ -173,7 +175,11 @@ class PreprocessingSection(AccordionSection):
                 s.value, "denoise_xy_scale_um", val
             )
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box, texts.PREPROC_DENOISE_XY_TOOLTIP
+            )
+        )
 
         self.denoise_z_box = QDoubleSpinBox()
         self.denoise_z_box.setObjectName(names.PREPROC_DENOISE_Z_FIELD)
@@ -186,7 +192,11 @@ class PreprocessingSection(AccordionSection):
                 s.value, "denoise_z_scale_um", val
             )
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box, texts.PREPROC_DENOISE_Z_TOOLTIP
+            )
+        )
 
         self.add_widget(VSeparator())
 
@@ -197,7 +207,9 @@ class PreprocessingSection(AccordionSection):
             self.bg_mode.addItem(mode.value)
         self.bg_mode.setCurrentText(defaults.bg_mode.value)
         self.bg_mode.currentTextChanged.connect(self._on_bg_mode_changed)
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode))
+        self.add_widget(
+            create_param_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode, texts.PREPROC_DENOISE_BG_MODE_TOOLTIP)
+        )
 
         self.bg_percentile = QDoubleSpinBox()
         self.bg_percentile.setObjectName(names.PREPROC_BG_PERCENTILE_FIELD)
@@ -209,7 +221,13 @@ class PreprocessingSection(AccordionSection):
         self.bg_percentile.valueChanged.connect(
             lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_percentile", val)
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_PERCENTILE, self.bg_percentile))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_BG_PERCENTILE,
+                self.bg_percentile,
+                texts.PREPROC_BG_PERCENTILE_TOOLTIP,
+            )
+        )
 
         self.bg_sigma_xy_um = QDoubleSpinBox()
         self.bg_sigma_xy_um.setObjectName(names.PREPROC_BG_SIGMA_XY_FIELD)
@@ -221,11 +239,18 @@ class PreprocessingSection(AccordionSection):
         self.bg_sigma_xy_um.valueChanged.connect(
             lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_sigma_xy_um", val)
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_BG_SIGMA_XY, self.bg_sigma_xy_um))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_BG_SIGMA_XY,
+                self.bg_sigma_xy_um,
+                texts.PREPROC_BG_WIDE_GAUSSIAN_TOOLTIP,
+            )
+        )
 
         self.add_widget(VSeparator())
 
         self.normalization_enabled = QCheckBox(texts.LABEL_PREPROC_NORMALIZATION_ENABLED)
+        self.normalization_enabled.setToolTip(texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP)
         self.normalization_enabled.setChecked(defaults.normalization_enabled)
         self.normalization_enabled.setObjectName(names.PREPROC_NORMALIZATION_ENABLED_FIELD)
         self.normalization_enabled.toggled.connect(self._on_normalization_toggled)
@@ -244,7 +269,13 @@ class PreprocessingSection(AccordionSection):
                 s.value, "lowest_intensity", val
             )
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_LOWEST_INTENSITY, self.lowest_instensity))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_LOWEST_INTENSITY,
+                self.lowest_instensity,
+                texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP,
+            )
+        )
 
         self.highest_intensity = QDoubleSpinBox()
         self.highest_intensity.setObjectName(names.PREPROC_HIGHEST_INTENSITY_FIELD)
@@ -271,6 +302,7 @@ class PreprocessingSection(AccordionSection):
         # 4. Logarithmic compression
         self.logarithmic_compression_enabled = QCheckBox(texts.LABEL_PREPROC_LOG_COMPRESSION)
         self.logarithmic_compression_enabled.setObjectName(names.PREPROC_LOG_COMPRESSION_CHECKBOX)
+        self.logarithmic_compression_enabled.setToolTip(texts.PREPROC_LOGARITHMIC_COMPRESSION_TOOLTIP)
         self.logarithmic_compression_enabled.setChecked(defaults.logarithmic_compression_enabled)
         self.logarithmic_compression_enabled.toggled.connect(
             lambda checked, s=self.step: self.right_panel.step_param_changed.emit(
@@ -293,13 +325,18 @@ class PreprocessingSection(AccordionSection):
                 s.value, "gamma_correction_to_apply", val
             )
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_GAMMA, self.gamma_correction_to_apply))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_GAMMA, self.gamma_correction_to_apply, texts.PREPROC_GAMMA_TOOLTIP
+            )
+        )
 
         self.add_widget(VSeparator())
 
         # 6. CLAHE
         self.clahe_enabled = QCheckBox(texts.LABEL_PREPROC_CLAHE)
         self.clahe_enabled.setObjectName(names.PREPROC_CLAHE_CHECKBOX)
+        self.clahe_enabled.setToolTip(texts.PREPROC_CLAHE_TOOLTIP)
         self.clahe_enabled.setChecked(defaults.clahe_enabled)
         self.clahe_enabled.toggled.connect(self._on_clahe_toggled)
         self.clahe_enabled.setEnabled(defaults.normalization_enabled)
@@ -315,7 +352,11 @@ class PreprocessingSection(AccordionSection):
         self.clahe_clip.valueChanged.connect(
             lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "clahe_clip", val)
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip, texts.PREPROC_CLAHE_CLIP_TOOLTIP
+            )
+        )
 
         self.clahe_kernel_xy_um = QDoubleSpinBox()
         self.clahe_kernel_xy_um.setObjectName(names.PREPROC_CLAHE_KERNEL_XY_FIELD)
@@ -329,7 +370,15 @@ class PreprocessingSection(AccordionSection):
                 s.value, "clahe_kernel_xy_um", val
             )
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_CLAHE_KERNEL_XY, self.clahe_kernel_xy_um))
+        self.add_widget(
+            create_param_row(
+                texts.LABEL_PREPROC_CLAHE_KERNEL_XY,
+                self.clahe_kernel_xy_um,
+                texts.PREPROC_CLAHE_KERNEL_TOOLTIP,
+            )
+        )
+
+        self.add_widget(VSeparator())
 
         # Complete this button (testing helper)
         complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
