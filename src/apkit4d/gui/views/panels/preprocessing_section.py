@@ -49,6 +49,8 @@ class PreprocessingSection(AccordionSection):
             callback=lambda s=self.step: self.right_panel._on_play_clicked(s),
             tooltip=texts.TOOLTIP_PLAY_STAGE,
         )
+
+        # TODO: this doesn't do anything right now
         self.right_panel._play_buttons[PipelineStep.PREPROCESSING] = play_btn
         self.right_panel._plan_buttons[PipelineStep.PREPROCESSING] = play_btn
 
@@ -399,7 +401,7 @@ class PreprocessingSection(AccordionSection):
         reset_btn.clicked.connect(lambda: self._on_reset(defaults))
         self.add_widget(reset_btn)
 
-        # Complete this button (testing helper)
+        # TODO: complete button doesn't do anything right now
         complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
         complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
         complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)

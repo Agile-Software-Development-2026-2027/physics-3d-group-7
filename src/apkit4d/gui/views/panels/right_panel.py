@@ -395,7 +395,7 @@ class RightPanel(SidePanel):
 
         for step, title in stage_definitions:
             if step == PipelineStep.PREPROCESSING:  # FIXME: refactor
-                self._register_stage(step, PreprocessingSection(self))
+                self._register_stage(step.value, PreprocessingSection(self))
                 continue
             sec = AccordionSection(title)
 
