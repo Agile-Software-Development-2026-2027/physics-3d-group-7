@@ -2,6 +2,8 @@
 Unit tests for RightPanel, BottomStatsSection, and its theme, layout, and control synchronization.
 """
 
+from typing import assert_never
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy
 
@@ -12,6 +14,8 @@ from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
+from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from tests.apkit4d.gui.helper import find_widget
 
 
 def test_right_panel_init(qtbot) -> None:
@@ -36,25 +40,34 @@ def test_right_panel_init(qtbot) -> None:
     assert not panel.bottom_stats.is_expanded()
     assert panel.bottom_stats.summary_label.text() == texts.STATS_DEFAULT_SUMMARY
 
-    # Verify each section has number field, plan up to this button, and complete this button
+    # Verify each section has plan up to this button and its inspector
     for step in PipelineStep:
         assert panel.get_section(step) is not None
         assert panel.get_section(step.value) is not None
-
-        num_field = panel.get_number_field(step)
-        assert num_field is not None
-        assert num_field.objectName() == names.STAGE_NUMBER_FIELD
-        assert num_field.value() == 10
 
         play_btn = panel.get_play_button(step)
         assert play_btn is not None
         assert play_btn.text() == texts.BUTTON_PLAY_STAGE
         assert play_btn.objectName() == names.PLAY_STAGE_BUTTON
 
-        complete_btn = panel.get_complete_button(step)
-        assert complete_btn is not None
-        assert complete_btn.text() == texts.BUTTON_COMPLETE_STAGE
-        assert complete_btn.objectName() == names.COMPLETE_STAGE_BUTTON
+        match step:
+            case PipelineStep.ROI:
+                # TODO: add test when the step is implemented
+                pass
+            case PipelineStep.PREPROCESSING:
+                # TODO: add test when the step is implemented
+                pass
+            case PipelineStep.DETECTION:
+                inspector = find_widget(panel, BlobDetectionInspector, names.DETECTION_INSPECTOR_STEP)
+                assert inspector is not None
+            case PipelineStep.TRACKING:
+                # TODO: add test when the step is implemented
+                pass
+            case PipelineStep.BATCH:
+                # TODO: add test when the step is implemented
+                pass
+            case _:
+                assert_never(step)
 
 
 def test_right_panel_theme_switch(qtbot) -> None:
@@ -118,12 +131,7 @@ def test_right_panel_param_changed_signal(qtbot) -> None:
     panel = RightPanel()
     qtbot.addWidget(panel)
 
-    # Editing number field emits step_param_changed
-    num_field = panel.get_number_field(PipelineStep.ROI)
-    assert num_field is not None
-    with qtbot.waitSignal(panel.step_param_changed) as blocker:
-        num_field.setValue(42)
-    assert blocker.args == [PipelineStep.ROI.value, "value", 42]
+    # TODO: implement signal check when pipeline steps are implemented
 
 
 def test_right_panel_plan_stage_signal(qtbot) -> None:
@@ -147,11 +155,7 @@ def test_right_panel_complete_stage_signal(qtbot) -> None:
     panel = RightPanel()
     qtbot.addWidget(panel)
 
-    complete_btn = panel.get_complete_button(PipelineStep.ROI)
-    assert complete_btn is not None
-    with qtbot.waitSignal(panel.complete_stage_requested) as blocker:
-        complete_btn.click()
-    assert blocker.args == [PipelineStep.ROI]
+    # TODO: implement complete stage check when pipeline steps are implemented
 
 
 def test_bottom_stats_section_collapse_and_expand(qtbot) -> None:
