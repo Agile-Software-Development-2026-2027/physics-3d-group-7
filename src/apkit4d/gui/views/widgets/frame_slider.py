@@ -124,7 +124,9 @@ class FrameSlider(QSlider):
             self.update()
 
     def _stop_following(self) -> None:
-        if self._hover is not None:
+        # This ugly thing is required to make tests not fail
+        # TODO: THIS NEEDS TO BE FIXED, BECAUSE IT SHOULDN'T BE THIS WAY
+        if getattr(self, "_hover", None) is not None:
             self._hover = None
             self.update()
 
