@@ -42,6 +42,8 @@ DEFAULT_BACKGROUND = "gray"
 DEFAULT_OUTLINE_COLOR = "white"
 DEFAULT_TEXT_COLOR = "black"
 
+TRANSLATION_TOLERANCE = 1e-5  # tolerance for translation in ROI editing
+
 
 class RoiMode(Enum):
     INACTIVE = auto()
@@ -116,6 +118,14 @@ class Viewport(QWidget):
         """
         self._roi_box_rep: vtkBoxRepresentation | None = None
         self._roi_box_widget: vtkBoxWidget2 | None = None
+
+        """
+            to fix the box moving when the cursor is still outside the volume
+            i'll keep a virtual box who follows us outside the volume,
+            and we show instead only the version who fits in the volume
+        """
+        self._roi_widget_bounds: Bounds6D | None = None
+        self._roi_virtual_bounds: Bounds6D | None = None
 
         iren = self.plotter.iren.interactor  # vtkRenderWindowInteractor
 
@@ -1339,6 +1349,9 @@ class Viewport(QWidget):
         # disable rotation so the user can only resize faces or translate the box along X, Y, Z
         widget.SetRotationEnabled(False)
 
+        # when the user grabs a handle, a new drag starts: forget the virtual box of the previous one
+        widget.AddObserver(vtkCommand.StartInteractionEvent, self._on_box_widget_start_interaction)
+
         # while the user drags a handle, update and clamp the ROI at moving quality
         widget.AddObserver(vtkCommand.InteractionEvent, self._on_box_widget_interaction)
         # when the user releases the handle, draw the volume at full quality
@@ -1358,12 +1371,17 @@ class Viewport(QWidget):
             None
         """
         self._ensure_roi_box_widget()
-        if self._roi_box_rep is None or self._roi_box_widget is None:
+        rep = self._roi_box_rep
+        if rep is None or self._roi_box_widget is None:
             return
 
-        # PlaceWidget take the bounds and positions the handles
-        self._roi_box_rep.PlaceWidget(list(bounds))
+        rep.PlaceWidget(list(bounds))
         self._roi_box_widget.On()
+
+        # a new box was placed so the virtual box is forgotten,
+        # and we store where the widget handles are, to compute the next delta from it
+        self._roi_virtual_bounds = None
+        self._roi_widget_bounds = self._read_widget_bounds(rep)
 
     def _disable_roi_box_widget(self) -> None:
         """
@@ -1377,11 +1395,14 @@ class Viewport(QWidget):
         if self._roi_box_widget is not None:
             self._roi_box_widget.Off()
 
-    def _on_box_widget_interaction(self, _obj: object, _event: str) -> None:
+        # nothing is being edited anymore
+        self._roi_virtual_bounds = None
+        self._roi_widget_bounds = None
+
+    def _on_box_widget_start_interaction(self, _obj: object, _event: str) -> None:
         """
-        Called by VTK whenever the user drags one of the 6 handles
-        of the box widget. Reads the new bounds, clamps them to `self.volume_bounds`,
-        and updates both the widget and the cyan preview box.
+        Called by VTK when the user grabs a handle of the box widget (a new drag starts).
+        The virtual box is forgotten, so the new drag begins from the box that is displayed.
 
         Parameters:
             _obj: the object that called the event
@@ -1390,21 +1411,83 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != RoiMode.EDITING or self._roi_box_rep is None or self.volume_bounds is None:
+        self._roi_virtual_bounds = None
+
+    def _on_box_widget_interaction(self, _obj: object, _event: str) -> None:
+        """
+        Called by VTK whenever the user drags a handle of the box widget.
+
+        The widget moves by deltas, so we keep a "virtual" box that receives every delta with no
+        limits, like the cursor does. The box we display is derived from the virtual one:
+          - if the whole box is being moved, it is slid inside the volume keeping its size, so it
+            stops at the edge and starts moving again only when the cursor comes back to the point
+            where the virtual box fits in the volume again;
+          - if a face is being dragged, the bounds are clamped one by one, so the face stops at the
+            edge (the size changes because the user is resizing).
+        The widget is always placed on the displayed box, so its handles never leave the volume.
+
+        Parameters:
+            _obj: the object that called the event
+            _event: the event that was called
+
+        Returns:
+            None
+        """
+        if (
+            self._roi_mode != RoiMode.EDITING
+            or self._roi_box_rep is None
+            or self.volume_bounds is None
+            or self._current_roi is None
+        ):
             return
 
-        # get bound returns the position of the handles right now
-        raw_bounds = self._roi_box_rep.GetBounds()
-        # disable the shrinking behavior, we could add a toggle to decide if the user wants it or not
-        if self._current_roi is not None:
-            raw_bounds = self._slide_inside_volume(raw_bounds, self._current_roi, self.volume_bounds)
-        self._current_roi = RegionOfInterest.from_bounds(
-            raw_bounds,
-            volume_bounds=self.volume_bounds,
-        )
+        rep = self._roi_box_rep
+        volume = self.volume_bounds
 
-        # snap the widget handles back inside volume_bounds if the user dragged past the volume edge
-        self._roi_box_rep.PlaceWidget(list(self._current_roi.bounds))
+        # new_bounds is the widget after the cursor moved
+        new_bounds = self._read_widget_bounds(rep)
+        # previous_bounds is the widget before the cursor moved, or the displayed ROI if we have no record
+        previous_bounds = self._roi_widget_bounds or self._current_roi.bounds
+
+        # the virtual box starts from the displayed one at the beginning of every drag
+        virtual = self._roi_virtual_bounds or previous_bounds
+        # add the movement of this event to every bound, with no limit from the volume
+        # it's like where it would be if the user could drag outside the volume
+        # we compute the movement by subtracting the new bounds from the previous bounds,
+        # and we add it to the virtual box
+        movement = np.subtract(new_bounds, previous_bounds)
+        virtual = tuple(np.add(virtual, movement))
+
+        # the tolerance depends on the size of the volume, see TRANSLATION_TOLERANCE
+        # we take the biggest side of the volume, so the tolerance is proportional
+        # to the size of the volume
+        biggest_side = max(volume[1] - volume[0], volume[3] - volume[2], volume[5] - volume[4])
+        tol = TRANSLATION_TOLERANCE * biggest_side
+
+        if self._is_pure_translation(new_bounds, previous_bounds, tol):
+            # moving the whole box: keep the size of the box that is displayed and slide it inside
+            size = (
+                # max x - min x, max y - min y, max z - min z
+                previous_bounds[1] - previous_bounds[0],
+                previous_bounds[3] - previous_bounds[2],
+                previous_bounds[5] - previous_bounds[4],
+            )
+            shown = self._slide_inside_volume(virtual, size, volume)
+        else:
+            # if is a resize we take virtual as it is and clamp it
+            # later when we call from_bounds
+            shown = virtual
+
+        # update the virtual box for the next event, and create the new ROI
+        self._roi_virtual_bounds = virtual
+        self._current_roi = RegionOfInterest.from_bounds(shown, volume_bounds=volume)
+
+        # snap the widget handles back inside volume_bounds if the user dragged past the volume edge,
+        # and remember what the widget holds, to compute the next delta from it
+        rep.PlaceWidget(list(self._current_roi.bounds))
+        self._roi_widget_bounds = self._read_widget_bounds(rep)
+
+        # call to update the render
         self._update_roi_preview_box(self._current_roi.bounds)
         self._request_moving_render()
         self.roi_updated.emit(self._current_roi)
@@ -1412,7 +1495,8 @@ class Viewport(QWidget):
     def _on_box_widget_end_interaction(self, _obj: object, _event: str) -> None:
         """
         Called by VTK when the user finishes dragging a handle on the box widget.
-        Requests a full-quality render of the volume.
+        Forgets the virtual box (the next drag starts from the displayed one) and
+        requests a full-quality render of the volume.
 
         Parameters:
             _obj: the object that called the event
@@ -1421,6 +1505,8 @@ class Viewport(QWidget):
         Returns:
             None
         """
+        self._roi_virtual_bounds = None
+
         if self._roi_mode != RoiMode.EDITING:
             return
 
@@ -1488,46 +1574,71 @@ class Viewport(QWidget):
         self.roi_updated.emit(self._current_roi)
 
     @staticmethod
-    def _slide_inside_volume(
-        raw: Bounds6D,
-        previous: RegionOfInterest,
-        volume_bounds: Bounds6D,
-        tol: float = 1e-6,
-    ) -> Bounds6D:
+    def _read_widget_bounds(rep: vtkBoxRepresentation) -> Bounds6D:
         """
-        If `raw` is the previous ROI only translated (same size on all axes), moves it back
-        inside the volume without changing its size. Otherwise a face is being resized, so
-        `raw` is returned as it is and the normal clamp applies.
+        Reads the bounds a VTK box representation holds right now, as a tuple of Python floats.
 
         Parameters:
-            raw: The new bounds of the ROI as a tuple (xmin, xmax, ymin, ymax, zmin, zmax).
-            previous: The previous RegionOfInterest object before the change
-            volume_bounds: The bounds of the volume as a tuple (xmin, xmax, ymin, ymax, zmin, zmax).
-            tol: A small tolerance value to determine if the size of the ROI has changed on any axis.
-        """
-        prev = previous.bounds
+            rep: the representation of the box widget. The caller must already have checked
+                that it exists, so this method never has to return None.
 
+        Returns:
+            Bounds6D: (x_min, x_max, y_min, y_max, z_min, z_max)
         """
-            we want to check if the size of the ROI on this axis has changed
-            lo and hi are the indices of the lower and upper bounds 
-            for this axis in the bounds tuple
-            ex. min_x and max_x and so on for y and z
+        b = rep.GetBounds()
+        return (float(b[0]), float(b[1]), float(b[2]), float(b[3]), float(b[4]), float(b[5]))
+
+    @staticmethod
+    def _is_pure_translation(new_bounds: Bounds6D, old_bounds: Bounds6D, tol: float) -> bool:
+        """
+        Tells if `new_bounds` is `old_bounds` only moved, with the same size on every axis.
+        Moving the whole box keeps its size, while dragging a face changes the size on one axis.
+
+        Parameters:
+            new_bounds: the bounds after the event.
+            old_bounds: the bounds before the event.
+            tol: the size can differ by this much (in micrometers) and still count as the same.
+
+        Returns:
+            bool: True if the box was only moved, False if it was resized.
         """
         for axis in range(3):
-            lo, hi = 2 * axis, 2 * axis + 1
-            # if the size has changed, we return raw and let the normal clamp apply
-            if abs((raw[hi] - raw[lo]) - (prev[hi] - prev[lo])) > tol:
-                return raw
+            lo, hi = 2 * axis, 2 * axis + 1  # positions of min and max of this axis in the tuple
+            new_size = new_bounds[hi] - new_bounds[lo]
+            old_size = old_bounds[hi] - old_bounds[lo]
+            if abs(new_size - old_size) > tol:
+                return False
+        return True
 
-        # if the size is the same, we slide it back inside the volume bounds
+    @staticmethod
+    def _slide_inside_volume(
+        virtual_bounds: Bounds6D,
+        size: tuple[float, float, float],
+        volume_bounds: Bounds6D,
+    ) -> Bounds6D:
+        """
+        Puts a box of the given size as near as possible to `virtual_bounds` while staying inside
+        the volume. Every axis is handled on its own, so if the box is stopped by the edge on X it
+        still follows the cursor on Y and Z (it "slides" along the edge).
+
+        The size never changes: the box stops at the edge, it is not cut.
+
+        Parameters:
+            virtual_bounds: where the box would be with no limits (only the min of each axis is used).
+            size: (size_x, size_y, size_z) of the box, in micrometers.
+            volume_bounds: the limits of the volume.
+
+        Returns:
+            Bounds6D: the bounds of the box, inside the volume.
+        """
         out: list[float] = []
         for axis in range(3):
             lo, hi = 2 * axis, 2 * axis + 1
-            # we calculate the size of the ROI on this axis
-            size = prev[hi] - prev[lo]
+            # the min can't go above (volume max - size), or the max of the box would exit the volume
+            highest_min = volume_bounds[hi] - size[axis]
             """
             we clamp the lower bound:
-            with min(raw .. bla bla) we ensure that the min cannot be greater
+            with min(virtual_bounds[lo], highest_min) we ensure that the min cannot be greater
             than volume_max (it is like the border we cannot cross it) - size 
             because that would make the max go outside the volume bounds
 
@@ -1538,7 +1649,7 @@ class Viewport(QWidget):
             i don't know if u will understand what i'm trying to say, it'd be easier to 
             explain with a drawing, if whoever is reviewing wants one i can send it on whatsapp
             """
-            new_lo = max(volume_bounds[lo], min(raw[lo], volume_bounds[hi] - size))
+            new_min = max(volume_bounds[lo], min(virtual_bounds[lo], highest_min))
             # the upper bound is just the lower bound plus the size, we don't need to clamp it
-            out.extend((new_lo, new_lo + size))
+            out.extend((new_min, new_min + size[axis]))
         return (out[0], out[1], out[2], out[3], out[4], out[5])
