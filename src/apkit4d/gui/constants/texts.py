@@ -96,6 +96,7 @@ PREPROC_CLAHE_TOOLTIP: str = (
 )
 PREPROC_CLAHE_CLIP_TOOLTIP: str = "Controls noise amplification"
 PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used by CLAHE"
+PREPROC_RESET: str = "Reset to defaults"
 
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"

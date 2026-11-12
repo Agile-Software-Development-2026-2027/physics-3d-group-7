@@ -56,6 +56,7 @@ PREPROC_GAMMA_FIELD: str = "preproc_gamma_field"
 PREPROC_CLAHE_CHECKBOX: str = "preproc_clahe_checkbox"
 PREPROC_CLAHE_CLIP_FIELD: str = "preproc_clahe_clip_field"
 PREPROC_CLAHE_KERNEL_XY_FIELD: str = "preproc_clahe_kernel_xy_field"
+PREPROC_RESET: str = "preproc_reset"
 
 # bottom stats section
 BOTTOM_STATS_SECTION: str = "bottom_stats_section"
