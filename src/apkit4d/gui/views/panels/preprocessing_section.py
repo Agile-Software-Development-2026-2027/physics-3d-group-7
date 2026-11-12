@@ -3,11 +3,12 @@
 from typing import TYPE_CHECKING
 
 from apkit4d.gui.shared.components.v_separator import VSeparator
+from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 
 if TYPE_CHECKING:
     from apkit4d.gui.views.panels.right_panel import RightPanel
 
-from PySide6.QtCore import QSignalBlocker
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -61,7 +62,8 @@ class PreprocessingSection(AccordionSection):
         self.lowest_intensity: QDoubleSpinBox
         self.highest_intensity: QDoubleSpinBox
         self.logarithmic_compression_enabled: QCheckBox
-        self.gamma_correction_to_apply: QDoubleSpinBox
+        self.gamma_correction_to_apply: FrameSlider
+        self.gamma_value_label: QLabel
         self.clahe_enabled: QCheckBox
         self.clahe_clip: QDoubleSpinBox
         self.clahe_kernel_xy_um: QDoubleSpinBox
@@ -86,7 +88,7 @@ class PreprocessingSection(AccordionSection):
             lowest_intensity=self.lowest_instensity.value(),
             highest_intensity=self.highest_intensity.value(),
             logarithmic_compression_enabled=self.logarithmic_compression_enabled.isChecked(),
-            gamma_correction_to_apply=self.gamma_correction_to_apply.value(),
+            gamma_correction_to_apply=round(self.gamma_correction_to_apply.value() / 100.0, 2),
             clahe_enabled=self.clahe_enabled.isChecked(),
             clahe_clip=self.clahe_clip.value(),
             clahe_kernel_xy_um=self.clahe_kernel_xy_um.value(),
@@ -116,7 +118,8 @@ class PreprocessingSection(AccordionSection):
         with QSignalBlocker(self.logarithmic_compression_enabled):
             self.logarithmic_compression_enabled.setChecked(params.logarithmic_compression_enabled)
         with QSignalBlocker(self.gamma_correction_to_apply):
-            self.gamma_correction_to_apply.setValue(params.gamma_correction_to_apply)
+            self.gamma_correction_to_apply.setValue(int(round(params.gamma_correction_to_apply * 100.0)))
+            self.gamma_value_label.setText(f"{params.gamma_correction_to_apply:.2f}")
         with QSignalBlocker(self.clahe_enabled):
             self.clahe_enabled.setChecked(params.clahe_enabled)
         with QSignalBlocker(self.clahe_clip):
@@ -159,6 +162,11 @@ class PreprocessingSection(AccordionSection):
         self.right_panel.step_param_changed.emit(
             PipelineStep.PREPROCESSING.value, "normalization_enabled", checked
         )
+
+    def _on_gamma_slider_changed(self, int_val: int) -> None:
+        gamma_val = round(int_val / 100.0, 2)
+        self.gamma_value_label.setText(f"{gamma_val:.2f}")
+        self.right_panel.step_param_changed.emit(self.step.value, "gamma_correction_to_apply", gamma_val)
 
     def _widgets(self):
         defaults = PreprocParams()
@@ -314,21 +322,27 @@ class PreprocessingSection(AccordionSection):
         self.add_widget(VSeparator())
 
         # 5. Gamma
-        self.gamma_correction_to_apply = QDoubleSpinBox()
+        gamma_container = QWidget()
+        gamma_layout = QHBoxLayout(gamma_container)
+        gamma_layout.setContentsMargins(0, 0, 0, 0)
+        gamma_layout.setSpacing(8)
+
+        self.gamma_correction_to_apply = FrameSlider()
         self.gamma_correction_to_apply.setObjectName(names.PREPROC_GAMMA_FIELD)
-        self.gamma_correction_to_apply.setRange(0.1, 5.0)
-        self.gamma_correction_to_apply.setSingleStep(0.05)
-        self.gamma_correction_to_apply.setDecimals(2)
-        self.gamma_correction_to_apply.setValue(defaults.gamma_correction_to_apply)
-        self.gamma_correction_to_apply.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "gamma_correction_to_apply", val
-            )
-        )
+        self.gamma_correction_to_apply.setRange(10, 500)
+        self.gamma_correction_to_apply.setSingleStep(5)
+        self.gamma_correction_to_apply.setValue(int(round(defaults.gamma_correction_to_apply * 100.0)))
+        self.gamma_correction_to_apply.valueChanged.connect(self._on_gamma_slider_changed)
+
+        self.gamma_value_label = QLabel(f"{defaults.gamma_correction_to_apply:.2f}")
+        self.gamma_value_label.setFixedWidth(36)
+        self.gamma_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        gamma_layout.addWidget(self.gamma_correction_to_apply, stretch=1)
+        gamma_layout.addWidget(self.gamma_value_label)
+
         self.add_widget(
-            create_param_row(
-                texts.LABEL_PREPROC_GAMMA, self.gamma_correction_to_apply, texts.PREPROC_GAMMA_TOOLTIP
-            )
+            create_param_row(texts.LABEL_PREPROC_GAMMA, gamma_container, texts.PREPROC_GAMMA_TOOLTIP)
         )
 
         self.add_widget(VSeparator())

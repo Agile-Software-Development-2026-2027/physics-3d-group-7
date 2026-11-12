@@ -62,6 +62,14 @@ def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
     step, name, value = catcher.last()
     assert name == "clahe_enabled"
     assert value is True
+    catcher.clear()
+
+    section.gamma_correction_to_apply.setValue(185)
+    qtbot.wait(10)
+    step, name, value = catcher.last()
+    assert name == "gamma_correction_to_apply"
+    assert abs(value - 1.85) < 0.001
+    assert section.gamma_value_label.text() == "1.85"
 
 
 def test_set_params_without_emitting_signals(right_panel: RightPanel, qtbot):
