@@ -7,7 +7,7 @@ plan up to this, complete this), and a collapsible bottom statistics
 and diagnostics section.
 """
 
-from typing import Any
+from typing import Any, assert_never
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
 from PySide6.QtWidgets import (
@@ -33,6 +33,8 @@ from apkit4d.gui.theme import (
     ThemeColors,
 )
 from apkit4d.gui.views.panels.side_panel import SidePanel
+from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -192,6 +194,10 @@ class RightPanel(SidePanel):
         self._plan_buttons: dict[PipelineStep, QPushButton] = {}
         self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
+        # i need to build it here since as a local variable i couldn't access
+        # it from the main controller
+        self._roi_inspector: RoiInspector | None = None
+
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
             self._layout.takeAt(0)
@@ -253,6 +259,11 @@ class RightPanel(SidePanel):
     def bottom_stats(self) -> BottomStatsSection:
         """The collapsible statistics section at the bottom."""
         return self._bottom_stats
+
+    @property
+    def roi_inspector(self) -> RoiInspector | None:
+        """The ROI inspector widget."""
+        return self._roi_inspector
 
     def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
@@ -347,6 +358,7 @@ class RightPanel(SidePanel):
         self._play_buttons.clear()
         self._plan_buttons.clear()
         self._complete_buttons.clear()
+        self._roi_inspector = None
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -393,37 +405,34 @@ class RightPanel(SidePanel):
 
         for step, title in stage_definitions:
             sec = AccordionSection(title)
+
+            match step:
+                case PipelineStep.ROI:
+                    roi_inspector = RoiInspector()
+                    roi_inspector.setObjectName(names.ROI_INSPECTOR_STEP)
+                    sec.add_widget(roi_inspector)
+                    self._roi_inspector = roi_inspector
+                case PipelineStep.PREPROCESSING:
+                    # TODO: implement
+                    pass
+                case PipelineStep.DETECTION:
+                    detection_inspector = BlobDetectionInspector()
+                    detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    sec.add_widget(detection_inspector)
+                case PipelineStep.TRACKING:
+                    # TODO: implement
+                    pass
+                case PipelineStep.BATCH:
+                    # TODO: implement
+                    pass
+                case _:
+                    assert_never(step)
+
             play_btn = sec.enable_play_button(
                 callback=lambda s=step: self._on_play_clicked(s),
                 tooltip=texts.TOOLTIP_PLAY_STAGE,
             )
             self._play_buttons[step] = play_btn
-            self._plan_buttons[step] = play_btn
-
-            # Number field
-            param_row = QWidget()
-            param_layout = QHBoxLayout(param_row)
-            param_layout.setContentsMargins(0, 0, 0, 0)
-            param_label = QLabel(texts.LABEL_STAGE_VALUE)
-            num_box = QSpinBox()
-            num_box.setObjectName(names.STAGE_NUMBER_FIELD)
-            num_box.setRange(0, 1000)
-            num_box.setValue(10)
-            num_box.valueChanged.connect(
-                lambda val, s=step: self.step_param_changed.emit(s.value, "value", val)
-            )
-            param_layout.addWidget(param_label)
-            param_layout.addWidget(num_box)
-            sec.add_widget(param_row)
-            self._number_fields[step] = num_box
-
-            # Complete this button (testing helper)
-            complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
-            complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
-            complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-            complete_btn.clicked.connect(lambda _, s=step: self.complete_stage_requested.emit(s))
-            sec.add_widget(complete_btn)
-            self._complete_buttons[step] = complete_btn
 
             self._register_stage(step.value, sec)
 

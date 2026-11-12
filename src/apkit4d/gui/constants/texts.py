@@ -4,7 +4,10 @@ Every text shown to the user.
 Texts with `{...}` are templates: fill them with `str.format`.
 """
 
+from typing import assert_never
+
 from apkit4d.gui.constants.application import CZI_SUFFIX
+from apkit4d.gui.models.output_type import OutputType
 
 # center panel
 PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
@@ -38,6 +41,7 @@ TOOLTIP_PREVIOUS: str = "Previous frame"
 TOOLTIP_PLAY: str = "Play"
 TOOLTIP_PAUSE: str = "Pause"
 TOOLTIP_NEXT: str = "Next frame"
+HOVER_FRAME: str = "{frame}"  # in the bubble that follows the mouse on the slider
 COUNTER_SEPARATOR: str = " / "
 COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no recording
 
@@ -93,3 +97,104 @@ STATS_COMPLETED_PROGRESS_DETAILS: str = (
 )
 STATS_COMPLETED_SUMMARY: str = "Pipeline: Completed"
 STATS_COMPLETED_DETAILS: str = "All 5 pipeline stages are complete."
+
+
+# output types labels
+def get_output_type_label(output_type: OutputType) -> str:
+    match output_type:
+        case OutputType.PARQUET:
+            return "Parquet"
+        case OutputType.CSV:
+            return "CSV"
+        case _:
+            assert_never(output_type)
+
+
+# blob detection inspector
+INSPECTOR_LABEL_FRAME_RANGE: str = "Frame range"
+START_TIME_LABEL: str = "t₀"
+END_TIME_LABEL: str = "t₁"
+INSPECTOR_TOOLTIP_FRAME_RANGE: str = "The frames range used by batch and linking (0-based, inclusive)."
+
+INSPECTOR_SECTION_DETECTION_PARAMETERS: str = "Detection parameters"
+INSPECTOR_LABEL_DIAMETER_XY: str = "Diameter XY (µm)"
+INSPECTOR_TOOLTIP_DIAMETER_XY: str = "Expected cell diameter in X and Y."
+INSPECTOR_LABEL_DIAMETER_Z: str = "Diameter Z (µm)"
+INSPECTOR_TOOLTIP_DIAMETER_Z: str = (
+    "Expected extent in Z. Much larger than the real cell,\n because the axial PSF stretches it."
+)
+
+INSPECTOR_LABEL_DIAMETER_Z_EQUALS_XY: str = "Diameter Z = Diameter XY"
+INSPECTOR_TOOLTIP_DIAMETER_Z_EQUALS_XY: str = "Use a single diameter for all axes."
+INSPECTOR_LABEL_LOG_THRESHOLD: str = "LoG threshold"
+INSPECTOR_TOOLTIP_LOG_THRESHOLD: str = "Minimum LoG response for a candidate to count. Higher = fewer blobs."
+INSPECTOR_LABEL_SEED_SEPARATION: str = "Seed separation (× diameter)"
+INSPECTOR_TOOLTIP_SEED_SEPARATION: str = (
+    "Minimum distance between two candidates,\n as a fraction of the diameter."
+)
+INSPECTOR_LABEL_BOUNDARY: str = "Boundary (× peak)"
+INSPECTOR_TOOLTIP_BOUNDARY: str = (
+    "Each region keeps the voxels above this fraction of its own peak\n. Lower = larger blobs."
+)
+INSPECTOR_LABEL_MIN_VOLUME: str = "Min volume (µm³)"
+INSPECTOR_TOOLTIP_MIN_VOLUME: str = "Discard blobs smaller than this."
+INSPECTOR_LABEL_MAX_VOLUME: str = "Max volume (µm³)"
+INSPECTOR_TOOLTIP_MAX_VOLUME: str = "Discard blobs larger than this."
+
+INSPECTOR_LABEL_UPDATE_ON_CHANGE: str = "Update blobs on every change"
+INSPECTOR_TOOLTIP_UPDATE_ON_CHANGE: str = (
+    "Compute blobs on every parameter or frame change,\n even before pressing Find blobs."
+)
+INSPECTOR_LABEL_SHOW_SEGMENTS: str = "Show segments"
+INSPECTOR_TOOLTIP_SHOW_SEGMENTS: str = (
+    "Add a segments layer with the watershed regions.\n Toggling it recomputes the blobs."
+)
+INSPECTOR_BUTTON_FIND_BLOBS: str = "Find blobs (current frame)"
+INSPECTOR_TOOLTIP_FIND_BLOBS: str = (
+    "Run preprocessing and blob detection on the current\n "
+    "frame, using the current ROI and parameters.\n "
+    "Nothing is saved to file."
+)
+INSPECTOR_STATUS_NO_BLOBS: str = "No blobs detected"
+
+INSPECTOR_SECTION_BATCH_PROCESSING: str = "Batch Processing"
+INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER: str = "Choose output folder"
+INSPECTOR_DIALOG_OUTPUT_FOLDER: str = "Choose output folder"
+INSPECTOR_LABEL_OUTPUT_FOLDER: str = "Output folder"
+INSPECTOR_LABEL_WORKERS: str = "Workers"
+INSPECTOR_LABEL_FORMAT: str = "Format"
+INSPECTOR_BUTTON_RUN_BATCH: str = "Run batch t₀..t₁"
+INSPECTOR_TOOLTIP_RUN_BATCH: str = (
+    "Run detection on every frame from t0 to t1,\n "
+    "using the current ROI and detection parameters.\n "
+    "Runs in a separate process."
+)
+
+
+# roi inspector
+INSPECTOR_SECTION_ROI_BOUNDS: str = "Region of Interest (µm)"
+INSPECTOR_LABEL_ROI_X: str = "X range (µm)"
+INSPECTOR_LABEL_ROI_Y: str = "Y range (µm)"
+INSPECTOR_LABEL_ROI_Z: str = "Z range (µm)"
+ROI_MIN_LABEL: str = "min"
+ROI_MAX_LABEL: str = "max"
+INSPECTOR_TOOLTIP_ROI_BOUNDS: str = "Spatial bounds of the Region of Interest in micrometers."
+INSPECTOR_BUTTON_SELECT_ROI: str = "Select ROI on 3D View"
+INSPECTOR_TOOLTIP_SELECT_ROI: str = "Click and drag directly on the 3D volume to draw a Region of Interest."
+INSPECTOR_BUTTON_ACCEPT_ROI: str = "Accept"
+INSPECTOR_TOOLTIP_ACCEPT_ROI: str = "Confirm the selected Region of Interest and crop the volume."
+INSPECTOR_BUTTON_CANCEL_ROI: str = "Cancel"
+INSPECTOR_TOOLTIP_CANCEL_ROI: str = "Cancel ROI selection and discard preview changes."
+INSPECTOR_BUTTON_RESET_ROI: str = "Reset to Full Volume"
+INSPECTOR_TOOLTIP_RESET_ROI: str = "Remove cropping and restore the full 3D volume."
+INSPECTOR_STATUS_ROI_FULL: str = "Full volume active (no ROI cropping)"
+INSPECTOR_STATUS_ROI_SELECTING: str = "Click and drag on the 3D volume, or adjust coordinates..."
+INSPECTOR_STATUS_ROI_ACTIVE: str = (
+    "Active ROI: X=[{x0:.1f}, {x1:.1f}] Y=[{y0:.1f}, {y1:.1f}] Z=[{z0:.1f}, {z1:.1f}] µm"
+)
+INSPECTOR_BUTTON_UNDO_ROI: str = "Undo Last Crop"
+INSPECTOR_TOOLTIP_UNDO_ROI: str = "Revert to the previous Region of Interest before the last accepted crop."
+INSPECTOR_BUTTON_SAVE_ROI: str = "Save ROI"
+INSPECTOR_TOOLTIP_SAVE_ROI: str = (
+    "Save the current Region of Interest in a certain range of frames to a file."
+)
