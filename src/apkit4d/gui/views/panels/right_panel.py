@@ -34,6 +34,7 @@ from apkit4d.gui.theme import (
 )
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -193,6 +194,10 @@ class RightPanel(SidePanel):
         self._plan_buttons: dict[PipelineStep, QPushButton] = {}
         self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
+        # i need to build it here since as a local variable i couldn't access
+        # it from the main controller
+        self._roi_inspector: RoiInspector | None = None
+
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
             self._layout.takeAt(0)
@@ -254,6 +259,11 @@ class RightPanel(SidePanel):
     def bottom_stats(self) -> BottomStatsSection:
         """The collapsible statistics section at the bottom."""
         return self._bottom_stats
+
+    @property
+    def roi_inspector(self) -> RoiInspector | None:
+        """The ROI inspector widget."""
+        return self._roi_inspector
 
     def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
@@ -348,6 +358,7 @@ class RightPanel(SidePanel):
         self._play_buttons.clear()
         self._plan_buttons.clear()
         self._complete_buttons.clear()
+        self._roi_inspector = None
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -397,8 +408,10 @@ class RightPanel(SidePanel):
 
             match step:
                 case PipelineStep.ROI:
-                    # TODO: implement
-                    pass
+                    roi_inspector = RoiInspector()
+                    roi_inspector.setObjectName(names.ROI_INSPECTOR_STEP)
+                    sec.add_widget(roi_inspector)
+                    self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
                     # TODO: implement
                     pass

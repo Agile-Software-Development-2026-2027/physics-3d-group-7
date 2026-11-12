@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 
+from apkit4d.roi import RegionOfInterest
 from apkit4d.visualization.viewport import (
     DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,
@@ -629,6 +630,294 @@ class TestViewportRoiDragSelection:
         # Cancel must turn off the widget
         viewport.cancel_roi_selection()
         assert viewport._roi_box_widget.GetEnabled() == 0
+
+    def test_accept_roi_selection_emits_signal_and_cleans_up_preview(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        started_calls = []
+        updated_rois = []
+        accepted_rois = []
+
+        viewport.roi_selection_started.connect(lambda: started_calls.append(True))
+        viewport.roi_updated.connect(lambda r: updated_rois.append(r))
+        viewport.roi_accepted.connect(lambda r: accepted_rois.append(r))
+
+        # Calling accept when not in EDITING mode should return None and emit nothing
+        assert viewport.accept_roi_selection() is None
+        assert len(accepted_rois) == 0
+
+        viewport.start_roi_selection()
+        assert len(started_calls) == 1
+
+        renderer = viewport.plotter.renderer
+
+        def world_to_px(wx, wy, wz):
+            renderer.SetWorldPoint(wx, wy, wz, 1.0)
+            renderer.WorldToDisplay()
+            dx, dy, _ = renderer.GetDisplayPoint()
+            return int(round(dx)), int(round(dy))
+
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(*world_to_px(1.0, 1.0, 4.0))
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        iren.SetEventPosition(*world_to_px(3.0, 3.0, 4.0))
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+
+        assert len(updated_rois) >= 1
+
+        # Adjust bounds via the box widget representation before accepting
+        viewport._roi_box_rep.PlaceWidget([0.5, 3.5, 1.0, 3.0, 0.5, 2.5])
+        viewport._on_box_widget_interaction(None, "InteractionEvent")
+
+        # Accept the ROI
+        final_roi = viewport.accept_roi_selection()
+        assert final_roi is not None
+        assert len(accepted_rois) == 1
+        assert accepted_rois[0] == final_roi
+        np.testing.assert_allclose(final_roi.bounds, (0.5, 3.5, 1.0, 3.0, 0.5, 2.5))
+
+        # Verify state is back to INACTIVE and preview/widget are turned off
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport._roi_box_widget.GetEnabled() == 0
+        assert "roi_preview" not in viewport.plotter.actors
+
+    def test_set_roi_preview_and_cancel_signal(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        cancelled_calls = []
+        viewport.roi_cancelled.connect(lambda: cancelled_calls.append(True))
+
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport.current_roi == custom_roi
+        assert viewport._roi_box_widget is not None
+        assert viewport._roi_box_widget.GetEnabled() == 1
+        assert "roi_preview" in viewport.plotter.actors
+
+        viewport.cancel_roi_selection()
+        assert len(cancelled_calls) == 1
+        assert viewport.roi_mode == RoiMode.INACTIVE
+
+    def test_click_outside_volume_stays_waiting_for_first_point(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+        # Click at pixel (1, 1) in the corner far outside the volume
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(1, 1)
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+        assert viewport.current_roi is None
+
+    def test_quick_click_without_mouse_move_creates_valid_roi_on_release(self, viewport):
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+        viewport.start_roi_selection()
+
+        renderer = viewport.plotter.renderer
+        renderer.SetWorldPoint(2.0, 2.0, 4.0, 1.0)
+        renderer.WorldToDisplay()
+        dx, dy, _ = renderer.GetDisplayPoint()
+
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(int(round(dx)), int(round(dy)))
+
+        # Press and immediately release without calling _on_mouse_move
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.roi_mode == RoiMode.DRAGGING
+        assert viewport.current_roi is None
+
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport.current_roi is not None
+        assert "roi_preview" in viewport.plotter.actors
+        assert viewport._roi_box_widget is not None
+        assert viewport._roi_box_widget.GetEnabled() == 1
+
+    def test_set_roi_preview_ignored_without_volume(self, viewport):
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+
+    def test_clear_resets_roi_editing_state_and_disables_widget(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)
+        custom_roi = RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=0.5, z_max=2.5)
+        viewport.set_roi_preview(custom_roi)
+        assert viewport.roi_mode == RoiMode.EDITING
+        assert viewport._roi_box_widget.GetEnabled() == 1
+
+        viewport.clear()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert viewport.current_roi is None
+        assert viewport._roi_box_widget.GetEnabled() == 0
+
+    @staticmethod
+    def _drag_box(viewport, dx=0.0, dy=0.0):
+        """Simulates one mouse move that translates the whole box by (dx, dy), like VTK does:
+        the delta is added to the bounds the widget holds right now."""
+        b = viewport._roi_box_rep.GetBounds()
+        viewport._roi_box_rep.PlaceWidget([b[0] + dx, b[1] + dx, b[2] + dy, b[3] + dy, b[4], b[5]])
+        viewport._on_box_widget_interaction(None, "InteractionEvent")
+
+    @staticmethod
+    def _box_with_x_between_1_and_3(viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)  # volume bounds are 0..4 on every axis
+        viewport.set_roi_preview(
+            RegionOfInterest(x_min=1.0, x_max=3.0, y_min=1.0, y_max=3.0, z_min=1.0, z_max=3.0)
+        )
+        viewport._on_box_widget_start_interaction(None, "StartInteractionEvent")
+
+    def test_pushing_box_against_edge_stops_it_without_shrinking(self, viewport):
+        self._box_with_x_between_1_and_3(viewport)
+
+        for _ in range(5):  # the cursor keeps going far beyond the edge
+            self._drag_box(viewport, dx=1.0)
+
+        x_min, x_max, *_ = viewport.current_roi.bounds
+        assert (x_min, x_max) == pytest.approx((2.0, 4.0))  # same width 2, stopped at the edge
+        np.testing.assert_allclose(viewport._roi_box_rep.GetBounds()[0:2], (2.0, 4.0))
+
+    def test_box_does_not_move_back_until_cursor_is_inside_again(self, viewport):
+        self._box_with_x_between_1_and_3(viewport)
+
+        for _ in range(3):  # the virtual box goes to x = (4, 6), the shown one stops at (2, 4)
+            self._drag_box(viewport, dx=1.0)
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((2.0, 4.0))
+
+        self._drag_box(viewport, dx=-1.0)  # virtual (3, 5): still beyond the edge
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((2.0, 4.0))
+
+        self._drag_box(viewport, dx=-1.0)  # virtual (2, 4): the cursor is exactly at the edge
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((2.0, 4.0))
+
+        self._drag_box(viewport, dx=-1.0)  # virtual (1, 3): the box follows again
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((1.0, 3.0))
+
+    def test_box_slides_along_edge_when_cursor_moves_on_the_other_axis(self, viewport):
+        self._box_with_x_between_1_and_3(viewport)
+
+        self._drag_box(viewport, dx=3.0)  # pushed against the x edge, virtual x = (4, 6)
+        self._drag_box(viewport, dy=0.5)  # moving up while still outside on x
+
+        x_min, x_max, y_min, y_max, *_ = viewport.current_roi.bounds
+        assert (x_min, x_max) == pytest.approx((2.0, 4.0))  # still stopped on x
+        assert (y_min, y_max) == pytest.approx((1.5, 3.5))  # but it follows on y
+
+    def test_new_drag_starts_from_the_displayed_box(self, viewport):
+        self._box_with_x_between_1_and_3(viewport)
+
+        for _ in range(3):  # virtual (4, 6), shown (2, 4)
+            self._drag_box(viewport, dx=1.0)
+        viewport._on_box_widget_end_interaction(None, "EndInteractionEvent")
+
+        # new drag: the virtual box is forgotten, so it moves back immediately
+        viewport._on_box_widget_start_interaction(None, "StartInteractionEvent")
+        self._drag_box(viewport, dx=-1.0)
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((1.0, 3.0))
+
+    def test_resizing_a_face_past_edge_stops_at_edge_and_waits_for_cursor(self, viewport):
+        self._box_with_x_between_1_and_3(viewport)
+
+        def drag_max_x_face(dx):
+            b = viewport._roi_box_rep.GetBounds()
+            viewport._roi_box_rep.PlaceWidget([b[0], b[1] + dx, b[2], b[3], b[4], b[5]])
+            viewport._on_box_widget_interaction(None, "InteractionEvent")
+
+        drag_max_x_face(+3.0)  # virtual max x = 6, the face stops at 4
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((1.0, 4.0))
+
+        drag_max_x_face(-1.0)  # virtual max x = 5: the cursor is still outside
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((1.0, 4.0))
+
+        drag_max_x_face(-2.0)  # virtual max x = 3: the face follows again
+        assert viewport.current_roi.bounds[0:2] == pytest.approx((1.0, 3.0))
+
+
+VOLUME = (0.0, 4.0, 0.0, 4.0, 0.0, 4.0)
+
+
+class TestBoxMovementHelpers:
+    def test_pure_translation_is_detected(self):
+        old = (1.0, 3.0, 1.0, 3.0, 1.0, 3.0)
+        new = (2.0, 4.0, 1.5, 3.5, 1.0, 3.0)  # moved on x and y, same sizes
+
+        assert Viewport._is_pure_translation(new, old, tol=1e-6)
+
+    def test_resize_of_one_face_is_not_a_translation(self):
+        old = (1.0, 3.0, 1.0, 3.0, 1.0, 3.0)
+        new = (1.0, 3.5, 1.0, 3.0, 1.0, 3.0)  # only x max moved
+
+        assert not Viewport._is_pure_translation(new, old, tol=1e-6)
+
+    def test_size_difference_below_tolerance_counts_as_translation(self):
+        old = (1.0, 3.0, 1.0, 3.0, 1.0, 3.0)
+        new = (2.0, 4.0 + 1e-9, 1.0, 3.0, 1.0, 3.0)  # float noise
+
+        assert Viewport._is_pure_translation(new, old, tol=1e-6)
+
+    def test_slide_leaves_box_inside_volume_unchanged(self):
+        virtual = (1.5, 3.5, 1.0, 3.0, 1.0, 3.0)
+
+        result = Viewport._slide_inside_volume(virtual, (2.0, 2.0, 2.0), VOLUME)
+
+        np.testing.assert_allclose(result, virtual)
+
+    def test_slide_past_max_edge_stops_at_edge_keeping_size(self):
+        virtual = (3.0, 5.0, 1.0, 3.0, 1.0, 3.0)  # x sticks out by 1
+
+        result = Viewport._slide_inside_volume(virtual, (2.0, 2.0, 2.0), VOLUME)
+
+        np.testing.assert_allclose(result, (2.0, 4.0, 1.0, 3.0, 1.0, 3.0))
+
+    def test_slide_past_min_edge_stops_at_edge_keeping_size(self):
+        virtual = (-1.0, 1.0, 1.0, 3.0, 1.0, 3.0)
+
+        result = Viewport._slide_inside_volume(virtual, (2.0, 2.0, 2.0), VOLUME)
+
+        np.testing.assert_allclose(result, (0.0, 2.0, 1.0, 3.0, 1.0, 3.0))
+
+    def test_slide_is_independent_on_each_axis(self):
+        # far outside on x, inside on y: x stops at the edge, y follows
+        virtual = (50.0, 52.0, 1.5, 3.5, 1.0, 3.0)
+
+        result = Viewport._slide_inside_volume(virtual, (2.0, 2.0, 2.0), VOLUME)
+
+        np.testing.assert_allclose(result, (2.0, 4.0, 1.5, 3.5, 1.0, 3.0))
+
+    def test_slide_box_as_big_as_volume_cannot_move(self):
+        virtual = (1.0, 5.0, 0.0, 4.0, 0.0, 4.0)
+
+        result = Viewport._slide_inside_volume(virtual, (4.0, 4.0, 4.0), VOLUME)
+
+        np.testing.assert_allclose(result, VOLUME)
 
 
 def lut_colors(viewport) -> np.ndarray:
