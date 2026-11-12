@@ -165,7 +165,6 @@ class VolumeController(QObject):
     def _on_read(self, _task_id: int, volume: NDArray) -> None:
         generation, frame = self._finish_reading()
         if generation == self._generation:
-            # FIXME: see what the PipelineController does, move it there
             self._current_frame = frame
             self._current_raw_volume = volume
             if self._preproc_params is not None:

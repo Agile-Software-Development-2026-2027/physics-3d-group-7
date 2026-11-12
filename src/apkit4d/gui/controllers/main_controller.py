@@ -15,9 +15,10 @@ from PySide6.QtWidgets import QApplication
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
+from apkit4d.gui.controllers.preprocessing_controller import PreprocessingController
 from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeView
-from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
+from apkit4d.gui.models.pipeline_model import PipelineModel
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.czi import CziSource
 
@@ -53,12 +54,15 @@ class MainController(QObject):
         self._pipeline_controller = PipelineController(self._pipeline_model, window.right_panel, self)
 
         self._volume_controller = VolumeController(window, view, self) if view is not None else None
+        self._preprocessing_controller: PreprocessingController | None = None
         if self._volume_controller is not None:
             # the volume controller must know the new recording before the playback goes back to frame 0
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
-            self._pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+            self._preprocessing_controller = PreprocessingController(
+                self._pipeline_model, self._volume_controller, self
+            )
         self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
@@ -99,6 +103,11 @@ class MainController(QObject):
         """Controller of the analysis pipeline."""
         return self._pipeline_controller
 
+    @property
+    def preprocessing_controller(self) -> PreprocessingController | None:
+        """Controller that bridges preprocessing params to the live 3D preview."""
+        return self._preprocessing_controller
+
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller
         playback.set_playing(False)
@@ -108,7 +117,3 @@ class MainController(QObject):
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error
-
-    def _on_step_params_changed(self, step: PipelineStep) -> None:
-        if step == PipelineStep.PREPROCESSING and self._volume_controller is not None:
-            self._volume_controller.apply_preproc_params(self._pipeline_model.get_preproc_params())
