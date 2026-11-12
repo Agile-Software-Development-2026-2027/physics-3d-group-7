@@ -57,7 +57,7 @@ class LeftPanel(SidePanel):
         self._colormap_combo.addItems(list(view_style.COLORMAPS))
         self._colormap_combo.currentTextChanged.connect(self.colormap_chosen)
 
-        self._opacity_slider = FrameSlider()
+        self._opacity_slider = FrameSlider(preview=False)  # its bubble would show frame numbers
         self._opacity_slider.setObjectName(names.OPACITY_SLIDER)
         self._opacity_slider.setRange(view_style.OPACITY_MIN_PERCENT, view_style.OPACITY_MAX_PERCENT)
         self._opacity_slider.setValue(view_style.OPACITY_DEFAULT_PERCENT)

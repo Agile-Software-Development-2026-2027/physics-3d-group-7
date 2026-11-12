@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog, QComboBox, QLabel, QPushButton, QWidget
 
-from apkit4d.gui.constants import names, texts, view_style
+from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
@@ -127,6 +127,11 @@ def test_moving_the_opacity_slider_emits_the_factor_and_shows_the_percent(panel,
     assert blocker.args == [2.5]
     assert panel.volume_opacity == 2.5
     assert panel.findChild(QLabel, names.OPACITY_VALUE).text() == texts.OPACITY_VALUE.format(percent=250)
+
+
+def test_opacity_slider_has_no_frame_preview(panel) -> None:
+    slider = panel.findChild(FrameSlider, names.OPACITY_SLIDER)
+    assert slider.height() == appearance.SLIDER_HEIGHT  # no room above the groove for the bubble
 
 
 @pytest.mark.parametrize(

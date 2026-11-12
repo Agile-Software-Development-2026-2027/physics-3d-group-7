@@ -28,12 +28,15 @@ class FrameSlider(QSlider):
 
     Args:
         parent: Qt parent.
+        preview: Whether the marker and the bubble follow the mouse. Without them the slider keeps no
+            room above the groove, and it can choose values that are not frames.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, preview: bool = True) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
-        self.setFixedHeight(appearance.SLIDER_HEADROOM + appearance.SLIDER_HEIGHT)
-        self.setMouseTracking(True)  # to follow the mouse also when no button is pressed
+        self._preview = preview
+        self.setFixedHeight(self._headroom() + appearance.SLIDER_HEIGHT)
+        self.setMouseTracking(preview)  # to follow the mouse also when no button is pressed
         self._hover: int | None = None
         self._bubble_font = make_bubble_font(self.font())
 
@@ -118,6 +121,8 @@ class FrameSlider(QSlider):
 
     def _follow(self, x: float) -> None:
         """Show the marker and the bubble for the frame under the horizontal position `x`."""
+        if not self._preview:
+            return
         frame = self._value_at(x)
         if frame != self._hover:
             self._hover = frame
@@ -142,7 +147,11 @@ class FrameSlider(QSlider):
 
     def _center_y(self) -> float:
         """Vertical position of the middle of the groove, under the room kept for the bubble."""
-        return appearance.SLIDER_HEADROOM + appearance.SLIDER_HEIGHT / 2
+        return self._headroom() + appearance.SLIDER_HEIGHT / 2
+
+    def _headroom(self) -> int:
+        """Room kept above the groove for the bubble, none without the preview."""
+        return appearance.SLIDER_HEADROOM if self._preview else 0
 
     def _span(self) -> int:
         return self.width() - 2 * appearance.SLIDER_PADDING
