@@ -192,3 +192,44 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     qtbot.waitUntil(lambda: len(captured) == 1, timeout=5000)
     # Preprocessing must have been called with the cropped volume
     assert captured[0].shape != (8, 16, 16)
+
+
+def test_suggest_intensity_window_returns_none_when_voxel_invalid(qtbot) -> None:
+    """When voxel dimensions are invalid (_usable is False), no window should be suggested."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    view = FakeVolumeView()
+    controller = VolumeController(window, view)
+
+    source = FakeSource()
+    source.info.voxel = (0.0, 1.0, 1.0)
+    controller.set_source(Path("test.czi"), source)
+
+    assert controller.suggest_intensity_window() is None
+
+
+def test_suggest_intensity_window_after_clearing_roi(qtbot) -> None:
+    """Clearing the ROI restores window calculation over the full volume."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    view = FakeVolumeView()
+    controller = VolumeController(window, view)
+
+    data = np.full((8, 16, 16), 10_000.0, dtype=np.float32)
+    data[0:4, 0:8, 0:8] = np.linspace(50.0, 200.0, 4 * 8 * 8, dtype=np.float32).reshape(4, 8, 8)
+
+    source = FakeSource(data=data)
+    controller.set_source(Path("test.czi"), source)
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    roi = RegionOfInterest(x_min=0.0, x_max=7.0, y_min=0.0, y_max=7.0, z_min=0.0, z_max=3.0)
+    controller.set_roi(roi)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+    assert controller.suggest_intensity_window()[1] <= 200.0
+
+    # Reset ROI to full volume
+    controller.set_roi(None)
+    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
+    full_window = controller.suggest_intensity_window()
+    assert full_window is not None
+    assert full_window[1] == 10_000.0

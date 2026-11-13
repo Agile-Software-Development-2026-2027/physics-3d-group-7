@@ -9,7 +9,7 @@ orchestrates the analysis pipeline.
 """
 
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
@@ -24,6 +24,7 @@ from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController, VolumeView
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
 from apkit4d.gui.views.main_window import MainWindow
+from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
 from apkit4d.roi import Bounds6D, RegionOfInterest
 
@@ -69,6 +70,11 @@ class MainController(QObject):
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+
+            if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
+                cast(PreprocessingSection, preproc_sec).suggest_window_clicked.connect(
+                    self._on_suggest_window_clicked
+                )
 
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
@@ -359,3 +365,13 @@ class MainController(QObject):
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         if self._volume_controller is not None and step == PipelineStep.PREPROCESSING:
             self._volume_controller.apply_preproc_params(self.pipeline_model.get_preproc_params())
+
+    def _on_suggest_window_clicked(self) -> None:
+        if self._volume_controller is None:
+            return
+        window = self._volume_controller.suggest_intensity_window()
+        if window is None:
+            return
+        lo, hi = window
+        if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
+            cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)

@@ -29,7 +29,7 @@ from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.image import Image
-from apkit4d.preprocessing import PreprocParams, preprocess
+from apkit4d.preprocessing import PreprocParams, preprocess, suggest_window
 from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.visualization.data_mapper import create_volume_grid
 
@@ -316,3 +316,9 @@ class VolumeController(QObject):
         if self._current_full_volume is None or not self._usable:
             return
         self._apply_roi_and_show(self._current_full_volume)
+
+    def suggest_intensity_window(self) -> tuple[float, float] | None:
+        if self._current_roi_volume is None or not self._usable:
+            return None
+        lo, hi = suggest_window(self._current_roi_volume)
+        return float(lo), float(hi)

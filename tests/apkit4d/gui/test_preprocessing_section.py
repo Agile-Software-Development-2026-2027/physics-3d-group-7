@@ -1,6 +1,8 @@
+import numpy as np
 import pytest
 
 from apkit4d.gui.controllers.main_controller import MainController
+from apkit4d.gui.controllers.volume_controller import VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
@@ -28,6 +30,7 @@ def right_panel(qtbot):
     rp = RightPanel()
     qtbot.addWidget(rp)
     rp.show()
+    qtbot.wait(250)  # let initial DebouncedSlider(200) timer settle
     return rp
 
 
@@ -38,7 +41,6 @@ def test_preproc_defaults_match_preproc_params_dataclass_default(right_panel):
 
 
 def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
-
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
     catcher = SignalCatcher(right_panel)
 
@@ -111,3 +113,60 @@ def test_preproc_section_changes_are_propagated_through_the_main_controller(qtbo
 
     model_params = controller.pipeline_model.get_preproc_params()
     assert abs(model_params.denoise_xy_scale_um - 4.5) < 0.01
+
+
+def test_suggest_window_button_enabled_only_with_normalization(right_panel: RightPanel) -> None:
+    section = right_panel.get_section(PipelineStep.PREPROCESSING)
+
+    assert not section.normalization_enabled.isChecked()
+    assert not section.suggest_window_btn.isEnabled()
+
+    section.normalization_enabled.setChecked(True)
+    assert section.suggest_window_btn.isEnabled()
+
+    section.normalization_enabled.setChecked(False)
+    assert not section.suggest_window_btn.isEnabled()
+
+
+def test_set_intensity_window_updates_spinboxes_and_emits_params(right_panel: RightPanel) -> None:
+    section = right_panel.get_section(PipelineStep.PREPROCESSING)
+    catcher = SignalCatcher(right_panel)
+
+    section.set_intensity_window(42.5, 875.0)
+
+    assert section.lowest_instensity.value() == pytest.approx(42.5)
+    assert section.highest_intensity.value() == pytest.approx(875.0)
+    assert (PipelineStep.PREPROCESSING.value, "lowest_intensity", 42.5) in catcher.signals
+    assert (PipelineStep.PREPROCESSING.value, "highest_intensity", 875.0) in catcher.signals
+
+
+def test_clicking_suggest_window_populates_ui_and_updates_model(qtbot, qapp) -> None:
+    class DummyVolumeView:
+        def show_volume(self, grid, reset_camera: bool = True, force_update: bool = False) -> None:
+            pass
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp, window)
+
+    vol_ctrl = VolumeController(window, DummyVolumeView(), controller)
+    controller._volume_controller = vol_ctrl
+
+    section = window.right_panel.get_section(PipelineStep.PREPROCESSING)
+    section.suggest_window_clicked.connect(controller._on_suggest_window_clicked)
+
+    vol = np.arange(1, 1001, dtype=np.uint16).reshape(10, 10, 10)
+    vol_ctrl._usable = True
+    vol_ctrl._current_roi_volume = vol
+
+    section.normalization_enabled.setChecked(True)
+    section.suggest_window_btn.click()
+
+    lo = section.lowest_instensity.value()
+    hi = section.highest_intensity.value()
+    assert lo == pytest.approx(10.99, rel=1e-2)
+    assert hi == pytest.approx(999.001, rel=1e-2)
+
+    params = controller.pipeline_model.get_preproc_params()
+    assert params.lowest_intensity == pytest.approx(lo)
+    assert params.highest_intensity == pytest.approx(hi)
