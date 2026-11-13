@@ -43,7 +43,7 @@ def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
     catcher = SignalCatcher(right_panel)
 
     section.denoise_xy_box.setValue(7.3)
-    qtbot.wait(10)
+    qtbot.waitUntil(lambda: catcher.last() is not None, timeout=2000)
     step, name, value = catcher.last()
     assert step == PipelineStep.PREPROCESSING.value
     assert name == "denoise_xy_scale_um"
@@ -51,7 +51,7 @@ def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
     catcher.clear()
 
     section.bg_mode.setCurrentText(BgMode.PERCENTILE_PER_SLICE.value)
-    qtbot.wait(10)
+    qtbot.waitUntil(lambda: catcher.last() is not None, timeout=2000)
     step, name, value = catcher.last()
     assert name == "bg_mode"
     assert isinstance(value, BgMode) and value == BgMode.PERCENTILE_PER_SLICE
