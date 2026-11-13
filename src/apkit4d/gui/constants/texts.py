@@ -41,6 +41,7 @@ TOOLTIP_PREVIOUS: str = "Previous frame"
 TOOLTIP_PLAY: str = "Play"
 TOOLTIP_PAUSE: str = "Pause"
 TOOLTIP_NEXT: str = "Next frame"
+HOVER_FRAME: str = "{frame}"  # in the bubble that follows the mouse on the slider
 COUNTER_SEPARATOR: str = " / "
 COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no recording
 
