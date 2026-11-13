@@ -48,6 +48,7 @@ class PreprocParams:
     bg_sigma_xy_um: float = 60.0
 
     # Intensity window for normalization. Narrower -> more contrast
+    normalization_enabled: bool = False
     lowest_intensity: float = 0.0
     highest_intensity: float = 1000.0
 
@@ -145,14 +146,15 @@ def subtract_background(
 def normalize_intensity(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
     """Normalizes intensities in [0.0, 1.0]"""
 
-    span = max(p.highest_intensity - p.lowest_intensity, 1e-6)
-    volume -= p.lowest_intensity
-    volume /= span
+    np.subtract(volume, np.float32(p.lowest_intensity), out=volume)
+    np.divide(
+        volume, np.float32(max(float(p.highest_intensity) - float(p.lowest_intensity), 1e-6)), out=volume
+    )
     return np.clip(volume, 0.0, 1.0, dtype=np.float32, out=volume)
 
 
 def logarithmic_compression(volume: Image[np.float32]) -> Image[np.float32]:
-    """Highlights dim details and dims bright peaks."""
+    """Highlights dim details and dims bright peaks"""
 
     k = 1000.0
     np.multiply(volume, k, out=volume)
@@ -212,11 +214,12 @@ def preprocess(
     volume = vol_roi.astype(np.float32, copy=True)
     out = denoise(volume, p, voxel_dim)
     out = subtract_background(out, p, voxel_dim)
-    out = normalize_intensity(out, p)
+    if p.normalization_enabled:
+        out = normalize_intensity(out, p)
     if p.logarithmic_compression_enabled:
         out = logarithmic_compression(out)
     out = gamma_correction(out, p)
-    if p.clahe_enabled:
+    if p.normalization_enabled and p.clahe_enabled:
         out = clahe(out, p, voxel_dim)
     return out
 

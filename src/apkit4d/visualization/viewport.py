@@ -175,24 +175,30 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
-    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True) -> None:
+    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False) -> None:
         """
         This function is used to visualize the 3D data in the viewport.
 
         Parameters:
             grid (pv.ImageData): PyVista ImageData object that we mapped in the data_mapper.py file.
-            it contains the 3D data that we want to visualize.
+                                 it contains the 3D data that we want to visualize.
+
+            force_update (bool): force a full copy of the PyVista grid. It is slow. Use it when the
+                                 intensity between two frame is widely different. Otherwise the view
+                                 will not update correctly.
 
         Returns:
             None
         """
+
         if grid is None or grid.n_points == 0:
             return
 
         # with this if we want to avoid to recreate the volume when we will change frames
         # we just update the values
         if (
-            self._volume_grid is not None
+            not force_update
+            and self._volume_grid is not None
             and self._volume_grid.dimensions == grid.dimensions
             and self._volume_grid.spacing == grid.spacing
             and self._volume_grid.origin == grid.origin

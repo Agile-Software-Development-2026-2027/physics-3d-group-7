@@ -2,9 +2,11 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 
+from apkit4d.image import Image
+
 
 def create_volume_grid(
-    img_array: np.ndarray,
+    img_array: Image[np.uint16],
     voxel_size: tuple[float, float, float],
     offset: tuple[float, float, float] = (0, 0, 0),
 ) -> pv.ImageData:
@@ -27,8 +29,11 @@ def create_volume_grid(
     if img_array is None or img_array.size == 0 or img_array.ndim != 3:
         return pv.ImageData()
 
+    # the intensities are read as uint16 from the CZI, we need them as float32
+    img_float = img_array.astype(np.float32, copy=False)
+
     # transpose the array to match PyVista's expected order
-    img_xyz = np.transpose(img_array, (2, 1, 0))
+    img_xyz = np.transpose(img_float, (2, 1, 0))
 
     # transpose the voxel size to match the order of the transposed array
     spacing_xyz = (voxel_size[2], voxel_size[1], voxel_size[0])
