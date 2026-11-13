@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
+from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
@@ -27,7 +28,7 @@ from apkit4d.io.czi import CziSource
 from apkit4d.roi import Bounds6D, RegionOfInterest
 
 
-class SceneView(VolumeView, AppearanceView, Protocol):
+class SceneView(VolumeView, AppearanceView, BlobView, Protocol):
     """What the controllers need from the 3D view: showing the frames and changing how they look."""
 
 
@@ -87,6 +88,14 @@ class MainController(QObject):
         self._full_volume_bounds: Bounds6D | None = None
         self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
+
+        if view is not None:
+            self._blob_controller = BlobDetectionController(
+                window.right_panel.detection_inspector, view, parent=self
+            )
+            self.file_controller.loaded.connect(self._blob_controller.set_source)
+            self.file_controller.closed.connect(self._blob_controller.clear_source)
+            self.playback_controller.frame_changed.connect(self._blob_controller.on_set_frame)
 
     @property
     def file_controller(self) -> FileController:

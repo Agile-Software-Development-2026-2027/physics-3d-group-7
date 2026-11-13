@@ -75,6 +75,78 @@ class BlobDetectionInspector(QWidget):
         self._build_batch_processing_section()
         self._build_detection_parameters_section()
 
+    @property
+    def diameter_xy(self):
+        return self._diameter_xy.value()
+
+    @diameter_xy.setter
+    def diameter_xy(self, value):
+        self._diameter_xy.setValue(value)
+
+    @property
+    def diameter_z(self):
+        return self._diameter_z.value()
+
+    @diameter_z.setter
+    def diameter_z(self, value):
+        self._diameter_z.setValue(value)
+
+    @property
+    def lo_g_threshold(self):
+        return self._lo_g_threshold.value()
+
+    @lo_g_threshold.setter
+    def lo_g_threshold(self, value):
+        self._lo_g_threshold.setValue(value)
+
+    @property
+    def seed_separation(self):
+        return self._seed_separation.value()
+
+    @seed_separation.setter
+    def seed_separation(self, value):
+        self._seed_separation.setValue(value)
+
+    @property
+    def boundary(self):
+        return self._boundary.value()
+
+    @boundary.setter
+    def boundary(self, value):
+        self._boundary.setValue(value)
+
+    @property
+    def min_volume(self):
+        return self._min_volume.value()
+
+    @min_volume.setter
+    def min_volume(self, value):
+        self._min_volume.setValue(value)
+
+    @property
+    def max_volume(self):
+        return self._max_volume.value()
+
+    @max_volume.setter
+    def max_volume(self, value):
+        self._max_volume.setValue(value)
+
+    @property
+    def z_equals_xy(self):
+        return self._diameter_z_equals_xy.isChecked()
+
+    @z_equals_xy.setter
+    def z_equals_xy(self, value):
+        self._diameter_z_equals_xy.setChecked(value)
+
+    @property
+    def update_on_change(self):
+        return self._update_on_change.isChecked()
+
+    @update_on_change.setter
+    def update_on_change(self, value):
+        self._update_on_change.setChecked(value)
+
     def _create_double_spinbox(
         self,
         value: float,
@@ -188,7 +260,7 @@ class BlobDetectionInspector(QWidget):
         )
 
         self._diameter_xy = self._create_double_spinbox(
-            2.0, names.DETECTION_INSPECTOR_DIAMETER_XY, minimum=1, maximum=200
+            1, names.DETECTION_INSPECTOR_DIAMETER_XY, minimum=1, maximum=200
         )
         self._add_field(
             form,
@@ -199,7 +271,7 @@ class BlobDetectionInspector(QWidget):
         self._diameter_xy.valueChanged.connect(self.diameter_xy_changed.emit)
 
         self._diameter_z = self._create_double_spinbox(
-            5.0, names.DETECTION_INSPECTOR_DIAMETER_Z, minimum=1, maximum=500
+            1, names.DETECTION_INSPECTOR_DIAMETER_Z, minimum=1, maximum=500
         )
         self._add_field(
             form,
@@ -218,9 +290,13 @@ class BlobDetectionInspector(QWidget):
             texts.INSPECTOR_TOOLTIP_DIAMETER_Z_EQUALS_XY,
         )
         self._diameter_z_equals_xy.toggled.connect(self.diameter_z_equal_to_xy_toggled.emit)
+        # the Z field has no meaning while it follows XY
+        self._diameter_z_equals_xy.toggled.connect(self._handle_diameter_z_equals_xy_toggle)
+        # to keep the value of _diameter_z synched with _diameter_xy
+        self._diameter_xy.valueChanged.connect(self._sync_diameter_z)
 
         self._lo_g_threshold = self._create_double_spinbox(
-            0.1, names.DETECTION_INSPECTOR_LOG_THRESHOLD, minimum=0, maximum=5, step=0.01
+            0, names.DETECTION_INSPECTOR_LOG_THRESHOLD, minimum=0, maximum=5, step=0.01
         )
         self._add_field(
             form,
@@ -253,7 +329,7 @@ class BlobDetectionInspector(QWidget):
         self._boundary.valueChanged.connect(self.boundary_changed.emit)
 
         self._min_volume = self._create_double_spinbox(
-            200, names.DETECTION_INSPECTOR_MIN_VOLUME, maximum=10_000_000, step=100
+            0, names.DETECTION_INSPECTOR_MIN_VOLUME, maximum=10_000_000, step=100
         )
         self._add_field(
             form,
@@ -264,7 +340,10 @@ class BlobDetectionInspector(QWidget):
         self._min_volume.valueChanged.connect(self.min_volume_changed.emit)
 
         self._max_volume = self._create_double_spinbox(
-            1_000_000, names.DETECTION_INSPECTOR_MAX_VOLUME, maximum=1_000_000_000, step=1000
+            0,
+            names.DETECTION_INSPECTOR_MAX_VOLUME,
+            maximum=1_000_000_000,
+            step=1000,
         )
         self._add_field(
             form,
@@ -342,3 +421,11 @@ class BlobDetectionInspector(QWidget):
         """
 
         self._detection_status.setText(status)
+
+    def _handle_diameter_z_equals_xy_toggle(self, v: bool):
+        self._diameter_z.setDisabled(v)
+        self._sync_diameter_z()
+
+    def _sync_diameter_z(self):
+        if self._diameter_z_equals_xy.isChecked():
+            self._diameter_z.setValue(self._diameter_xy.value())
