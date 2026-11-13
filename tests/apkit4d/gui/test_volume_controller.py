@@ -194,22 +194,21 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     assert captured[0].shape != (8, 16, 16)
 
 
-def test_suggest_intensity_window_returns_none_when_voxel_invalid(qtbot) -> None:
-    """When voxel dimensions are invalid (_usable is False), no window should be suggested."""
+def test_suggest_intensity_window_does_nothing_without_volume(qtbot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     view = FakeVolumeView()
     controller = VolumeController(window, view)
 
-    source = FakeSource()
-    source.info.voxel = (0.0, 1.0, 1.0)
-    controller.set_source(Path("test.czi"), source)
+    emitted: list[tuple[float, float]] = []
+    controller.window_suggested.connect(lambda lo, hi: emitted.append((lo, hi)))
 
-    assert controller.suggest_intensity_window() is None
+    controller.suggest_intensity_window()
+    qtbot.wait(50)
+    assert emitted == []
 
 
-def test_suggest_intensity_window_after_clearing_roi(qtbot) -> None:
-    """Clearing the ROI restores window calculation over the full volume."""
+def test_suggest_intensity_window_uses_full_and_roi_volumes(qtbot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     view = FakeVolumeView()
@@ -222,14 +221,17 @@ def test_suggest_intensity_window_after_clearing_roi(qtbot) -> None:
     controller.set_source(Path("test.czi"), source)
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
 
+    # Without ROI, the 99.9th percentile picks up the 10_000 outliers
+    with qtbot.waitSignal(controller.window_suggested, timeout=5000) as blocker:
+        controller.suggest_intensity_window()
+    assert blocker.args[1] == 10_000.0
+
+    # With ROI active, only the cropped [50, 200] region is considered
     roi = RegionOfInterest(x_min=0.0, x_max=7.0, y_min=0.0, y_max=7.0, z_min=0.0, z_max=3.0)
     controller.set_roi(roi)
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
-    assert controller.suggest_intensity_window()[1] <= 200.0
 
-    # Reset ROI to full volume
-    controller.set_roi(None)
-    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
-    full_window = controller.suggest_intensity_window()
-    assert full_window is not None
-    assert full_window[1] == 10_000.0
+    with qtbot.waitSignal(controller.window_suggested, timeout=5000) as roi_blocker:
+        controller.suggest_intensity_window()
+    lo, hi = roi_blocker.args
+    assert 50.0 <= lo < hi <= 200.0

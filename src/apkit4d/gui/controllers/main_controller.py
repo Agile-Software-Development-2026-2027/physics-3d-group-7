@@ -70,6 +70,7 @@ class MainController(QObject):
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+            self._volume_controller.window_suggested.connect(self._on_window_suggested)
 
             if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
                 cast(PreprocessingSection, preproc_sec).suggest_window_clicked.connect(
@@ -373,5 +374,13 @@ class MainController(QObject):
         if window is None:
             return
         lo, hi = window
+        if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
+            cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)
+
+    def _on_suggest_window_clicked(self) -> None:
+        if self._volume_controller is not None:
+            self._volume_controller.suggest_intensity_window()
+
+    def _on_window_suggested(self, lo: float, hi: float) -> None:
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
             cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)

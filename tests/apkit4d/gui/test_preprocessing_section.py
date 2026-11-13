@@ -154,13 +154,15 @@ def test_clicking_suggest_window_populates_ui_and_updates_model(qtbot, qapp) -> 
 
     section = window.right_panel.get_section(PipelineStep.PREPROCESSING)
     section.suggest_window_clicked.connect(controller._on_suggest_window_clicked)
+    vol_ctrl.window_suggested.connect(controller._on_window_suggested)
 
     vol = np.arange(1, 1001, dtype=np.uint16).reshape(10, 10, 10)
     vol_ctrl._usable = True
     vol_ctrl._current_roi_volume = vol
 
     section.normalization_enabled.setChecked(True)
-    section.suggest_window_btn.click()
+    with qtbot.waitSignal(vol_ctrl.window_suggested, timeout=5000):
+        section.suggest_window_btn.click()
 
     lo = section.lowest_instensity.value()
     hi = section.highest_intensity.value()

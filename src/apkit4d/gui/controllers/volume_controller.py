@@ -80,8 +80,8 @@ class VolumeController(QObject):
     """
 
     failed = Signal()
-
     volume_bounds_changed = Signal(object)
+    window_suggested = Signal(float, float)
 
     def __init__(self, window: MainWindow, view: VolumeView, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -119,6 +119,12 @@ class VolumeController(QObject):
         self._preproc_runner.succeeded.connect(self._on_preproc_done)
         self._preproc_runner.failed.connect(self._on_preproc_failed)
         self._params_changed = False
+
+        self._suggest_busy = False
+        self._suggest_generation = 0
+        self._suggest_runner = TaskRunner(self)
+        self._suggest_runner.succeeded.connect(self._on_suggest_window_done)
+        self._suggest_runner.failed.connect(self._on_suggest_window_failed)
 
     @property
     def preproc_params(self) -> PreprocParams:
@@ -178,6 +184,8 @@ class VolumeController(QObject):
             source: The open recording.
         """
         self._generation += 1
+        self._suggest_generation = self._generation
+        self._suggest_busy = False
         self._source = source
         self._voxel = source.info.voxel
         self._roi = None
@@ -317,8 +325,25 @@ class VolumeController(QObject):
             return
         self._apply_roi_and_show(self._current_full_volume)
 
-    def suggest_intensity_window(self) -> tuple[float, float] | None:
-        if self._current_roi_volume is None or not self._usable:
-            return None
-        lo, hi = suggest_window(self._current_roi_volume)
-        return float(lo), float(hi)
+    def suggest_intensity_window(self) -> None:
+        """Compute suggested (lowest, highest) intensity bounds in a background thread."""
+        if self._current_roi_volume is None or not self._usable or self._suggest_busy:
+            return
+
+        self._suggest_busy = True
+        self._suggest_generation = self._generation
+        self._suggest_runner.run(partial(suggest_window, self._current_roi_volume))
+
+    def _on_suggest_window_done(self, _task_id: int, window: tuple[float, float]) -> None:
+        self._suggest_busy = False
+        if self._suggest_generation != self._generation or not self._usable:
+            return
+        lo, hi = window
+        self.window_suggested.emit(float(lo), float(hi))
+
+    def _on_suggest_window_failed(self, _task_id: int, error: Exception) -> None:
+        self._suggest_busy = False
+        if self._suggest_generation != self._generation:
+            return
+        reason = str(error) or type(error).__name__
+        self._window.set_status(f"Suggest window failed: {reason}")
