@@ -406,9 +406,6 @@ class RightPanel(SidePanel):
         )
 
         for step, title in stage_definitions:
-            if step == PipelineStep.PREPROCESSING:  # FIXME: refactor
-                self._register_stage(step.value, PreprocessingSection(self))
-                continue
             sec = AccordionSection(title)
 
             match step:
@@ -418,8 +415,7 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    # TODO: implement
-                    pass
+                    sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
                     detection_inspector = BlobDetectionInspector()
                     detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)

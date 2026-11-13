@@ -49,10 +49,7 @@ class PreprocessingSection(AccordionSection):
             callback=lambda s=self.step: self.right_panel._on_play_clicked(s),
             tooltip=texts.TOOLTIP_PLAY_STAGE,
         )
-
-        # TODO: this doesn't do anything right now
-        self.right_panel._play_buttons[PipelineStep.PREPROCESSING] = play_btn
-        self.right_panel._plan_buttons[PipelineStep.PREPROCESSING] = play_btn
+        self.right_panel._plan_buttons[self.step] = play_btn
 
         # widgets
         self.denoise_xy_scale_um: QDoubleSpinBox
