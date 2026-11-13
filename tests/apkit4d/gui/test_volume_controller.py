@@ -49,9 +49,9 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     source = FakeSource()
     controller.set_source(Path("test.czi"), source)
 
-    # Wait for frame 0 read to complete
+    # Wait for frame 0 read and default preprocessing to complete
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
-    assert controller.preproc_params is None
+    assert controller.preproc_params == PreprocParams()
     assert len(view.grids) == 1
     first_grid, reset_cam = view.grids[0]
     assert reset_cam is True
@@ -70,10 +70,11 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     second_grid, reset_cam_2 = view.grids[1]
     assert reset_cam_2 is False
 
-    # Apply None to revert to raw volume
-    controller.apply_preproc_params(None)
-    assert controller.preproc_params is None
-    assert len(view.grids) == 3
+    # Apply default PreprocParams to reset preprocessing
+    default_params = PreprocParams()
+    controller.apply_preproc_params(default_params)
+    assert controller.preproc_params == default_params
+    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
 
 
 def test_volume_controller_preproc_failed(qtbot, monkeypatch) -> None:
@@ -122,11 +123,14 @@ def test_volume_controller_preproc_runs_on_roi(qtbot, monkeypatch) -> None:
     monkeypatch.setattr("apkit4d.gui.controllers.volume_controller.preprocess", capturing_preprocess)
 
     controller.set_roi(roi)
-    controller.apply_preproc_params(PreprocParams())
-    qtbot.waitUntil(lambda: len(captured) == 1, timeout=5000)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
-    # The volume passed to preprocess must be the cropped shape, not the full (8,16,16)
-    assert captured[0].shape != (8, 16, 16), "preprocess received the full un-cropped volume"
+    controller.apply_preproc_params(PreprocParams())
+    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
+
+    assert len(captured) >= 1
+    # Every volume passed to preprocess after setting ROI must be the cropped shape, not (8, 16, 16)
+    assert all(vol.shape != (8, 16, 16) for vol in captured), "preprocess received the full un-cropped volume"
 
 
 def test_set_roi_does_not_re_read_disk(qtbot) -> None:
@@ -145,8 +149,8 @@ def test_set_roi_does_not_re_read_disk(qtbot) -> None:
     roi = RegionOfInterest(x_min=0.0, x_max=7.0, y_min=0.0, y_max=7.0, z_min=0.0, z_max=3.0)
     controller.set_roi(roi)
 
-    # A new grid must have been displayed
-    assert len(view.grids) == 2
+    # Wait for background preprocessing on the new ROI grid to finish
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
     # But no extra disk read should have happened
     assert len(source.read_calls) == reads_after_load
 
