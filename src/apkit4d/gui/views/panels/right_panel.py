@@ -184,6 +184,7 @@ class RightPanel(SidePanel):
     plan_stage_requested = Signal(object)
     complete_stage_requested = Signal(object)
     step_param_changed = Signal(str, str, object)
+    step_params_reset = Signal(str)
 
     def __init__(self) -> None:
         super().__init__(names.RIGHT_PANEL)

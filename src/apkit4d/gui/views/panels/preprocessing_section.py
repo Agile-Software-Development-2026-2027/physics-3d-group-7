@@ -411,32 +411,4 @@ class PreprocessingSection(AccordionSection):
 
     def _on_reset(self, defaults: PreprocParams):
         self.set_preproc_params(defaults)
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "denoise_xy_scale_um", defaults.denoise_xy_scale_um
-        )
-        self.right_panel.step_param_changed.emit(self.step.value, "bg_mode", defaults.bg_mode)
-        self.right_panel.step_param_changed.emit(self.step.value, "bg_sigma_xy_um", defaults.bg_sigma_xy_um)
-        self.right_panel.step_param_changed.emit(self.step.value, "bg_percentile", defaults.bg_percentile)
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "denoise_z_scale_um", defaults.denoise_z_scale_um
-        )
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "logarithmic_compression_enabled", defaults.logarithmic_compression_enabled
-        )
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "normalization_enabled", defaults.normalization_enabled
-        )
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "highest_intensity", defaults.highest_intensity
-        )
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "lowest_intensity", defaults.lowest_intensity
-        )
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "gamma_correction_to_apply", defaults.gamma_correction_to_apply
-        )
-        self.right_panel.step_param_changed.emit(self.step.value, "clahe_enabled", defaults.clahe_enabled)
-        self.right_panel.step_param_changed.emit(self.step.value, "clahe_clip", defaults.clahe_clip)
-        self.right_panel.step_param_changed.emit(
-            self.step.value, "clahe_kernel_xy_um", defaults.clahe_kernel_xy_um
-        )
+        self.right_panel.step_params_reset.emit(self.step.value)

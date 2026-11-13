@@ -187,6 +187,17 @@ class PipelineModel(QObject):
         self._params[step].update(params)
         self.step_params_changed.emit(step)
 
+    def reset_step_params(self, step: PipelineStep) -> None:
+        """Reset all parameters for `step` to defaults and notify listeners once."""
+
+        if step == PipelineStep.PREPROCESSING:
+            self._params[step].clear()
+            self._params[step].update(PreprocParams().to_dict())
+        else:
+            self._params[step].clear()
+
+        self.step_params_changed.emit(step)
+
     def invalidate_subsequent(self, step: PipelineStep) -> None:
         """
         Invalidate all steps following `step`, resetting their status to IDLE.

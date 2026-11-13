@@ -110,35 +110,32 @@ class VolumeController(QObject):
         # origin of the roi, None = (0, 0, 0)
         self._current_roi_origin: tuple[float, float, float] | None = None
 
-        self._preproc_params: PreprocParams | None = None
+        self._preproc_params = PreprocParams()
         self._preproc_busy = False
-        self._preproc_wanted: PreprocParams | None = None
+        self._preproc_pending = False
         self._preproc_runner = TaskRunner(self)
         self._preproc_runner.succeeded.connect(self._on_preproc_done)
         self._preproc_runner.failed.connect(self._on_preproc_failed)
 
     @property
-    def preproc_params(self) -> PreprocParams | None:
+    def preproc_params(self) -> PreprocParams:
         """The currently applied preprocessing parameters, or None if showing raw volume."""
         return self._preproc_params
 
-    def apply_preproc_params(self, params: PreprocParams | None) -> None:
+    def apply_preproc_params(self, params: PreprocParams) -> None:
         """
         Apply preprocessing parameters to the current ROI-cropped volume and update the 3D view.
 
         Args:
             params: The preprocessing parameters to apply, or None to show the raw ROI volume.
         """
+
         self._preproc_params = params
         if self._current_roi_volume is None or not self._usable:
             return
 
-        if params is None:
-            self._show(self._current_frame, self._current_roi_volume, self._current_roi_origin)
-            return
-
         if self._preproc_busy:
-            self._preproc_wanted = params
+            self._preproc_pending = True
             return
 
         self._start_preprocessing(self._current_roi_volume, params)
@@ -149,17 +146,19 @@ class VolumeController(QObject):
 
     def _on_preproc_done(self, _task_id: int, volume: NDArray) -> None:
         self._preproc_busy = False
+
+        if self._preproc_pending:
+            self._preproc_pending = False
+            if self._current_roi_volume is not None and self._usable:
+                self._start_preprocessing(self._current_roi_volume, self._preproc_params)
+                return
+
         if self._usable:
             self._show(self._current_frame, volume, self._current_roi_origin)
-        if self._preproc_wanted is not None:
-            wanted = self._preproc_wanted
-            self._preproc_wanted = None
-            if self._current_roi_volume is not None:
-                self._start_preprocessing(self._current_roi_volume, wanted)
 
     def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:
         self._preproc_busy = False
-        self._preproc_wanted = None
+        self._preproc_pending = False
         reason = str(error) or type(error).__name__
         self._window.set_status(f"Preprocessing failed: {reason}")
 
@@ -181,7 +180,7 @@ class VolumeController(QObject):
         self._first_frame = True
         self._wanted = None
         self._current_frame = 0
-        self._preproc_wanted = None
+        self._preproc_pending = False
         self._usable = self._has_valid_voxel(source)
         if self._usable:
             # when we read the file we set the bounds so that the ROI inspector can show them
@@ -223,18 +222,19 @@ class VolumeController(QObject):
         if generation == self._generation:
             self._current_frame = frame
             self._current_full_volume = volume
-            self._apply_roi_and_show(frame, volume)
+            self._apply_roi_and_show(volume)
         self._read_the_next_frame()
 
-    def _apply_roi_and_show(self, frame: int, full_volume: NDArray) -> None:
-        """Extract the ROI slice from *full_volume*, then preprocess or display it."""
+    def _apply_roi_and_show(self, full_volume: Image[np.uint16]) -> None:
+        """Extract the ROI slice from `full_volume`, then preprocess or display it"""
+
         roi_volume, roi_origin = self._extract_roi(full_volume)
         self._current_roi_volume = roi_volume
         self._current_roi_origin = roi_origin
-        if self._preproc_params is not None:
-            self._start_preprocessing(roi_volume, self._preproc_params)
+        if self._preproc_busy:
+            self._preproc_pending = True
         else:
-            self._show(frame, roi_volume, roi_origin)
+            self._start_preprocessing(roi_volume, self._preproc_params)
 
     def _extract_roi(self, volume: NDArray) -> tuple[NDArray, tuple[float, float, float] | None]:
         if self._roi is not None:
@@ -307,4 +307,4 @@ class VolumeController(QObject):
         self._roi = roi
         if self._current_full_volume is None or not self._usable:
             return
-        self._apply_roi_and_show(self._current_frame, self._current_full_volume)
+        self._apply_roi_and_show(self._current_full_volume)

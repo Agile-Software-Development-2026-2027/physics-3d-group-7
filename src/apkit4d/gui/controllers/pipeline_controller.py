@@ -66,6 +66,7 @@ class PipelineController(QObject):
         self._view.run_stage_requested.connect(self.run_up_to)
         self._view.complete_stage_requested.connect(self.complete_stage)
         self._view.step_param_changed.connect(self._on_view_param_changed)
+        self._view.step_params_reset.connect(self._on_view_params_reset)
 
         # Synchronize initial state
         self._sync_view()
@@ -226,6 +227,16 @@ class PipelineController(QObject):
         except ValueError:
             return
         self._model.update_step_params(step, **{param_name: value})
+
+        self._update_pipeline_stats()
+
+    def _on_view_params_reset(self, step_name: str) -> None:
+        """Handle atomic parameter reset from the view."""
+        try:
+            step = PipelineStep(step_name)
+        except ValueError:
+            return
+        self._model.reset_step_params(step)
         self._update_pipeline_stats()
 
     def _update_pipeline_stats(self) -> None:
