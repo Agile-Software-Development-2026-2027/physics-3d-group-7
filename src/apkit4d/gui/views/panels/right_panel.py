@@ -424,6 +424,18 @@ class RightPanel(SidePanel):
                     tracking_inspector = TrajectoryLinkingInspector()
                     tracking_inspector.setObjectName(names.TRACKING_INSPECTOR_STEP)
                     sec.add_widget(tracking_inspector)
+
+                    tracking_inspector.min_len_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "min_len", value)
+                    )
+                    tracking_inspector.max_gap_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "max_gap", value)
+                    )
+                    tracking_inspector.max_speed_changed.connect(
+                        lambda value: self.notify_param_changed(
+                            PipelineStep.TRACKING.value, "max_speed_um_s", value
+                        )
+                    )
                 case PipelineStep.BATCH:
                     # TODO: implement
                     pass

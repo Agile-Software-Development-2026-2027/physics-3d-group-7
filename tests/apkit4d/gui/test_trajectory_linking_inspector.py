@@ -1,4 +1,3 @@
-
 import pytest
 from PySide6.QtWidgets import QDoubleSpinBox, QGroupBox, QSpinBox
 from pytestqt.qtbot import QtBot
@@ -19,24 +18,10 @@ def inspector(qtbot: QtBot) -> TrajectoryLinkingInspector:
 def test_widgets_have_expected_object_names(
     inspector: TrajectoryLinkingInspector,
 ) -> None:
-    assert (
-        inspector.findChild(
-            QGroupBox, names.TRACKING_INSPECTOR_PARAMETERS_GROUP
-        )
-        is not None
-    )
-    assert (
-        inspector.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN)
-        is not None
-    )
-    assert (
-        inspector.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP)
-        is not None
-    )
-    assert (
-        inspector.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED)
-        is not None
-    )
+    assert inspector.findChild(QGroupBox, names.TRACKING_INSPECTOR_PARAMETERS_GROUP) is not None
+    assert inspector.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN) is not None
+    assert inspector.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP) is not None
+    assert inspector.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED) is not None
 
 
 def test_default_values(inspector: TrajectoryLinkingInspector) -> None:
@@ -67,27 +52,21 @@ def test_values_are_clamped(inspector: TrajectoryLinkingInspector) -> None:
     assert inspector._max_speed.value() == 0.01
 
 
-def test_min_len_changed_signal(
-    inspector: TrajectoryLinkingInspector, qtbot: QtBot
-) -> None:
+def test_min_len_changed_signal(inspector: TrajectoryLinkingInspector, qtbot: QtBot) -> None:
     with qtbot.waitSignal(inspector.min_len_changed) as blocker:
         inspector._min_len.setValue(6)
 
     assert blocker.args == [6]
 
 
-def test_max_gap_changed_signal(
-    inspector: TrajectoryLinkingInspector, qtbot: QtBot
-) -> None:
+def test_max_gap_changed_signal(inspector: TrajectoryLinkingInspector, qtbot: QtBot) -> None:
     with qtbot.waitSignal(inspector.max_gap_changed) as blocker:
         inspector._max_gap.setValue(4)
 
     assert blocker.args == [4]
 
 
-def test_max_speed_changed_signal(
-    inspector: TrajectoryLinkingInspector, qtbot: QtBot
-) -> None:
+def test_max_speed_changed_signal(inspector: TrajectoryLinkingInspector, qtbot: QtBot) -> None:
     with qtbot.waitSignal(inspector.max_speed_changed) as blocker:
         inspector._max_speed.setValue(300.0)
 
