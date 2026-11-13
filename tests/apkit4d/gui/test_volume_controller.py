@@ -34,10 +34,10 @@ class FakeSource:
 
 class FakeVolumeView:
     def __init__(self) -> None:
-        self.grids: list[tuple[object, bool]] = []
+        self.grids: list[tuple[object, bool, bool]] = []
 
-    def show_volume(self, grid: object, reset_camera: bool = True) -> None:
-        self.grids.append((grid, reset_camera))
+    def show_volume(self, grid: object, reset_camera: bool = True, force_update: bool = False) -> None:
+        self.grids.append((grid, reset_camera, force_update))
 
 
 def test_volume_controller_raw_and_preproc(qtbot) -> None:
@@ -53,8 +53,9 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
     assert controller.preproc_params == PreprocParams()
     assert len(view.grids) == 1
-    first_grid, reset_cam = view.grids[0]
+    first_grid, reset_cam, force_update_1 = view.grids[0]
     assert reset_cam is True
+    assert force_update_1 is False
     assert first_grid.n_points == 8 * 16 * 16
 
     # Apply preprocessing parameters
@@ -67,14 +68,18 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
 
     # Preprocessing is offloaded to TaskRunner; wait for completion
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
-    second_grid, reset_cam_2 = view.grids[1]
+    _, reset_cam_2, force_update_2 = view.grids[1]
     assert reset_cam_2 is False
+    assert force_update_2 is True
 
     # Apply default PreprocParams to reset preprocessing
     default_params = PreprocParams()
     controller.apply_preproc_params(default_params)
     assert controller.preproc_params == default_params
     qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
+    _, reset_cam_3, force_update_3 = view.grids[2]
+    assert reset_cam_3 is False
+    assert force_update_3 is True
 
 
 def test_volume_controller_preproc_failed(qtbot, monkeypatch) -> None:
@@ -151,6 +156,8 @@ def test_set_roi_does_not_re_read_disk(qtbot) -> None:
 
     # Wait for background preprocessing on the new ROI grid to finish
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+    _, _, force_update = view.grids[1]
+    assert force_update is False
     # But no extra disk read should have happened
     assert len(source.read_calls) == reads_after_load
 

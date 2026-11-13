@@ -1044,3 +1044,33 @@ class TestAppearance:
         getattr(viewport, method)(value)
 
         assert calls
+
+    def test_show_volume_updates_in_place_when_grid_matches_and_force_update_is_false(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.full(first.n_points, 1.0)
+        viewport.show_volume(first, reset_camera=False)
+        cached_grid = viewport._volume_grid
+
+        second = make_grid(5)
+        second.point_data["values"] = np.full(second.n_points, 2.0)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+
+        assert viewport._volume_grid is cached_grid
+        np.testing.assert_allclose(viewport._volume_grid.point_data["values"], 2.0)
+        assert viewport.plotter.actors["volume"].mapper.scalar_range == pytest.approx((2.0, 2.0))
+
+    def test_show_volume_rebuilds_grid_and_transfer_functions_when_force_update_is_true(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.linspace(0.0, 1.0, first.n_points)
+        viewport.show_volume(first, reset_camera=False)
+        cached_grid = viewport._volume_grid
+
+        second = make_grid(5)
+        second.point_data["values"] = np.linspace(0.0, 4095.0, second.n_points)
+        viewport.show_volume(second, reset_camera=False, force_update=True)
+
+        assert viewport._volume_grid is not cached_grid
+        assert viewport.plotter.actors["volume"].mapper.scalar_range == pytest.approx((0.0, 4095.0))
+        assert viewport.plotter.actors["volume"].mapper.lookup_table.scalar_range == pytest.approx(
+            (0.0, 4095.0)
+        )

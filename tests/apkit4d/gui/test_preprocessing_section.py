@@ -65,7 +65,9 @@ def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
     catcher.clear()
 
     section.gamma_correction_to_apply.setValue(185)
-    qtbot.wait(10)
+    assert catcher.last() is None
+
+    qtbot.waitUntil(lambda: catcher.last() is not None, timeout=2000)
     step, name, value = catcher.last()
     assert name == "gamma_correction_to_apply"
     assert abs(value - 1.85) < 0.001
