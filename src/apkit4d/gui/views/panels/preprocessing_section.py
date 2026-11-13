@@ -329,7 +329,7 @@ class PreprocessingSection(AccordionSection):
         gamma_layout.setContentsMargins(0, 0, 0, 0)
         gamma_layout.setSpacing(8)
 
-        self.gamma_correction_to_apply = FrameSlider()
+        self.gamma_correction_to_apply = FrameSlider(self)
         self.gamma_correction_to_apply.setObjectName(names.PREPROC_GAMMA_FIELD)
         self.gamma_correction_to_apply.setRange(10, 500)
         self.gamma_correction_to_apply.setSingleStep(5)
@@ -338,7 +338,8 @@ class PreprocessingSection(AccordionSection):
 
         self.gamma_value_label = QLabel(f"{defaults.gamma_correction_to_apply:.2f}")
         self.gamma_value_label.setFixedWidth(36)
-        self.gamma_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.gamma_value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.gamma_value_label.setContentsMargins(0, 0, 0, 4)
 
         gamma_layout.addWidget(self.gamma_correction_to_apply, stretch=1)
         gamma_layout.addWidget(self.gamma_value_label)
