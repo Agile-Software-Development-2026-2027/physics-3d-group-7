@@ -162,7 +162,10 @@ INSPECTOR_TOOLTIP_RUN_BATCH: str = (
     "using the current ROI and detection parameters.\n "
     "Runs in a separate process."
 )
-
+INSPECTOR_STATUS_DETECTING = "detecting blobs..."
+INSPECTOR_STATUS_NO_BLOBS_FOUND = "frame {frame}: no blobs found"
+INSPECTOR_STATUS_BLOBS_FOUND = "frame {frame}: {count} blobs (median volume {volume:.0f} µm³)"
+INSPECTOR_STATUS_DETECTION_FAILED = "detection failed: {reason}"
 
 # roi inspector
 INSPECTOR_SECTION_ROI_BOUNDS: str = "Region of Interest (µm)"
