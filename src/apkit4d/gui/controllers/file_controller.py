@@ -46,9 +46,11 @@ class FileController(QObject):
 
     Signals:
         loaded: Emitted with the path and the recording once a file has been opened.
+        closed: Emitted when a file is closed
     """
 
     loaded = Signal(Path, object)
+    closed = Signal()
 
     def __init__(
         self, window: MainWindow, open_source: SourceOpener = CziSource, parent: QObject | None = None
@@ -89,6 +91,7 @@ class FileController(QObject):
         if self._source is not None:
             self._source.close()
             self._source = None
+            self.closed.emit()
 
     def _on_opened(self, task_id: int, source: FrameSource) -> None:
         if task_id != self._latest_task:

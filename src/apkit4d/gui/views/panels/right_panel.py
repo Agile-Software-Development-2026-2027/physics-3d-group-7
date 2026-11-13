@@ -417,9 +417,9 @@ class RightPanel(SidePanel):
                 case PipelineStep.PREPROCESSING:
                     sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
-                    detection_inspector = BlobDetectionInspector()
-                    detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
-                    sec.add_widget(detection_inspector)
+                    self.detection_inspector = BlobDetectionInspector()
+                    self.detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    sec.add_widget(self.detection_inspector)
                 case PipelineStep.TRACKING:
                     # TODO: implement
                     pass

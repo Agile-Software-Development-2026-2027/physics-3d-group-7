@@ -199,3 +199,32 @@ def test_double_spinbox_emits_signal(qtbot, inspector, object_name, signal_name,
         spinbox.setValue(value)
 
     assert blocker.args == [value]
+
+
+def test_diameter_z_value_is_synched_with_diameter_xy_when_toggled(inspector):
+    inspector._diameter_xy.setValue(8.0)
+    inspector._diameter_z.setValue(30.0)
+
+    diameter_z_equals_xy: QCheckBox = find_widget(
+        inspector, QCheckBox, names.DETECTION_INSPECTOR_DIAMETER_Z_EQUALS_XY
+    )
+    diameter_z_equals_xy.setChecked(True)
+
+    assert inspector._diameter_z_equals_xy.isChecked()
+    assert inspector._diameter_z.value() == 8.0
+
+    diameter_xy: QDoubleSpinBox = find_widget(
+        inspector, QDoubleSpinBox, names.DETECTION_INSPECTOR_DIAMETER_XY
+    )
+    diameter_xy.setValue(10)
+    assert inspector._diameter_z.value() == 10.0
+    diameter_xy.stepDown()
+    assert inspector._diameter_z.value() == 9.0
+
+
+def test_diameter_z_is_disabled_while_equal_to_xy(inspector):
+    diameter_z_equals_xy: QCheckBox = find_widget(
+        inspector, QCheckBox, names.DETECTION_INSPECTOR_DIAMETER_Z_EQUALS_XY
+    )
+    diameter_z_equals_xy.setChecked(True)
+    assert not inspector._diameter_z.isEnabled()
