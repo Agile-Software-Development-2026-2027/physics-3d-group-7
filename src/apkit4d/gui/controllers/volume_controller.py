@@ -37,7 +37,9 @@ from apkit4d.visualization.data_mapper import create_volume_grid
 class VolumeView(Protocol):
     """What the controller needs from the 3D view. `Viewport` provides it."""
 
-    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True) -> None: ...
+    def show_volume(
+        self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False
+    ) -> None: ...
 
 
 class _SignalLike(Protocol):
@@ -116,6 +118,7 @@ class VolumeController(QObject):
         self._preproc_runner = TaskRunner(self)
         self._preproc_runner.succeeded.connect(self._on_preproc_done)
         self._preproc_runner.failed.connect(self._on_preproc_failed)
+        self._params_changed = False
 
     @property
     def preproc_params(self) -> PreprocParams:
@@ -138,6 +141,7 @@ class VolumeController(QObject):
             self._preproc_pending = True
             return
 
+        self._params_changed = True  # needed to force PyVista grid copy on task finished
         self._start_preprocessing(self._current_roi_volume, params)
 
     def _start_preprocessing(self, roi_volume: NDArray, params: PreprocParams) -> None:
@@ -154,7 +158,10 @@ class VolumeController(QObject):
                 return
 
         if self._usable:
-            self._show(self._current_frame, volume, self._current_roi_origin)
+            self._show(
+                self._current_frame, volume, self._current_roi_origin, force_update=self._params_changed
+            )
+            self._params_changed = False
 
     def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:
         self._preproc_busy = False
@@ -264,6 +271,7 @@ class VolumeController(QObject):
         frame: int,
         volume: Image[np.uint16],
         origin: tuple[float, float, float] | None,
+        force_update: bool = False,
     ) -> None:
         """Builds a PyVista grid from `volume` and hand gives it to the view"""
 
@@ -275,7 +283,7 @@ class VolumeController(QObject):
         if grid.n_points == 0:
             self._fail(texts.STATUS_EMPTY_VOLUME.format(frame=frame))
             return
-        self._view.show_volume(grid, reset_camera=self._first_frame)
+        self._view.show_volume(grid, reset_camera=self._first_frame, force_update=force_update)
         self._first_frame = False
 
     def _fail(self, message: str) -> None:

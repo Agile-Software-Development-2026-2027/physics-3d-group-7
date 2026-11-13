@@ -175,24 +175,30 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
-    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True) -> None:
+    def show_volume(self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False) -> None:
         """
         This function is used to visualize the 3D data in the viewport.
 
         Parameters:
             grid (pv.ImageData): PyVista ImageData object that we mapped in the data_mapper.py file.
-            it contains the 3D data that we want to visualize.
+                                 it contains the 3D data that we want to visualize.
+
+            force_update (bool): force a full copy of the PyVista grid. It is slow. Use it when the
+                                 intensity between two frame is widely different. Otherwise the view
+                                 will not update correctly.
 
         Returns:
             None
         """
+
         if grid is None or grid.n_points == 0:
             return
 
         # with this if we want to avoid to recreate the volume when we will change frames
         # we just update the values
         if (
-            self._volume_grid is not None
+            not force_update
+            and self._volume_grid is not None
             and self._volume_grid.dimensions == grid.dimensions
             and self._volume_grid.spacing == grid.spacing
             and self._volume_grid.origin == grid.origin
@@ -204,37 +210,24 @@ class Viewport(QWidget):
             # name in the mapper we don't have to change it here too,
             # but for now we keep it as it is
             values = grid.point_data["values"]
+            np.copyto(self._volume_grid.point_data["values"], values)
+
+            # fixed the bug of blobs not moving caused by the missing call on
+            # .Modified() on the scalars and the point data, that was needed to tell
+            #  VTK that the data has changed
+            self._volume_grid.GetPointData().GetScalars().Modified()
+            self._volume_grid.point_data.Modified()
+            self._volume_grid.Modified()
 
             # Aggiorna il range min, max della colormap/opacità e della scalar bar
             vmin, vmax = float(np.min(values)), float(np.max(values))
-            if vmax <= vmin:
-                vmax = vmin + 1e-6
+            self.plotter.actors["volume"].mapper.scalar_range = (vmin, vmax)
+            self.plotter.update_scalar_bar_range((vmin, vmax))
 
-            actor = self.plotter.actors.get("volume")
-            old_min, old_max = actor.mapper.scalar_range if actor is not None else (vmin, vmax)
-            old_span = max(old_max - old_min, 1e-6)
-            new_span = vmax - vmin
-
-            # use the in-place update when the intensity scale hasn't drastically changed.
-            # if preproc/normalization changed the range scale, fall through to add_volume so
-            # PyVista rebuilds all GPU transfer functions cleanly.
-            if actor is not None and 0.2 <= (new_span / old_span) <= 5.0:
-                np.copyto(self._volume_grid.point_data["values"], values)
-
-                # fixed the bug of blobs not moving caused by the missing call on
-                # .Modified() on the scalars and the point data, that was needed to tell
-                # VTK that the data has changed
-                self._volume_grid.GetPointData().GetScalars().Modified()
-                self._volume_grid.point_data.Modified()
-                self._volume_grid.Modified()
-
-                actor.mapper.scalar_range = (vmin, vmax)
-                self.plotter.update_scalar_bar_range((vmin, vmax))
-
-                if reset_camera:
-                    self.plotter.renderer.reset_camera(render=False)
-                self._request_render()
-                return
+            if reset_camera:
+                self.plotter.renderer.reset_camera(render=False)
+            self._request_render()
+            return
 
         self._volume_grid = grid.copy()
 
