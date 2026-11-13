@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from apkit4d.gui.shared.components.v_separator import VSeparator
+from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 
 if TYPE_CHECKING:
@@ -326,12 +327,12 @@ class PreprocessingSection(AccordionSection):
         gamma_layout.setContentsMargins(0, 0, 0, 0)
         gamma_layout.setSpacing(8)
 
-        self.gamma_correction_to_apply = FrameSlider(self)
+        self.gamma_correction_to_apply = DebouncedSlider(200)
         self.gamma_correction_to_apply.setObjectName(names.PREPROC_GAMMA_FIELD)
         self.gamma_correction_to_apply.setRange(10, 500)
         self.gamma_correction_to_apply.setSingleStep(5)
         self.gamma_correction_to_apply.setValue(int(round(defaults.gamma_correction_to_apply * 100.0)))
-        self.gamma_correction_to_apply.valueChanged.connect(self._on_gamma_slider_changed)
+        self.gamma_correction_to_apply.value_debounced.connect(self._on_gamma_slider_changed)
 
         self.gamma_value_label = QLabel(f"{defaults.gamma_correction_to_apply:.2f}")
         self.gamma_value_label.setFixedWidth(36)
