@@ -90,11 +90,11 @@ def test_gap_dist_is_an_optional_float():
     assert opt.default is UNSET
 
 
-def test_min_len_is_an_optional_int_with_default_3():
+def test_min_len_is_an_optional_int_with_default_5():
     opt = get_option(LINK, "--min-len")
     assert isinstance(opt.type, click.types.IntParamType)
     assert not opt.required
-    assert opt.default == 3
+    assert opt.default == 5
 
 
 def test_resamples_is_an_optional_int_with_default_20():

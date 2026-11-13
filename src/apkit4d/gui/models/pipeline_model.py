@@ -8,6 +8,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.preprocessing import PreprocParams
 
 
@@ -66,6 +67,7 @@ class PipelineModel(QObject):
         }
         self._params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
         self._params[PipelineStep.PREPROCESSING] = PreprocParams().to_dict()
+        self._params[PipelineStep.TRACKING] = TrackingConfig().model_dump()
         self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
 
     @property
@@ -193,6 +195,9 @@ class PipelineModel(QObject):
         if step == PipelineStep.PREPROCESSING:
             self._params[step].clear()
             self._params[step].update(PreprocParams().to_dict())
+        elif step == PipelineStep.TRACKING:
+            self._params[step].clear()
+            self._params[step].update(TrackingConfig().model_dump())
         else:
             self._params[step].clear()
 

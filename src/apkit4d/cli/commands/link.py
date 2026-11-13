@@ -2,6 +2,10 @@ import pathlib
 
 import click
 
+from apkit4d.core.models import TrackingConfig
+
+TRACKING_DEFAULTS = TrackingConfig()
+
 
 @click.command(
     help="Link the blobs found by `batch` into tracks. "
@@ -23,7 +27,7 @@ import click
 @click.option(
     "--max-speed",
     type=click.FLOAT,
-    default=250.0,
+    default=TRACKING_DEFAULTS.max_speed_um_s,
     show_default=True,
     help="Maximum expected speed in um/s, used to derive the search radius. "
     + "Ignored if --max-dist is given.",
@@ -31,7 +35,7 @@ import click
 @click.option(
     "--max-gap",
     type=click.INT,
-    default=3,
+    default=TRACKING_DEFAULTS.max_gap,
     show_default=True,
     help="Maximum number of missing frames that can be bridged inside a track.",
 )
@@ -44,7 +48,7 @@ import click
 @click.option(
     "--min-len",
     type=click.INT,
-    default=3,
+    default=TRACKING_DEFAULTS.min_len,
     show_default=True,
     help="Minimum number of points needed to keep a track.",
 )

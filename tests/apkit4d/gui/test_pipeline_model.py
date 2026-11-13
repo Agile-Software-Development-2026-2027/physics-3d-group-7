@@ -4,6 +4,7 @@ Unit tests for PipelineModel verifying state transitions, dependencies, and casc
 
 import pytest
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -203,3 +204,27 @@ def test_pipeline_model_preproc_params(qtbot) -> None:
         model.set_preproc_params(custom)
     assert blocker.args == [PipelineStep.PREPROCESSING]
     assert model.get_preproc_params() == custom
+
+
+def test_pipeline_model_tracking_params_defaults_and_reset() -> None:
+    model = PipelineModel()
+    defaults = TrackingConfig().model_dump()
+
+    # Tracking starts with the default configuration
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults
+
+    # Parameters can be updated
+    model.update_step_params(
+        PipelineStep.TRACKING,
+        min_len=7,
+        max_gap=4,
+    )
+
+    params = model.get_step_params(PipelineStep.TRACKING)
+    assert params["min_len"] == 7
+    assert params["max_gap"] == 4
+
+    # Reset restores the default configuration
+    model.reset_step_params(PipelineStep.TRACKING)
+
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults

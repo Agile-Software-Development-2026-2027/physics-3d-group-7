@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 
 
@@ -20,6 +21,8 @@ class TrajectoryLinkingInspector(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+
+        config = TrackingConfig()
 
         self._main_layout = QVBoxLayout(self)
         self._main_layout.setContentsMargins(0, 0, 0, 0)
@@ -35,7 +38,7 @@ class TrajectoryLinkingInspector(QWidget):
         self._min_len = QSpinBox()
         self._min_len.setObjectName(names.TRACKING_INSPECTOR_MIN_LEN)
         self._min_len.setRange(2, 1000)
-        self._min_len.setValue(5)
+        self._min_len.setValue(config.min_len)
         self._min_len.setToolTip(texts.INSPECTOR_TOOLTIP_MIN_LEN)
         self._min_len.valueChanged.connect(self.min_len_changed.emit)
 
@@ -47,7 +50,7 @@ class TrajectoryLinkingInspector(QWidget):
         self._max_gap = QSpinBox()
         self._max_gap.setObjectName(names.TRACKING_INSPECTOR_MAX_GAP)
         self._max_gap.setRange(0, 100)
-        self._max_gap.setValue(3)
+        self._max_gap.setValue(config.max_gap)
         self._max_gap.setToolTip(texts.INSPECTOR_TOOLTIP_MAX_GAP)
         self._max_gap.valueChanged.connect(self.max_gap_changed.emit)
 
@@ -61,7 +64,7 @@ class TrajectoryLinkingInspector(QWidget):
         self._max_speed.setRange(0.01, 10000.0)
         self._max_speed.setDecimals(2)
         self._max_speed.setSingleStep(10.0)
-        self._max_speed.setValue(250.0)
+        self._max_speed.setValue(config.max_speed_um_s)
         self._max_speed.setToolTip(texts.INSPECTOR_TOOLTIP_MAX_SPEED)
         self._max_speed.valueChanged.connect(self.max_speed_changed.emit)
 

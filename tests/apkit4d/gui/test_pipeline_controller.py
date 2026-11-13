@@ -3,8 +3,9 @@ Unit tests for PipelineController orchestrating PipelineModel and RightPanel.
 """
 
 import pytest
+from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox
 
-from apkit4d.gui.constants import texts
+from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -230,3 +231,28 @@ def test_pipeline_controller_complete_stage_raises_value_error_when_prior_incomp
         ValueError, match="Cannot set 'detection' to completed: prior step 'roi' is not completed."
     ):
         controller.complete_stage(PipelineStep.DETECTION)
+
+
+def test_tracking_gui_params_update_pipeline_model(qtbot) -> None:
+    view = RightPanel()
+    qtbot.addWidget(view)
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    min_len = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN)
+    max_gap = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP)
+    max_speed = view.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED)
+
+    assert min_len is not None
+    assert max_gap is not None
+    assert max_speed is not None
+
+    min_len.setValue(7)
+    max_gap.setValue(4)
+    max_speed.setValue(300.0)
+
+    params = controller.model.get_step_params(PipelineStep.TRACKING)
+
+    assert params["min_len"] == 7
+    assert params["max_gap"] == 4
+    assert params["max_speed_um_s"] == 300.0
