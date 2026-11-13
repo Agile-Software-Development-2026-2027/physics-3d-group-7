@@ -204,24 +204,37 @@ class Viewport(QWidget):
             # name in the mapper we don't have to change it here too,
             # but for now we keep it as it is
             values = grid.point_data["values"]
-            np.copyto(self._volume_grid.point_data["values"], values)
-
-            # fixed the bug of blobs not moving caused by the missing call on
-            # .Modified() on the scalars and the point data, that was needed to tell
-            #  VTK that the data has changed
-            self._volume_grid.GetPointData().GetScalars().Modified()
-            self._volume_grid.point_data.Modified()
-            self._volume_grid.Modified()
 
             # Aggiorna il range min, max della colormap/opacità e della scalar bar
             vmin, vmax = float(np.min(values)), float(np.max(values))
-            self.plotter.actors["volume"].mapper.scalar_range = (vmin, vmax)
-            self.plotter.update_scalar_bar_range((vmin, vmax))
+            if vmax <= vmin:
+                vmax = vmin + 1e-6
 
-            if reset_camera:
-                self.plotter.renderer.reset_camera(render=False)
-            self._request_render()
-            return
+            actor = self.plotter.actors.get("volume")
+            old_min, old_max = actor.mapper.scalar_range if actor is not None else (vmin, vmax)
+            old_span = max(old_max - old_min, 1e-6)
+            new_span = vmax - vmin
+
+            # use the in-place update when the intensity scale hasn't drastically changed.
+            # if preproc/normalization changed the range scale, fall through to add_volume so
+            # PyVista rebuilds all GPU transfer functions cleanly.
+            if actor is not None and 0.2 <= (new_span / old_span) <= 5.0:
+                np.copyto(self._volume_grid.point_data["values"], values)
+
+                # fixed the bug of blobs not moving caused by the missing call on
+                # .Modified() on the scalars and the point data, that was needed to tell
+                # VTK that the data has changed
+                self._volume_grid.GetPointData().GetScalars().Modified()
+                self._volume_grid.point_data.Modified()
+                self._volume_grid.Modified()
+
+                actor.mapper.scalar_range = (vmin, vmax)
+                self.plotter.update_scalar_bar_range((vmin, vmax))
+
+                if reset_camera:
+                    self.plotter.renderer.reset_camera(render=False)
+                self._request_render()
+                return
 
         self._volume_grid = grid.copy()
 
