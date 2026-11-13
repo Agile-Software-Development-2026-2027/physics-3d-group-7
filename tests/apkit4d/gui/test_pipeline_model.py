@@ -10,6 +10,7 @@ from apkit4d.gui.models.pipeline_model import (
     PipelineStep,
     StepStatus,
 )
+from apkit4d.preprocessing import BgMode, PreprocParams
 
 
 def test_pipeline_model_init(qtbot) -> None:
@@ -183,3 +184,22 @@ def test_pipeline_model_reset_all(qtbot) -> None:
 
     for step in PIPELINE_STEP_ORDER:
         assert model.get_status(step) == StepStatus.IDLE
+
+
+def test_pipeline_model_preproc_params(qtbot) -> None:
+    model = PipelineModel()
+    defaults = PreprocParams()
+    assert model.get_preproc_params() == defaults
+
+    custom = PreprocParams(
+        denoise_xy_scale_um=3.5,
+        bg_mode=BgMode.PERCENTILE_PER_SLICE,
+        bg_percentile=60.0,
+        lowest_intensity=20.0,
+        highest_intensity=800.0,
+    )
+
+    with qtbot.waitSignal(model.step_params_changed) as blocker:
+        model.set_preproc_params(custom)
+    assert blocker.args == [PipelineStep.PREPROCESSING]
+    assert model.get_preproc_params() == custom

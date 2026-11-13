@@ -32,6 +32,7 @@ from apkit4d.gui.theme import (
     Theme,
     ThemeColors,
 )
+from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
@@ -183,6 +184,7 @@ class RightPanel(SidePanel):
     plan_stage_requested = Signal(object)
     complete_stage_requested = Signal(object)
     step_param_changed = Signal(str, str, object)
+    step_params_reset = Signal(str)
 
     def __init__(self) -> None:
         super().__init__(names.RIGHT_PANEL)
@@ -413,8 +415,7 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    # TODO: implement
-                    pass
+                    sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
                     self.detection_inspector = BlobDetectionInspector()
                     self.detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)

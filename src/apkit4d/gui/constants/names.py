@@ -51,6 +51,22 @@ STAGE_NUMBER_FIELD: str = "stage_number_field"
 PLAN_UP_TO_BUTTON: str = "plan_up_to_button"
 COMPLETE_STAGE_BUTTON: str = "complete_stage_button"
 
+# preprocessing stage controls
+PREPROC_DENOISE_XY_FIELD: str = "preproc_denoise_xy_field"
+PREPROC_DENOISE_Z_FIELD: str = "preproc_denoise_z_field"
+PREPROC_BG_MODE_COMBO: str = "preproc_bg_mode_combo"
+PREPROC_BG_PERCENTILE_FIELD: str = "preproc_bg_percentile_field"
+PREPROC_BG_SIGMA_XY_FIELD: str = "preproc_bg_sigma_xy_field"
+PREPROC_NORMALIZATION_ENABLED_FIELD: str = "preproc_normalization_enabled"
+PREPROC_LOWEST_INTENSITY_FIELD: str = "preproc_lowest_intensity_field"
+PREPROC_HIGHEST_INTENSITY_FIELD: str = "preproc_highest_intensity_field"
+PREPROC_LOG_COMPRESSION_CHECKBOX: str = "preproc_log_compression_checkbox"
+PREPROC_GAMMA_FIELD: str = "preproc_gamma_field"
+PREPROC_CLAHE_CHECKBOX: str = "preproc_clahe_checkbox"
+PREPROC_CLAHE_CLIP_FIELD: str = "preproc_clahe_clip_field"
+PREPROC_CLAHE_KERNEL_XY_FIELD: str = "preproc_clahe_kernel_xy_field"
+PREPROC_RESET: str = "preproc_reset"
+
 # bottom stats section
 BOTTOM_STATS_SECTION: str = "bottom_stats_section"
 BOTTOM_STATS_HEADER: str = "bottom_stats_header"

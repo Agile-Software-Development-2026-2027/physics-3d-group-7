@@ -68,6 +68,7 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
+            self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
 
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
@@ -354,3 +355,7 @@ class MainController(QObject):
                 inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
 
         self._unlock_playback_after_roi()
+
+    def _on_step_params_changed(self, step: PipelineStep) -> None:
+        if self._volume_controller is not None and step == PipelineStep.PREPROCESSING:
+            self._volume_controller.apply_preproc_params(self.pipeline_model.get_preproc_params())
