@@ -388,6 +388,8 @@ class RightPanel(SidePanel):
             section.apply_theme(colors)
         self._bottom_stats.apply_theme(colors)
 
+        self.detection_inspector.apply_theme(colors)
+
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
         self.top_bar.setStyleSheet(RightPanelStyler.top_bar_stylesheet(colors))
