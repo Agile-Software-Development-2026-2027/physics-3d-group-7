@@ -192,3 +192,46 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     qtbot.waitUntil(lambda: len(captured) == 1, timeout=5000)
     # Preprocessing must have been called with the cropped volume
     assert captured[0].shape != (8, 16, 16)
+
+
+def test_suggest_intensity_window_does_nothing_without_volume(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    view = FakeVolumeView()
+    controller = VolumeController(window, view)
+
+    emitted: list[tuple[float, float]] = []
+    controller.window_suggested.connect(lambda lo, hi: emitted.append((lo, hi)))
+
+    controller.suggest_intensity_window()
+    qtbot.wait(50)
+    assert emitted == []
+
+
+def test_suggest_intensity_window_uses_full_and_roi_volumes(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    view = FakeVolumeView()
+    controller = VolumeController(window, view)
+
+    data = np.full((8, 16, 16), 10_000.0, dtype=np.float32)
+    data[0:4, 0:8, 0:8] = np.linspace(50.0, 200.0, 4 * 8 * 8, dtype=np.float32).reshape(4, 8, 8)
+
+    source = FakeSource(data=data)
+    controller.set_source(Path("test.czi"), source)
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    # Without ROI, the 99.9th percentile picks up the 10_000 outliers
+    with qtbot.waitSignal(controller.window_suggested, timeout=5000) as blocker:
+        controller.suggest_intensity_window()
+    assert blocker.args[1] == 10_000.0
+
+    # With ROI active, only the cropped [50, 200] region is considered
+    roi = RegionOfInterest(x_min=0.0, x_max=7.0, y_min=0.0, y_max=7.0, z_min=0.0, z_max=3.0)
+    controller.set_roi(roi)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+
+    with qtbot.waitSignal(controller.window_suggested, timeout=5000) as roi_blocker:
+        controller.suggest_intensity_window()
+    lo, hi = roi_blocker.args
+    assert 50.0 <= lo < hi <= 200.0

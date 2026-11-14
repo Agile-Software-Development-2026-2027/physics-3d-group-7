@@ -59,7 +59,11 @@ class IconButton(QPushButton):
 
     @override
     def paintEvent(self, _event: QPaintEvent) -> None:
+        if self.width() <= 0 or self.height() <= 0:
+            return
         painter = QPainter(self)
+        if not painter.isActive():
+            return
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         background, border, icon_color = self._colors()
         focused = self.hasFocus()
