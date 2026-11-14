@@ -308,6 +308,12 @@ class RightPanel(SidePanel):
         if section is not None:
             section.set_status(status)
 
+        # enabled the button to complete the preprocessing stage after completing the ROI stage
+        if step == PipelineStep.ROI:
+            preproc_complete = self._complete_buttons.get(PipelineStep.PREPROCESSING)
+            if preproc_complete is not None:
+                preproc_complete.setEnabled(status == StepStatus.COMPLETED)
+
     def toggle_all(self) -> None:
         """Toggle all accordion sections."""
         all_expanded = bool(self._sections) and all(s.is_expanded() for s in self._sections)

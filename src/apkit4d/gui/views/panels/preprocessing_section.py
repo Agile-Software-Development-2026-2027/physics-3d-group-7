@@ -70,6 +70,7 @@ class PreprocessingSection(AccordionSection):
         self.clahe_enabled: QCheckBox
         self.clahe_clip: QDoubleSpinBox
         self.clahe_kernel_xy_um: QDoubleSpinBox
+        self.complete_btn: QPushButton
 
         self._widgets()
 
@@ -406,13 +407,14 @@ class PreprocessingSection(AccordionSection):
         reset_btn.clicked.connect(lambda: self._on_reset(defaults))
         self.add_widget(reset_btn)
 
-        # TODO: complete button doesn't do anything right now
-        complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
-        complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
-        complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-        complete_btn.clicked.connect(lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s))
-        self.add_widget(complete_btn)
-        self.right_panel._complete_buttons[self.step] = complete_btn
+        self.complete_btn = QPushButton(texts.PREPROC_COMPLETE)
+        self.complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+        self.complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+        self.complete_btn.clicked.connect(
+            lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s)
+        )
+        self.add_widget(self.complete_btn)
+        self.right_panel._complete_buttons[self.step] = self.complete_btn
 
     def _on_reset(self, defaults: PreprocParams):
         self.set_preproc_params(defaults)

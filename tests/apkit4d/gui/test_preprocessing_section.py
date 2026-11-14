@@ -2,8 +2,9 @@ import numpy as np
 import pytest
 
 from apkit4d.gui.controllers.main_controller import MainController
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.volume_controller import VolumeController
-from apkit4d.gui.models.pipeline_model import PipelineStep
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.preprocessing import BgMode, PreprocParams
@@ -172,3 +173,20 @@ def test_clicking_suggest_window_populates_ui_and_updates_model(qtbot, qapp) -> 
     params = controller.pipeline_model.get_preproc_params()
     assert params.lowest_intensity == pytest.approx(lo)
     assert params.highest_intensity == pytest.approx(hi)
+
+
+def test_preproc_complete_button_enabled_only_when_roi_completed(right_panel) -> None:
+    model = PipelineModel()
+    controller = PipelineController(model, right_panel)
+    section = right_panel.get_section(PipelineStep.PREPROCESSING)
+
+    assert not section.complete_btn.isEnabled()
+
+    model.set_step_status(PipelineStep.ROI, StepStatus.RUNNING)
+    assert not section.complete_btn.isEnabled()
+
+    controller.complete_stage(PipelineStep.ROI)
+    assert section.complete_btn.isEnabled()
+
+    controller.reset_pipeline()
+    assert not section.complete_btn.isEnabled()
