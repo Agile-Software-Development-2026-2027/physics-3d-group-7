@@ -249,3 +249,5 @@ INSPECTOR_TOOLTIP_MAX_GAP: str = "Maximum number of consecutive missing frames a
 
 INSPECTOR_LABEL_MAX_SPEED: str = "Maximum speed (µm/s)"
 INSPECTOR_TOOLTIP_MAX_SPEED: str = "Maximum allowed particle speed during trajectory linking."
+
+INSPECTOR_BUTTON_RESET_TRACKING = "Reset to defaults"

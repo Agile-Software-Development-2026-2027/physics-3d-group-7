@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
@@ -200,6 +201,7 @@ class RightPanel(SidePanel):
         # i need to build it here since as a local variable i couldn't access
         # it from the main controller
         self._roi_inspector: RoiInspector | None = None
+        self._tracking_inspector: TrajectoryLinkingInspector | None = None
 
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
@@ -315,6 +317,11 @@ class RightPanel(SidePanel):
             if preproc_complete is not None:
                 preproc_complete.setEnabled(status == StepStatus.COMPLETED)
 
+    def set_tracking_params(self, config: TrackingConfig) -> None:
+        """Synchronize tracking inspector with the model."""
+        if self._tracking_inspector is not None:
+            self._tracking_inspector.set_params(config)
+
     def toggle_all(self) -> None:
         """Toggle all accordion sections."""
         all_expanded = bool(self._sections) and all(s.is_expanded() for s in self._sections)
@@ -368,6 +375,7 @@ class RightPanel(SidePanel):
         self._plan_buttons.clear()
         self._complete_buttons.clear()
         self._roi_inspector = None
+        self._tracking_inspector = None
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -429,6 +437,7 @@ class RightPanel(SidePanel):
                     sec.add_widget(self.detection_inspector)
                 case PipelineStep.TRACKING:
                     tracking_inspector = TrajectoryLinkingInspector()
+                    self._tracking_inspector = tracking_inspector
                     tracking_inspector.setObjectName(names.TRACKING_INSPECTOR_STEP)
                     sec.add_widget(tracking_inspector)
 
@@ -442,6 +451,9 @@ class RightPanel(SidePanel):
                         lambda value: self.notify_param_changed(
                             PipelineStep.TRACKING.value, "max_speed_um_s", value
                         )
+                    )
+                    tracking_inspector.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.TRACKING.value)
                     )
                 case PipelineStep.BATCH:
                     # TODO: implement

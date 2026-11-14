@@ -3,8 +3,9 @@ Unit tests for PipelineController orchestrating PipelineModel and RightPanel.
 """
 
 import pytest
-from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QPushButton, QSpinBox
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.models.pipeline_model import (
@@ -256,3 +257,38 @@ def test_tracking_gui_params_update_pipeline_model(qtbot) -> None:
     assert params["min_len"] == 7
     assert params["max_gap"] == 4
     assert params["max_speed_um_s"] == 300.0
+
+
+def test_tracking_reset_updates_gui_and_model(qtbot) -> None:
+    view = RightPanel()
+    qtbot.addWidget(view)
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    min_len = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN)
+    max_gap = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP)
+    max_speed = view.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED)
+    reset_button = view.findChild(QPushButton, names.TRACKING_INSPECTOR_RESET_BUTTON)
+
+    assert min_len is not None
+    assert max_gap is not None
+    assert max_speed is not None
+    assert reset_button is not None
+
+    # Change tracking parameters
+    min_len.setValue(7)
+    max_gap.setValue(4)
+    max_speed.setValue(300.0)
+
+    # Reset through the GUI
+    reset_button.click()
+
+    defaults = TrackingConfig()
+
+    # Model has default values
+    assert controller.model.get_step_params(PipelineStep.TRACKING) == defaults.model_dump()
+
+    # GUI also displays default values
+    assert min_len.value() == defaults.min_len
+    assert max_gap.value() == defaults.max_gap
+    assert max_speed.value() == defaults.max_speed_um_s

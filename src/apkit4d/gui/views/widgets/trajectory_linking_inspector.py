@@ -1,8 +1,9 @@
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -18,6 +19,7 @@ class TrajectoryLinkingInspector(QWidget):
     min_len_changed: Signal = Signal(int)
     max_gap_changed: Signal = Signal(int)
     max_speed_changed: Signal = Signal(float)
+    reset_requested: Signal = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -73,4 +75,21 @@ class TrajectoryLinkingInspector(QWidget):
             self._max_speed,
         )
 
+        reset_button = QPushButton(texts.INSPECTOR_BUTTON_RESET_TRACKING)
+        reset_button.setObjectName(names.TRACKING_INSPECTOR_RESET_BUTTON)
+        reset_button.clicked.connect(self.reset_requested.emit)
+
+        form.addRow(reset_button)
+
         self._main_layout.addWidget(group)
+
+    def set_params(self, config: TrackingConfig) -> None:
+        """Update tracking parameters without emitting change signals."""
+        with (
+            QSignalBlocker(self._min_len),
+            QSignalBlocker(self._max_gap),
+            QSignalBlocker(self._max_speed),
+        ):
+            self._min_len.setValue(config.min_len)
+            self._max_gap.setValue(config.max_gap)
+            self._max_speed.setValue(config.max_speed_um_s)
