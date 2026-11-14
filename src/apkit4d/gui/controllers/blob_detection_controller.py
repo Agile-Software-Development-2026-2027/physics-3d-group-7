@@ -31,6 +31,7 @@ class BlobDetection:
 
 def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
     """Runs in the worker thread: only the detection, the volume is already prepared."""
+
     blobs, _labels, _seeds = find_blobs(
         prepared.image,
         params,
@@ -119,7 +120,7 @@ class BlobDetectionController(QObject):
 
     def on_volume_prepared(self, prepared: PreparedVolume):
         """The 3D view shows a new volume (frame, ROI or preprocessing changed)."""
-        print("prepared")
+
         if prepared is self._prepared:
             return
 
