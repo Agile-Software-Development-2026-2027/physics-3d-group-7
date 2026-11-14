@@ -21,9 +21,11 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 import pyvista as pv
+from attr import dataclass
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.blob_detection import voxel_offset
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
@@ -62,6 +64,17 @@ class RoiSelectionView(Protocol):
     def cancel_roi_selection(self) -> None: ...
 
 
+@dataclass(frozen=True)
+class PreparedVolume:
+    """What the 3D view is showing, in the form blob detection needs."""
+
+    frame: int
+    voxel: tuple[float, float, float]  # (z, y, x) in micrometers
+    roi_volume: Image[np.uint16]  # cropped, raw: for the weighted centroid
+    image: Image[np.float32]  # cropped, preprocessed: what the algorithm looks at
+    offset: tuple[int, int, int]  # origin of the crop in voxels (z, y, x)
+
+
 class VolumeController(QObject):
     """
     Reads the frames of the open recording and shows them in the 3D view.
@@ -77,11 +90,13 @@ class VolumeController(QObject):
 
     Signals:
         failed: Emitted when a frame could not be shown, so that the playback can stop.
+        volume_prepared: Emitted when a new volume is prepared.
     """
 
     failed = Signal()
     volume_bounds_changed = Signal(object)
     window_suggested = Signal(float, float)
+    volume_prepared = Signal(object)  # PreparedVolume
 
     def __init__(self, window: MainWindow, view: VolumeView, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -164,10 +179,20 @@ class VolumeController(QObject):
                 return
 
         if self._usable:
-            self._show(
+            shown = self._show(
                 self._current_frame, volume, self._current_roi_origin, force_update=self._params_changed
             )
             self._params_changed = False
+
+            if shown and self._current_roi_volume is not None:
+                offset = (
+                    (0, 0, 0)
+                    if self._current_roi_origin is None
+                    else voxel_offset(self._current_roi_origin, self._voxel)
+                )
+                self.volume_prepared.emit(
+                    PreparedVolume(self._current_frame, self._voxel, self._current_roi_volume, volume, offset)
+                )
 
     def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:
         self._preproc_busy = False
@@ -280,19 +305,27 @@ class VolumeController(QObject):
         volume: Image[np.uint16],
         origin: tuple[float, float, float] | None,
         force_update: bool = False,
-    ) -> None:
-        """Builds a PyVista grid from `volume` and hand gives it to the view"""
+    ) -> bool:
+        """
+        Builds a PyVista grid from `volume` and hand gives it to the view
+
+        Returns:
+            False when the volume is rejected True otherwise
+        """
 
         if volume.ndim != 3:
             self._fail(texts.STATUS_NOT_3D.format(frame=frame, shape=volume.shape))
-            return
+            return False
 
         grid = create_volume_grid(volume, self._voxel, (0, 0, 0) if origin is None else origin)
         if grid.n_points == 0:
             self._fail(texts.STATUS_EMPTY_VOLUME.format(frame=frame))
-            return
+            return False
+
         self._view.show_volume(grid, reset_camera=self._first_frame, force_update=force_update)
         self._first_frame = False
+
+        return True
 
     def _fail(self, message: str) -> None:
         self._wanted = None

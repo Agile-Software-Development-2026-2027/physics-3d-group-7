@@ -77,6 +77,15 @@ class MainController(QObject):
                     self._on_suggest_window_clicked
                 )
 
+        self._blob_controller: BlobDetectionController | None = None
+        if view is not None and self._volume_controller is not None:
+            self._blob_controller = BlobDetectionController(
+                window.right_panel.detection_inspector, view, parent=self
+            )
+            self._volume_controller.volume_prepared.connect(self._blob_controller.on_volume_prepared)
+            self._file_controller.loaded.connect(self._blob_controller.set_source)
+            self._file_controller.closed.connect(self._blob_controller.clear_source)
+
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
             if view is not None
@@ -96,14 +105,6 @@ class MainController(QObject):
         self._full_volume_bounds: Bounds6D | None = None
         self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
-
-        if view is not None:
-            self._blob_controller = BlobDetectionController(
-                window.right_panel.detection_inspector, view, parent=self
-            )
-            self.file_controller.loaded.connect(self._blob_controller.set_source)
-            self.file_controller.closed.connect(self._blob_controller.clear_source)
-            self.playback_controller.frame_changed.connect(self._blob_controller.on_set_frame)
 
     @property
     def file_controller(self) -> FileController:
