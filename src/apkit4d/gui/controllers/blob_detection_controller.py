@@ -134,8 +134,6 @@ class BlobDetectionController(QObject):
     def _on_param_changed(self, field: str, value: float):
         self._params = replace(self._params, **{field: value})
 
-        print(self._params)
-
         if self._inspector.update_on_change:
             self._schedule_a_detect()
 

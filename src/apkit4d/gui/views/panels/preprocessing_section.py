@@ -9,7 +9,7 @@ from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 if TYPE_CHECKING:
     from apkit4d.gui.views.panels.right_panel import RightPanel
 
-from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -41,6 +41,8 @@ def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = Non
 class PreprocessingSection(AccordionSection):
     """The preprocessing accordion"""
 
+    suggest_window_clicked = Signal()
+
     def __init__(self, right_panel: RightPanel):
         super().__init__(texts.STAGE_TITLE_PREPROCESSING)
 
@@ -61,12 +63,14 @@ class PreprocessingSection(AccordionSection):
         self.normalization_enabled: QCheckBox
         self.lowest_intensity: QDoubleSpinBox
         self.highest_intensity: QDoubleSpinBox
+        self.suggest_window_btn: QPushButton
         self.logarithmic_compression_enabled: QCheckBox
         self.gamma_correction_to_apply: FrameSlider
         self.gamma_value_label: QLabel
         self.clahe_enabled: QCheckBox
         self.clahe_clip: QDoubleSpinBox
         self.clahe_kernel_xy_um: QDoubleSpinBox
+        self.complete_btn: QPushButton
 
         self._widgets()
 
@@ -140,6 +144,7 @@ class PreprocessingSection(AccordionSection):
         self.lowest_instensity.setEnabled(normalization_on)
         self.highest_intensity.setEnabled(normalization_on)
         self.clahe_enabled.setEnabled(normalization_on)  # normalization is required for CLAHE
+        self.suggest_window_btn.setEnabled(normalization_on)
 
         clahe_on = self.clahe_enabled.isChecked() and normalization_on
         self.clahe_clip.setEnabled(clahe_on)
@@ -299,11 +304,12 @@ class PreprocessingSection(AccordionSection):
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
 
-        # TODO: suggest window
-        window = QPushButton("Suggest window")
-        window.setObjectName("suggest_window")
-        window.setToolTip("Press this button")
-        self.add_widget(window)
+        self.suggest_window_btn = QPushButton(texts.PREPROC_SUGGEST_WINDOW)
+        self.suggest_window_btn.setObjectName(names.PREPROC_SUGGEST_WINDOW)
+        self.suggest_window_btn.setToolTip(texts.PREPROC_SUGGEST_WINDOW_TOOLTIP)
+        self.suggest_window_btn.setEnabled(defaults.normalization_enabled)
+        self.suggest_window_btn.clicked.connect(self.suggest_window_clicked.emit)
+        self.add_widget(self.suggest_window_btn)
 
         self.add_widget(VSeparator())
 
@@ -331,7 +337,8 @@ class PreprocessingSection(AccordionSection):
         self.gamma_correction_to_apply.setObjectName(names.PREPROC_GAMMA_FIELD)
         self.gamma_correction_to_apply.setRange(10, 500)
         self.gamma_correction_to_apply.setSingleStep(5)
-        self.gamma_correction_to_apply.setValue(int(round(defaults.gamma_correction_to_apply * 100.0)))
+        with QSignalBlocker(self.gamma_correction_to_apply):
+            self.gamma_correction_to_apply.setValue(int(round(defaults.gamma_correction_to_apply * 100.0)))
         self.gamma_correction_to_apply.value_debounced.connect(self._on_gamma_slider_changed)
 
         self.gamma_value_label = QLabel(f"{defaults.gamma_correction_to_apply:.2f}")
@@ -400,14 +407,19 @@ class PreprocessingSection(AccordionSection):
         reset_btn.clicked.connect(lambda: self._on_reset(defaults))
         self.add_widget(reset_btn)
 
-        # TODO: complete button doesn't do anything right now
-        complete_btn = QPushButton(texts.BUTTON_COMPLETE_STAGE)
-        complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
-        complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-        complete_btn.clicked.connect(lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s))
-        self.add_widget(complete_btn)
-        self.right_panel._complete_buttons[self.step] = complete_btn
+        self.complete_btn = QPushButton(texts.PREPROC_COMPLETE)
+        self.complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
+        self.complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
+        self.complete_btn.clicked.connect(
+            lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s)
+        )
+        self.add_widget(self.complete_btn)
+        self.right_panel._complete_buttons[self.step] = self.complete_btn
 
     def _on_reset(self, defaults: PreprocParams):
         self.set_preproc_params(defaults)
         self.right_panel.step_params_reset.emit(self.step.value)
+
+    def set_intensity_window(self, low: float, high: float):
+        self.lowest_instensity.setValue(low)
+        self.highest_intensity.setValue(high)

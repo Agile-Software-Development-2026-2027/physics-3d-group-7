@@ -225,7 +225,7 @@ def preprocess(
 
 
 def suggest_window(
-    volume: Image[np.float32],
+    volume: Image[np.uint16],
     low_percentile: float = 1.0,
     high_percentile: float = 99.9,
     ignore_zeros: bool = True,

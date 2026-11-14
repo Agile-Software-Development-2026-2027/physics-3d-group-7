@@ -82,6 +82,7 @@ LABEL_PREPROC_BG_SIGMA_XY: str = "BG Sigma XY (µm):"
 LABEL_PREPROC_NORMALIZATION_ENABLED: str = "Window Normalize Intensities"
 LABEL_PREPROC_LOWEST_INTENSITY: str = "Window Min (AU):"
 LABEL_PREPROC_LOWEST_INTENSITY: str = "Window Min (AU):"
+PREPROC_SUGGEST_WINDOW: str = "Suggest Window"
 LABEL_PREPROC_HIGHEST_INTENSITY: str = "Window Max (AU):"
 LABEL_PREPROC_LOG_COMPRESSION: str = "Logarithmic Compression"
 LABEL_PREPROC_GAMMA: str = "Gamma Correction:"
@@ -104,7 +105,9 @@ PREPROC_CLAHE_TOOLTIP: str = (
 )
 PREPROC_CLAHE_CLIP_TOOLTIP: str = "Controls noise amplification"
 PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used by CLAHE"
-PREPROC_RESET: str = "Reset all to defaults"
+PREPROC_RESET: str = "Reset All to Defaults"
+PREPROC_SUGGEST_WINDOW_TOOLTIP: str = "Computed the intensity window from the current volume"
+PREPROC_COMPLETE: str = "Done"  # 🤷‍♂️
 
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"
