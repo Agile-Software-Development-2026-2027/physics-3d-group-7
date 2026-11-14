@@ -103,11 +103,13 @@ class BlobDetectionController(QObject):
         self._busy = False  # True when a detection is running
         self._stale = False  # True if a new run was requested while one was running
         self._running = (0, 0)  # (generation, frame) the running detection was started for
+        self._precomputed_by_frame: dict[int, pd.DataFrame] | None = None
 
     def set_source(self, _path: Path, source: FrameSource):
         """Start working on a new recording."""
         self._generation += 1
         self._source = source
+        self._precomputed_by_frame = None
         self._stale = False
         self._frame = 0
         self._timer.stop()
@@ -117,10 +119,32 @@ class BlobDetectionController(QObject):
         """The recording was closed."""
         self._generation += 1
         self._source = None
+        self._precomputed_by_frame = None
         self._frame = 0
         self._stale = False
         self._timer.stop()
         self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
+
+    def set_precomputed_blobs(self, blobs_df: pd.DataFrame | None) -> None:
+        """Load precomputed per-frame blobs (e.g. from mock or processed data)."""
+        self._timer.stop()
+        if blobs_df is None or blobs_df.empty:
+            self._precomputed_by_frame = None
+            self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
+            return
+
+        by_frame: dict[int, pd.DataFrame] = {}
+        for _frame_key, group in blobs_df.groupby("frame", sort=False):
+            frame_num = int(group["frame"].iloc[0])
+            by_frame[frame_num] = group.reset_index(drop=True)
+        self._precomputed_by_frame = by_frame
+        self._show_precomputed_frame(self._frame)
+
+    def _show_precomputed_frame(self, frame: int) -> None:
+        if self._precomputed_by_frame is None:
+            return
+        frame_df = self._precomputed_by_frame.get(frame, pd.DataFrame())
+        self._show_blobs(_BlobDetection(frame, frame_df))
 
     def on_set_frame(self, frame: int):
         """The frame shown changed."""
@@ -128,6 +152,8 @@ class BlobDetectionController(QObject):
 
         if self._inspector.update_on_change:
             self._detect()
+        elif self._precomputed_by_frame is not None:
+            self._show_precomputed_frame(frame)
         else:
             self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
 

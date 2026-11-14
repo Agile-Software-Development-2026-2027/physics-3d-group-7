@@ -9,6 +9,7 @@ from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
+from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.mock import MockConfig, MockFrameSource
 
@@ -100,8 +101,26 @@ def test_main_controller_open_mock_loads_source_and_playback(qtbot, qapp, window
     assert window.playback_bar.isEnabled()
     assert texts.MOCK_SOURCE_NAME in window.windowTitle()
 
-    # Stepping to another frame updates the mock volume view live
+    # All processing stages up to tracking are marked completed and frame 0 blobs render immediately
+    for step in (
+        PipelineStep.ROI,
+        PipelineStep.PREPROCESSING,
+        PipelineStep.DETECTION,
+        PipelineStep.TRACKING,
+    ):
+        assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
+    assert view.show_blobs.called
+    frame0_poly = view.show_blobs.call_args.args[0]
+    assert frame0_poly.n_points == int((source.tracks["frame"] == 0).sum())
+
+    # Stepping to another frame updates both the mock volume and precomputed blobs live
     controller.playback_controller.go_to_frame(2)
     qtbot.waitUntil(lambda: view.show_volume.call_count >= 2, timeout=5000)
     wait_for_background_tasks()
     assert frames_seen == [2]
+    frame2_poly = view.show_blobs.call_args.args[0]
+    assert frame2_poly.n_points == int((source.tracks["frame"] == 2).sum())
+
+    # Closing the mock source resets the mock pipeline state cleanly
+    controller.file_controller.close()
+    assert controller.pipeline_model.get_status(PipelineStep.ROI) == StepStatus.IDLE

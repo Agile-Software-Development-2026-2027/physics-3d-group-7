@@ -154,3 +154,28 @@ def test_changing_frame_without_update_on_change_clears_the_blobs(qtbot, setup):
     controller.on_set_frame(5)
 
     assert view.meshes[-1].n_points == 0
+
+
+def test_precomputed_blobs_render_across_frames_without_detection(setup):
+    _inspector, view, controller = setup
+    precomputed = pd.DataFrame(
+        {
+            "frame": [0, 0, 3],
+            "x_um": [1.0, 2.0, 4.0],
+            "y_um": [2.0, 3.0, 5.0],
+            "z_um": [3.0, 4.0, 6.0],
+            "volume_um3": [500.0, 600.0, 700.0],
+        }
+    )
+
+    controller.set_precomputed_blobs(precomputed)
+    assert view.meshes[-1].n_points == 2
+
+    controller.on_set_frame(3)
+    assert view.meshes[-1].n_points == 1
+
+    controller.on_set_frame(4)
+    assert view.meshes[-1].n_points == 0
+
+    controller.set_precomputed_blobs(None)
+    assert view.meshes[-1].n_points == 0

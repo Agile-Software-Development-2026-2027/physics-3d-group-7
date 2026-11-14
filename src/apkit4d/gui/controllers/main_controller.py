@@ -22,11 +22,11 @@ from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController, VolumeView
-from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
-from apkit4d.io.mock import MockConfig, create_mock_source
+from apkit4d.io.mock import MockConfig, MockFrameSource, create_mock_source
 from apkit4d.roi import Bounds6D, RegionOfInterest
 
 
@@ -85,7 +85,6 @@ class MainController(QObject):
         )
         if self._appearance_controller is not None:
             self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
-        self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
         self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
@@ -98,6 +97,8 @@ class MainController(QObject):
         self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
 
+        self._is_mock_loaded = False
+        self._blob_controller: BlobDetectionController | None = None
         if view is not None:
             self._blob_controller = BlobDetectionController(
                 window.right_panel.detection_inspector, view, parent=self
@@ -105,6 +106,10 @@ class MainController(QObject):
             self.file_controller.loaded.connect(self._blob_controller.set_source)
             self.file_controller.closed.connect(self._blob_controller.clear_source)
             self.playback_controller.frame_changed.connect(self._blob_controller.on_set_frame)
+
+        # Connected after child controllers so source/blob resets happen before mock initialization
+        self._file_controller.loaded.connect(self._on_file_loaded)
+        self._file_controller.closed.connect(self._on_file_closed)
 
     @property
     def file_controller(self) -> FileController:
@@ -148,12 +153,37 @@ class MainController(QObject):
             lambda: create_mock_source(config),
         )
 
+    def _complete_mock_pipeline(self) -> None:
+        self._pipeline_model.reset_all()
+        for step in (
+            PipelineStep.ROI,
+            PipelineStep.PREPROCESSING,
+            PipelineStep.DETECTION,
+            PipelineStep.TRACKING,
+        ):
+            self._pipeline_model.set_step_status(step, StepStatus.COMPLETED)
+
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller
         playback.set_playing(False)
         playback.set_frame_count(source.info.n_t)
+
+        if isinstance(source, MockFrameSource):
+            self._is_mock_loaded = True
+            self._complete_mock_pipeline()
+            if self._blob_controller is not None:
+                self._blob_controller.set_precomputed_blobs(source.tracks)
+        elif self._is_mock_loaded:
+            self._is_mock_loaded = False
+            self._pipeline_model.reset_all()
+
         playback.go_to_frame(0)
         self._window.playback_bar.setEnabled(True)
+
+    def _on_file_closed(self) -> None:
+        if self._is_mock_loaded:
+            self._is_mock_loaded = False
+            self._pipeline_model.reset_all()
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error

@@ -36,7 +36,7 @@ class MockConfig:
         px_size_y: Voxel spacing along Y in micrometers.
         px_size_z: Voxel spacing along Z in micrometers.
         dt_s: Time interval between consecutive frames in seconds.
-        seed: Random seed for reproducible noise and particle intensities.
+        seed: Random seed for reproducible metadata ordering.
     """
 
     n_t: int = 120
@@ -66,196 +66,199 @@ class _TrackBlueprint:
     start_frac_t: float = 0.0
     end_frac_t: float = 1.0
     drop_frac_window: tuple[float, float] | None = None
-    peak_intensity: float = 2400.0
+    peak_intensity: float = 0.85
 
 
 def _build_default_blueprints() -> tuple[_TrackBlueprint, ...]:
-    """Return a diverse set of helical, smooth, peripheral, and transient tracks."""
+    """Return non-colliding helical, smooth, peripheral, and transient tracks across Z bands.
+
+    Each track stays inside a separated Z stratum and/or distinct XY quadrant so algae do
+    not converge into the same spot simultaneously, keeping per-frame blob detection separable.
+    """
     return (
-        # Tight helices passing through central and mid volume
+        # Band 1 (Lower Z: 0.10..0.24)
         _TrackBlueprint(
             track_id=1,
             profile="tight_helix",
-            start_frac=(0.24, 0.28, 0.25),
-            end_frac=(0.76, 0.72, 0.78),
+            start_frac=(0.14, 0.16, 0.12),
+            end_frac=(0.44, 0.42, 0.22),
             radius_um=8.5,
             omega_rad_s=13.0,
             phase_rad=0.0,
             speed_mod=0.25,
-            peak_intensity=3100.0,
+            peak_intensity=0.96,
         ),
-        _TrackBlueprint(
-            track_id=2,
-            profile="tight_helix",
-            start_frac=(0.72, 0.25, 0.72),
-            end_frac=(0.28, 0.74, 0.28),
-            radius_um=10.0,
-            omega_rad_s=11.0,
-            phase_rad=1.2,
-            speed_mod=0.15,
-            peak_intensity=2850.0,
-        ),
-        _TrackBlueprint(
-            track_id=3,
-            profile="tight_helix",
-            start_frac=(0.35, 0.65, 0.20),
-            end_frac=(0.68, 0.35, 0.84),
-            radius_um=7.5,
-            omega_rad_s=15.0,
-            phase_rad=2.4,
-            peak_intensity=2700.0,
-        ),
-        _TrackBlueprint(
-            track_id=4,
-            profile="tight_helix",
-            start_frac=(0.50, 0.22, 0.45),
-            end_frac=(0.52, 0.78, 0.56),
-            radius_um=9.5,
-            omega_rad_s=-12.0,
-            phase_rad=0.7,
-            peak_intensity=2950.0,
-        ),
-        # Wide helices with slower rotational frequency
         _TrackBlueprint(
             track_id=5,
             profile="wide_helix",
-            start_frac=(0.25, 0.50, 0.32),
-            end_frac=(0.75, 0.52, 0.72),
-            radius_um=27.0,
+            start_frac=(0.56, 0.18, 0.14),
+            end_frac=(0.86, 0.74, 0.22),
+            radius_um=24.0,
             omega_rad_s=4.2,
             phase_rad=0.4,
             speed_mod=0.35,
-            peak_intensity=3250.0,
+            peak_intensity=1.0,
         ),
-        _TrackBlueprint(
-            track_id=6,
-            profile="wide_helix",
-            start_frac=(0.65, 0.72, 0.28),
-            end_frac=(0.32, 0.28, 0.75),
-            radius_um=24.0,
-            omega_rad_s=5.0,
-            phase_rad=2.0,
-            peak_intensity=2900.0,
-        ),
-        _TrackBlueprint(
-            track_id=7,
-            profile="wide_helix",
-            start_frac=(0.30, 0.32, 0.68),
-            end_frac=(0.74, 0.68, 0.30),
-            radius_um=31.0,
-            omega_rad_s=-3.6,
-            phase_rad=3.1,
-            speed_mod=0.2,
-            peak_intensity=2650.0,
-        ),
-        # Non-helical smooth / curved / ballistic tracks
         _TrackBlueprint(
             track_id=8,
             profile="linear",
-            start_frac=(0.18, 0.48, 0.52),
-            end_frac=(0.84, 0.54, 0.48),
+            start_frac=(0.16, 0.82, 0.16),
+            end_frac=(0.48, 0.62, 0.20),
             radius_um=0.0,
             omega_rad_s=0.0,
             speed_mod=0.55,
-            peak_intensity=3000.0,
+            peak_intensity=0.92,
+        ),
+        _TrackBlueprint(
+            track_id=12,
+            profile="peripheral_helix",
+            start_frac=(0.06, 0.34, 0.12),
+            end_frac=(0.10, 0.90, 0.20),
+            radius_um=7.5,
+            omega_rad_s=11.5,
+            phase_rad=0.5,
+            peak_intensity=0.80,
+        ),
+        # Band 2 (Mid-Lower Z: 0.34..0.48)
+        _TrackBlueprint(
+            track_id=2,
+            profile="tight_helix",
+            start_frac=(0.86, 0.16, 0.36),
+            end_frac=(0.62, 0.42, 0.44),
+            radius_um=9.5,
+            omega_rad_s=11.0,
+            phase_rad=1.2,
+            speed_mod=0.15,
+            peak_intensity=0.90,
         ),
         _TrackBlueprint(
             track_id=9,
             profile="smooth_curve",
-            start_frac=(0.28, 0.20, 0.35),
-            end_frac=(0.70, 0.80, 0.68),
+            start_frac=(0.14, 0.44, 0.34),
+            end_frac=(0.34, 0.80, 0.40),
             radius_um=0.0,
             omega_rad_s=0.0,
-            sway_frac=(0.10, -0.08, 0.06),
+            sway_frac=(0.04, -0.04, 0.01),
             speed_mod=0.3,
-            peak_intensity=2500.0,
+            peak_intensity=0.82,
         ),
         _TrackBlueprint(
             track_id=10,
             profile="slow_drift",
-            start_frac=(0.45, 0.44, 0.58),
-            end_frac=(0.58, 0.58, 0.46),
+            start_frac=(0.58, 0.68, 0.38),
+            end_frac=(0.72, 0.80, 0.44),
             radius_um=0.0,
             omega_rad_s=0.0,
-            sway_frac=(0.04, 0.05, -0.03),
-            peak_intensity=2100.0,
-        ),
-        _TrackBlueprint(
-            track_id=11,
-            profile="smooth_curve",
-            start_frac=(0.76, 0.62, 0.24),
-            end_frac=(0.24, 0.38, 0.78),
-            radius_um=0.0,
-            omega_rad_s=0.0,
-            sway_frac=(-0.09, 0.11, 0.04),
-            peak_intensity=2600.0,
-        ),
-        # Peripheral tracks staying outside a typical central ROI (useful for filtering tests)
-        _TrackBlueprint(
-            track_id=12,
-            profile="peripheral_helix",
-            start_frac=(0.08, 0.12, 0.25),
-            end_frac=(0.14, 0.86, 0.75),
-            radius_um=8.0,
-            omega_rad_s=11.5,
-            phase_rad=0.5,
-            peak_intensity=2300.0,
+            sway_frac=(0.03, 0.04, 0.0),
+            peak_intensity=0.72,
         ),
         _TrackBlueprint(
             track_id=13,
             profile="peripheral_curve",
-            start_frac=(0.86, 0.14, 0.72),
-            end_frac=(0.90, 0.88, 0.28),
+            start_frac=(0.88, 0.28, 0.38),
+            end_frac=(0.92, 0.86, 0.48),
             radius_um=0.0,
             omega_rad_s=0.0,
-            sway_frac=(-0.03, 0.0, 0.05),
-            peak_intensity=2200.0,
+            sway_frac=(-0.03, 0.0, 0.02),
+            peak_intensity=0.78,
+        ),
+        # Band 3 (Mid-Upper Z: 0.62..0.76)
+        _TrackBlueprint(
+            track_id=3,
+            profile="tight_helix",
+            start_frac=(0.28, 0.66, 0.66),
+            end_frac=(0.58, 0.30, 0.74),
+            radius_um=7.5,
+            omega_rad_s=15.0,
+            phase_rad=2.4,
+            peak_intensity=0.88,
+        ),
+        _TrackBlueprint(
+            track_id=6,
+            profile="wide_helix",
+            start_frac=(0.62, 0.42, 0.60),
+            end_frac=(0.78, 0.66, 0.66),
+            radius_um=20.0,
+            omega_rad_s=5.0,
+            phase_rad=2.0,
+            peak_intensity=0.94,
+        ),
+        _TrackBlueprint(
+            track_id=11,
+            profile="smooth_curve",
+            start_frac=(0.18, 0.18, 0.64),
+            end_frac=(0.46, 0.56, 0.62),
+            radius_um=0.0,
+            omega_rad_s=0.0,
+            sway_frac=(-0.05, 0.06, 0.01),
+            peak_intensity=0.86,
         ),
         _TrackBlueprint(
             track_id=14,
             profile="peripheral_helix",
-            start_frac=(0.16, 0.88, 0.30),
-            end_frac=(0.84, 0.91, 0.70),
-            radius_um=9.0,
+            start_frac=(0.14, 0.88, 0.62),
+            end_frac=(0.84, 0.92, 0.70),
+            radius_um=8.5,
             omega_rad_s=-10.0,
             phase_rad=1.7,
-            peak_intensity=2450.0,
+            peak_intensity=0.84,
         ),
-        # Transient & gapped tracks testing entry, exit, and missing frames
+        # Band 4 (Upper Z: 0.82..0.94) + Transient / Gapped tracks
+        _TrackBlueprint(
+            track_id=4,
+            profile="tight_helix",
+            start_frac=(0.24, 0.24, 0.84),
+            end_frac=(0.76, 0.36, 0.92),
+            radius_um=9.0,
+            omega_rad_s=-12.0,
+            phase_rad=0.7,
+            peak_intensity=0.93,
+        ),
+        _TrackBlueprint(
+            track_id=7,
+            profile="wide_helix",
+            start_frac=(0.78, 0.78, 0.90),
+            end_frac=(0.24, 0.74, 0.84),
+            radius_um=24.0,
+            omega_rad_s=-3.6,
+            phase_rad=3.1,
+            speed_mod=0.2,
+            peak_intensity=0.89,
+        ),
         _TrackBlueprint(
             track_id=15,
             profile="transient_early",
-            start_frac=(0.30, 0.75, 0.42),
-            end_frac=(0.66, 0.40, 0.64),
-            radius_um=11.0,
+            start_frac=(0.14, 0.72, 0.84),
+            end_frac=(0.42, 0.80, 0.90),
+            radius_um=10.0,
             omega_rad_s=9.5,
             start_frac_t=0.0,
             end_frac_t=0.48,
-            peak_intensity=2550.0,
+            peak_intensity=0.85,
         ),
         _TrackBlueprint(
             track_id=16,
             profile="transient_late",
-            start_frac=(0.64, 0.30, 0.36),
-            end_frac=(0.34, 0.70, 0.72),
-            radius_um=14.0,
+            start_frac=(0.56, 0.16, 0.84),
+            end_frac=(0.84, 0.56, 0.90),
+            radius_um=11.0,
             omega_rad_s=7.0,
             start_frac_t=0.35,
             end_frac_t=1.0,
-            peak_intensity=2750.0,
+            peak_intensity=0.91,
         ),
         _TrackBlueprint(
             track_id=17,
             profile="gapped_transient",
-            start_frac=(0.40, 0.30, 0.66),
-            end_frac=(0.62, 0.70, 0.38),
+            start_frac=(0.36, 0.16, 0.18),
+            end_frac=(0.56, 0.38, 0.22),
             radius_um=0.0,
             omega_rad_s=0.0,
-            sway_frac=(0.06, -0.04, 0.05),
+            sway_frac=(0.03, -0.02, 0.01),
             start_frac_t=0.18,
             end_frac_t=0.82,
             drop_frac_window=(0.45, 0.48),
-            peak_intensity=2350.0,
+            peak_intensity=0.80,
         ),
     )
 
@@ -301,11 +304,13 @@ def _evaluate_blueprint(
     progress = s + (mod / (2.0 * np.pi)) * np.sin(2.0 * np.pi * s)
 
     usable_span = np.maximum(domain_um - 2.0 * margin_um, 1e-3)
-    max_safe_radius = float(np.min(usable_span) * 0.28)
+    max_safe_radius = float(np.min(usable_span) * 0.25)
     radius = min(spec.radius_um, max_safe_radius)
 
-    inner_min = margin_um + radius
-    inner_max = np.maximum(domain_um - margin_um - radius, inner_min)
+    # Reserve lateral helix clearance along X/Y while preserving tight Z-band separation
+    inner_pad = np.array([radius, radius, min(radius * 0.4, usable_span[2] * 0.08)], dtype=np.float64)
+    inner_min = margin_um + inner_pad
+    inner_max = np.maximum(domain_um - margin_um - inner_pad, inner_min)
     inner_span = inner_max - inner_min
 
     p_start = inner_min + np.array(spec.start_frac, dtype=np.float64) * inner_span
@@ -341,12 +346,12 @@ def _evaluate_blueprint(
             "z_um": z_um,
             "y_um": y_um,
             "x_um": x_um,
-            "volume_um3": np.full(n_pts, 1850.0, dtype=np.float64),
-            "n_voxels": np.full(n_pts, 13, dtype=np.int64),
+            "volume_um3": np.full(n_pts, 4500.0, dtype=np.float64),
+            "n_voxels": np.full(n_pts, 32, dtype=np.int64),
             "z_extent": np.full(n_pts, config.px_size_z * 2.5, dtype=np.float64),
-            "response": np.full(n_pts, 0.72, dtype=np.float64),
+            "response": np.full(n_pts, 0.35, dtype=np.float64),
             "peak": np.full(n_pts, spec.peak_intensity, dtype=np.float64),
-            "mean_intensity": np.full(n_pts, spec.peak_intensity * 0.42, dtype=np.float64),
+            "mean_intensity": np.full(n_pts, spec.peak_intensity * 0.45, dtype=np.float64),
             "max_intensity": np.full(n_pts, spec.peak_intensity, dtype=np.float64),
             "t_s": frames.astype(np.float64) * config.dt_s,
             "reliability": np.full(n_pts, 0.98, dtype=np.float64),
@@ -381,8 +386,8 @@ def generate_mock_tracks(config: MockConfig | None = None) -> tuple[pd.DataFrame
         dtype=np.float64,
     )
     margin_um = np.minimum(
-        np.array([2.0 * cfg.px_size_x, 2.0 * cfg.px_size_y, 1.25 * cfg.px_size_z], dtype=np.float64),
-        domain_um * 0.2,
+        np.array([2.5 * cfg.px_size_x, 2.5 * cfg.px_size_y, 1.5 * cfg.px_size_z], dtype=np.float64),
+        domain_um * 0.15,
     )
 
     blueprints = _build_default_blueprints()
@@ -402,14 +407,16 @@ def generate_mock_tracks(config: MockConfig | None = None) -> tuple[pd.DataFrame
 class MockFrameSource:
     """In-memory synthetic FrameSource aligned with generated 3D algae trajectories.
 
-    Synthesizes 3D Gaussian blobs in each requested frame on demand so memory footprint
-    stays minimal while providing full volume playback, preprocessing, and blob alignment.
+    Synthesizes clean, background-subtracted `[0.0, 1.0]` `float32` 3D Gaussian blobs
+    per frame on demand so empty background has zero fog (`0.0`) and `find_blobs` runs
+    cleanly without extra preprocessing.
     """
 
-    BACKGROUND_LEVEL = 120.0
-    NOISE_STD = 12.0
-    SIGMA_XY_VOX = 1.8
-    SIGMA_Z_VOX = 1.2
+    BACKGROUND_LEVEL = 0.0
+    NOISE_STD = 0.0
+    SIGMA_XY_VOX = 1.6
+    SIGMA_Z_VOX = 1.15
+    INTENSITY_CUTOFF = 1e-3
 
     def __init__(self, config: MockConfig | None = None, name: str = "Mock Algae Session") -> None:
         self._config = config if config is not None else MockConfig()
@@ -422,7 +429,7 @@ class MockFrameSource:
             n_y=self._config.n_y,
             n_x=self._config.n_x,
             n_c=1,
-            dtype="uint16",
+            dtype="float32",
             px_size_x=self._config.px_size_x,
             px_size_y=self._config.px_size_y,
             px_size_z=self._config.px_size_z,
@@ -501,24 +508,19 @@ class MockFrameSource:
             },
         }
 
-    def read(self, t: int) -> NDArray[np.uint16]:
-        """Synthesize and return the 3D `(Z, Y, X)` volume for frame `t`."""
+    def read(self, t: int) -> NDArray[np.float32]:
+        """Synthesize and return the normalized 3D `(Z, Y, X)` volume for frame `t`."""
         if self._closed:
             raise RuntimeError("Cannot read from a closed MockFrameSource")
         if t < 0 or t >= self._info.n_t:
             raise IndexError(f"Frame index {t} out of range [0, {self._info.n_t})")
 
-        rng = np.random.default_rng(self._config.seed + t)
-        volume = self.BACKGROUND_LEVEL + rng.normal(
-            0.0,
-            self.NOISE_STD,
-            size=(self._info.n_z, self._info.n_y, self._info.n_x),
-        )
+        volume = np.zeros((self._info.n_z, self._info.n_y, self._info.n_x), dtype=np.float32)
 
         blobs = self._frame_blobs.get(t)
         if blobs is not None:
-            rad_z = int(np.ceil(3.0 * self.SIGMA_Z_VOX))
-            rad_xy = int(np.ceil(3.0 * self.SIGMA_XY_VOX))
+            rad_z = int(np.ceil(3.5 * self.SIGMA_Z_VOX))
+            rad_xy = int(np.ceil(3.5 * self.SIGMA_XY_VOX))
             zs, ys, xs, peaks = blobs
             for zc, yc, xc, peak in zip(zs, ys, xs, peaks, strict=True):
                 z0 = max(0, int(np.floor(zc)) - rad_z)
@@ -532,9 +534,11 @@ class MockFrameSource:
                 gy = ((np.arange(y0, y1, dtype=np.float64) - yc) / self.SIGMA_XY_VOX) ** 2
                 gx = ((np.arange(x0, x1, dtype=np.float64) - xc) / self.SIGMA_XY_VOX) ** 2
                 gauss = peak * np.exp(-0.5 * (gz[:, None, None] + gy[None, :, None] + gx[None, None, :]))
-                volume[z0:z1, y0:y1, x0:x1] += gauss
+                gauss[gauss < self.INTENSITY_CUTOFF] = 0.0
+                patch = volume[z0:z1, y0:y1, x0:x1]
+                volume[z0:z1, y0:y1, x0:x1] = np.maximum(patch, gauss.astype(np.float32))
 
-        return np.clip(volume, 0.0, 65535.0).astype(np.uint16)
+        return volume
 
     def close(self) -> None:
         """Mark the mock source as closed."""
