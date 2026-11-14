@@ -68,6 +68,7 @@ class RoiSelectionView(Protocol):
 class PreparedVolume:
     """What the 3D view is showing, in the form blob detection needs."""
 
+    is_image_normalized: bool
     frame: int
     voxel: tuple[float, float, float]  # (z, y, x) in micrometers
     roi_volume: Image[np.uint16]  # cropped, raw: for the weighted centroid
@@ -191,7 +192,14 @@ class VolumeController(QObject):
                     else voxel_offset(self._current_roi_origin, self._voxel)
                 )
                 self.volume_prepared.emit(
-                    PreparedVolume(self._current_frame, self._voxel, self._current_roi_volume, volume, offset)
+                    PreparedVolume(
+                        self._preproc_params.normalization_enabled,
+                        self._current_frame,
+                        self._voxel,
+                        self._current_roi_volume,
+                        volume,
+                        offset,
+                    )
                 )
 
     def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:

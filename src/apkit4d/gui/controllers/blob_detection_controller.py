@@ -6,7 +6,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 import pyvista as pv
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from apkit4d.blob_detection import BlobParams, find_blobs
 from apkit4d.gui.constants import texts
@@ -40,6 +40,7 @@ def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
         offset=prepared.offset,
         frame=prepared.frame,
     )
+
     return BlobDetection(prepared.frame, blobs)
 
 
@@ -118,6 +119,17 @@ class BlobDetectionController(QObject):
         self._stale = False  # True if a new run was requested while one was running
         self._running: PreparedVolume | None = None  # the volume the running detection works on
 
+    @Slot(bool)
+    def on_normalization_toggled(self, checked: bool):
+        disabled = not checked
+
+        self._inspector.disable_update_on_change(disabled)
+        if disabled:
+            self._inspector.update_on_change = False
+
+        self._inspector.disable_find_blob(disabled)
+
+    @Slot(PreparedVolume)
     def on_volume_prepared(self, prepared: PreparedVolume):
         """The 3D view shows a new volume (frame, ROI or preprocessing changed)."""
 
@@ -146,6 +158,7 @@ class BlobDetectionController(QObject):
         self._timer.stop()
         self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
 
+    @Slot(str, float)
     def _on_blob_param_changed(self, field: str, value: float):
         self._params = replace(self._params, **{field: value})
 
@@ -154,6 +167,7 @@ class BlobDetectionController(QObject):
 
         self.params_changed.emit(field, value)
 
+    @Slot(bool)
     def _on_update_on_change(self, enabled: bool):
         if enabled:
             self._schedule_a_detect()
@@ -165,8 +179,8 @@ class BlobDetectionController(QObject):
         self._timer.stop()
 
         prepared = self._prepared
-        if prepared is None:
-            return  # no volume on screen yet
+        if prepared is None or not prepared.is_image_normalized:
+            return  # no volume on screen yet or volume is not normalized
 
         if self._busy:
             self._stale = True  # run again with the latest values when this one ends
@@ -178,12 +192,14 @@ class BlobDetectionController(QObject):
         self._inspector.set_detection_status(texts.INSPECTOR_STATUS_DETECTING)
         self._runner.run(partial(detect_blobs, prepared, self._params))
 
+    @Slot(int, BlobDetection)
     def _on_done(self, _task_id: int, result: BlobDetection):
         if self._finish():
             self._show_blobs(result)
 
         self._run_again_if_needed()
 
+    @Slot(int, Exception)
     def _on_failed(self, _task_id: int, error: Exception):
         if self._finish():
             reason = str(error) or type(error).__name__
@@ -227,6 +243,7 @@ class BlobDetectionController(QObject):
         self._view.show_blobs(pv.PolyData())  # an empty mesh removes the blobs
         self._inspector.set_detection_status(status)
 
+    @Slot(bool)
     def _on_show_segments_toggled(self, toggled: bool):
         if toggled:
             # TODO: show segments

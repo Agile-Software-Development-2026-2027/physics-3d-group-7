@@ -14,9 +14,7 @@ from apkit4d.gui.controllers.blob_detection_controller import (
     BlobDetectionController,
 )
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
-from apkit4d.gui.views.widgets.blob_detection_inspector import (
-    BlobDetectionInspector,
-)
+from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 
 BLOBS = pd.DataFrame(
     {
@@ -26,7 +24,6 @@ BLOBS = pd.DataFrame(
         "volume_um3": [500.0],
     }
 )
-
 SOURCE = types.SimpleNamespace(info=types.SimpleNamespace(voxel=(1, 1, 1)))
 
 
@@ -38,9 +35,10 @@ class FakeView:
         self.meshes.append(poly)
 
 
-def make_prepared(frame: int = 0) -> PreparedVolume:
+def make_prepared(frame: int = 0, *, is_image_normalized: bool = True) -> PreparedVolume:
     """A new volume every time: the controller tells volumes apart by identity."""
     return PreparedVolume(
+        is_image_normalized=is_image_normalized,
         frame=frame,
         voxel=(1.0, 1.0, 1.0),
         roi_volume=np.zeros((2, 3, 4), dtype=np.uint16),
@@ -97,24 +95,23 @@ def setup(qtbot, fake_detect):
     return inspector, view, controller
 
 
-def announce(setup, frame: int = 0) -> PreparedVolume:
+def announce(setup, frame: int = 0, *, is_image_normalized: bool = True) -> PreparedVolume:
     """The 3D view shows a new volume and announces it to the controller."""
+
     _, view, controller = setup
-    prepared = make_prepared(frame)
+    prepared = make_prepared(frame, is_image_normalized=is_image_normalized)
     controller.on_volume_prepared(prepared)
-    view.meshes.clear()  # the controller cleared the blobs of the previous volume: not what the tests look at
+    view.meshes.clear()
     return prepared
 
 
 def click_find_blobs(qtbot, inspector):
-    qtbot.mouseClick(
-        inspector._find_blobs_button,
-        Qt.MouseButton.LeftButton,
-    )
+    qtbot.mouseClick(inspector._find_blobs_button, Qt.MouseButton.LeftButton)
 
 
 def enable_update_on_change(inspector):
     """Tick the checkbox without the detection its signal would schedule."""
+
     inspector._update_on_change.blockSignals(True)
     inspector._update_on_change.setChecked(True)
     inspector._update_on_change.blockSignals(False)
@@ -135,12 +132,60 @@ def test_find_blobs_detects_the_volume_on_screen_and_shows_the_result(qtbot, set
 
 def test_find_blobs_does_nothing_without_a_volume(qtbot, setup, fake_detect):
     inspector, view, _ = setup
-
     click_find_blobs(qtbot, inspector)
     qtbot.wait(100)
-
     assert fake_detect == []
     assert view.meshes == []
+
+
+def test_find_blobs_does_nothing_when_volume_is_not_normalized(qtbot, setup, fake_detect):
+    inspector, view, _ = setup
+    prepared = announce(setup, is_image_normalized=False)
+    click_find_blobs(qtbot, inspector)
+    qtbot.wait(100)
+    assert prepared.is_image_normalized is False
+    assert fake_detect == []
+    assert view.meshes == []
+
+
+def test_detection_works_again_when_a_normalized_volume_arrives(qtbot, setup, fake_detect):
+    inspector, view, _ = setup
+    announce(setup, frame=0, is_image_normalized=False)
+    click_find_blobs(qtbot, inspector)
+    qtbot.wait(100)
+    assert fake_detect == []
+
+    normalized = announce(setup, frame=1, is_image_normalized=True)
+    click_find_blobs(qtbot, inspector)
+    qtbot.waitUntil(lambda: len(view.meshes) == 1)
+
+    assert len(fake_detect) == 1
+    assert fake_detect[0][0] is normalized
+    assert view.meshes[0].n_points == 1
+
+
+def test_update_on_change_does_not_detect_an_unnormalized_volume(qtbot, setup, fake_detect):
+    inspector, _, _ = setup
+    enable_update_on_change(inspector)
+    announce(setup, is_image_normalized=False)
+    inspector._lo_g_threshold.setValue(0.3)
+    qtbot.wait(BlobDetectionController.DEBOUNCE_MS + 100)
+    assert fake_detect == []
+
+
+def test_normalization_toggle_disables_detection_controls_and_resets_live_update(
+    setup,
+):
+    inspector, _, controller = setup
+    enable_update_on_change(inspector)
+    controller.on_normalization_toggled(False)
+    assert inspector._find_blobs_button.isEnabled() is False
+    assert inspector._update_on_change.isEnabled() is False
+    assert inspector.update_on_change is False
+    controller.on_normalization_toggled(True)
+    assert inspector._find_blobs_button.isEnabled() is True
+    assert inspector._update_on_change.isEnabled() is True
+    assert inspector.update_on_change is False
 
 
 def test_find_blobs_uses_the_latest_volume(qtbot, setup, fake_detect):
@@ -196,8 +241,7 @@ def test_the_same_volume_announced_twice_changes_nothing(qtbot, setup, fake_dete
     shown = len(view.meshes)
     controller.on_volume_prepared(prepared)
     qtbot.wait(100)
-
-    assert len(view.meshes) == shown  # the blobs on screen were not cleared
+    assert len(view.meshes) == shown
     assert len(fake_detect) == 1
 
 
@@ -206,30 +250,27 @@ def test_a_result_for_a_replaced_volume_is_discarded(qtbot, setup, blocking_dete
     announce(setup, frame=0)
     click_find_blobs(qtbot, inspector)
     qtbot.waitUntil(lambda: len(blocking_detect.started) == 1)
-
-    announce(setup, frame=1)  # the 3D view moved on while the detection was running
+    announce(setup, frame=1)
     blocking_detect.release.set()
     qtbot.wait(300)
 
     assert view.meshes == []
-    assert len(blocking_detect.started) == 1  # without update on change nothing detects again
+    assert len(blocking_detect.started) == 1
 
 
 def test_volumes_arriving_during_a_detection_detect_only_the_latest(qtbot, setup, blocking_detect):
     inspector, view, _ = setup
     enable_update_on_change(inspector)
     announce(setup, frame=1)
-    qtbot.waitUntil(lambda: len(blocking_detect.started) == 1)  # frame 1 is running, blocked
-
+    qtbot.waitUntil(lambda: len(blocking_detect.started) == 1)
     announce(setup, frame=2)
     announce(setup, frame=3)
     blocking_detect.release.set()
     qtbot.waitUntil(lambda: len(blocking_detect.started) == 2)
     qtbot.waitUntil(lambda: len(view.meshes) == 1)
     qtbot.wait(100)
-
-    assert [prepared.frame for prepared, _ in blocking_detect.started] == [1, 3]  # frame 2 was never detected
-    assert len(view.meshes) == 1  # the result of frame 1 was discarded
+    assert [prepared.frame for prepared, _ in blocking_detect.started] == [1, 3]
+    assert len(view.meshes) == 1
 
 
 def test_a_result_computed_with_old_parameters_is_discarded(qtbot, setup, blocking_detect):
@@ -239,7 +280,7 @@ def test_a_result_computed_with_old_parameters_is_discarded(qtbot, setup, blocki
     qtbot.waitUntil(lambda: len(blocking_detect.started) == 1)
 
     inspector._lo_g_threshold.setValue(0.3)
-    qtbot.wait(BlobDetectionController.DEBOUNCE_MS + 200)  # the debounce fires while the first run is blocked
+    qtbot.wait(BlobDetectionController.DEBOUNCE_MS + 200)
     blocking_detect.release.set()
 
     qtbot.waitUntil(lambda: len(blocking_detect.started) == 2)
@@ -251,7 +292,10 @@ def test_a_result_computed_with_old_parameters_is_discarded(qtbot, setup, blocki
     "close",
     [
         pytest.param(lambda controller: controller.clear_source(), id="clear_source"),
-        pytest.param(lambda controller: controller.set_source(Path("other.czi"), SOURCE), id="set_source"),
+        pytest.param(
+            lambda controller: controller.set_source(Path("other.czi"), SOURCE),
+            id="set_source",
+        ),
     ],
 )
 def test_closing_the_recording_forgets_the_volume(qtbot, setup, fake_detect, close):
@@ -263,13 +307,12 @@ def test_closing_the_recording_forgets_the_volume(qtbot, setup, fake_detect, clo
     qtbot.wait(100)
 
     assert view.meshes[-1].n_points == 0
-    assert fake_detect == []  # the volume of the previous recording is gone
+    assert fake_detect == []
 
 
 def test_parameter_change_does_not_run_without_update_on_change(qtbot, setup, fake_detect):
     inspector, _, _ = setup
-    announce(setup)  # without a volume nothing would run anyway
-
+    announce(setup)
     inspector._lo_g_threshold.setValue(0.3)
 
     qtbot.wait(BlobDetectionController.DEBOUNCE_MS + 200)
@@ -297,14 +340,10 @@ def test_z_equals_xy_is_synchronized_by_the_view(qtbot, setup, fake_detect):
     announce(setup)
 
     inspector._diameter_z_equals_xy.setChecked(True)
-
-    # Changing XY while the checkbox is checked must also update Z.
     inspector._diameter_xy.setValue(16.0)
-
     click_find_blobs(qtbot, inspector)
 
     qtbot.waitUntil(lambda: len(fake_detect) == 1)
-
     params = fake_detect[0][1]
 
     assert params.diameter_xy_um == 16.0
@@ -316,14 +355,11 @@ def test_xy_and_z_can_differ_when_checkbox_is_unchecked(qtbot, setup, fake_detec
     announce(setup)
 
     inspector._diameter_z_equals_xy.setChecked(False)
-
     inspector._diameter_xy.setValue(16.0)
     inspector._diameter_z.setValue(70.0)
-
     click_find_blobs(qtbot, inspector)
 
     qtbot.waitUntil(lambda: len(fake_detect) == 1)
-
     params = fake_detect[0][1]
 
     assert params.diameter_xy_um == 16.0
@@ -332,6 +368,7 @@ def test_xy_and_z_can_differ_when_checkbox_is_unchecked(qtbot, setup, fake_detec
 
 def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
     prepared = PreparedVolume(
+        is_image_normalized=True,
         frame=3,
         voxel=(5.0, 1.0, 2.0),
         roi_volume=np.ones((2, 3, 4), dtype=np.uint16),
@@ -343,16 +380,15 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
 
     def fake_find_blobs(image, blob_params, voxel, **kwargs):
         seen.update(image=image, params=blob_params, voxel=voxel, kwargs=kwargs)
-        return BLOBS.copy(), None, np.array([])
+        return (BLOBS.copy(), None, np.array([]))
 
     monkeypatch.setattr(module, "find_blobs", fake_find_blobs)
 
     result = module.detect_blobs(prepared, params)
-
-    assert seen["image"] is prepared.image  # the algorithm looks at the preprocessed volume
+    assert seen["image"] is prepared.image
     assert seen["params"] is params
     assert seen["voxel"] == (5.0, 1.0, 2.0)
-    assert seen["kwargs"]["intensity"] is prepared.roi_volume  # the centroid uses the raw cropped one
+    assert seen["kwargs"]["intensity"] is prepared.roi_volume
     assert seen["kwargs"]["offset"] == (1, 2, 3)
     assert seen["kwargs"]["frame"] == 3
     assert result.frame == 3

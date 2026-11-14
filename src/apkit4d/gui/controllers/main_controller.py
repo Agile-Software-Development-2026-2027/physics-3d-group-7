@@ -86,6 +86,11 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
 
+            if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
+                preproc_sec = cast(PreprocessingSection, preproc_sec)
+                self._blob_controller.on_normalization_toggled(preproc_sec.normalization_enabled.isChecked())
+                preproc_sec.normalization_toggled.connect(self._blob_controller.on_normalization_toggled)
+
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
             if view is not None
