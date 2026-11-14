@@ -26,6 +26,7 @@ from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
+from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.roi import Bounds6D, RegionOfInterest
 
 
@@ -139,6 +140,13 @@ class MainController(QObject):
     def pipeline_controller(self) -> PipelineController:
         """Controller of the analysis pipeline."""
         return self._pipeline_controller
+
+    def open_mock(self, config: MockConfig | None = None) -> None:
+        """Open a synthetic mock recording in the background."""
+        self._file_controller.open_with(
+            Path(texts.MOCK_SOURCE_NAME),
+            lambda: create_mock_source(config),
+        )
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller

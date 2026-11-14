@@ -30,12 +30,12 @@ def test_apkit4d_gui_is_defined(runner: CliRunner, fake_gui: MagicMock):  # pyri
     assert result.exit_code == 0
 
 
-@pytest.mark.parametrize("param", ["czi", "--software-gl", "--diagnostic"])
+@pytest.mark.parametrize("param", ["czi", "--software-gl", "--diagnostic", "--mock"])
 def test_apkit4d_gui_has_params_defined(param: str):
     assert is_param_defined(GUI, param)
 
 
-@pytest.mark.parametrize("option", ["--software-gl", "--diagnostic"])
+@pytest.mark.parametrize("option", ["--software-gl", "--diagnostic", "--mock"])
 def test_gui_options_are_flags_with_default_false(option: str):
     opt = get_option(GUI, option)
     assert opt.is_flag
@@ -61,3 +61,17 @@ def test_gui_rejects_two_files(runner: CliRunner, fake_gui: MagicMock, tmp_path:
     _ = b.write_bytes(b"")
     r = runner.invoke(cli, ["gui", str(a), str(b)])
     assert r.exit_code == 2
+
+
+def test_gui_mock_flag_runs_with_mock_true(runner: CliRunner, fake_gui: MagicMock):
+    r = runner.invoke(cli, ["gui", "--mock"])
+    assert r.exit_code == 0
+    fake_gui.run.assert_called_once_with(None, mock=True)
+
+
+def test_gui_rejects_czi_with_mock_flag(runner: CliRunner, fake_gui: MagicMock, tmp_path: pathlib.Path):  # pyright: ignore[reportUnusedParameter]
+    czi = tmp_path / "sample.czi"
+    _ = czi.write_bytes(b"")
+    r = runner.invoke(cli, ["gui", str(czi), "--mock"])
+    assert r.exit_code == 2
+    assert "Cannot specify both" in r.output

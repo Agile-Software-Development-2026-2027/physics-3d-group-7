@@ -13,6 +13,7 @@ from apkit4d.gui.models.output_type import OutputType
 PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 
 # main window
+MOCK_SOURCE_NAME: str = "Mock Algae Session"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
 STATUS_NO_FILE: str = "No file open"
 STATUS_OPENING: str = "Opening {name}..."
