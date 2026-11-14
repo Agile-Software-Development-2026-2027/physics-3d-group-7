@@ -11,9 +11,11 @@ orchestrates the analysis pipeline.
 from pathlib import Path
 from typing import Protocol, cast
 
+import pandas as pd
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
@@ -21,12 +23,16 @@ from apkit4d.gui.controllers.file_controller import FileController, FrameSource,
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.theme_controller import ThemeController
+from apkit4d.gui.controllers.trajectory_linking_controller import (
+    TrajectoryLinkingController,
+)
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController, VolumeView
-from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
 from apkit4d.roi import Bounds6D, RegionOfInterest
+from apkit4d.tracking.linker import TrackingResult
 
 
 class SceneView(VolumeView, AppearanceView, BlobView, Protocol):
@@ -62,6 +68,15 @@ class MainController(QObject):
         self._theme_controller = ThemeController(app, self)
         self._pipeline_model = PipelineModel(self)
         self._pipeline_controller = PipelineController(self._pipeline_model, window.right_panel, self)
+
+        self._tracking_controller = TrajectoryLinkingController(self)
+        self._tracking_controller.result_ready.connect(self._on_tracking_ready)
+        self._tracking_controller.failed.connect(self._on_tracking_failed)
+
+        self._tracking_result: TrackingResult | None = None
+        self._tracking_running_config: TrackingConfig | None = None
+
+        self._pipeline_model.step_status_changed.connect(self._on_tracking_step_status_changed)
 
         self._volume_controller = VolumeController(window, view, self) if view is not None else None
         if self._volume_controller is not None:
@@ -139,6 +154,79 @@ class MainController(QObject):
     def pipeline_controller(self) -> PipelineController:
         """Controller of the analysis pipeline."""
         return self._pipeline_controller
+
+    @property
+    def tracking_result(self) -> TrackingResult | None:
+        """Return the latest accepted tracking result."""
+        return self._tracking_result
+
+    def _on_tracking_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
+        """Start tracking when the pipeline reaches its tracking stage."""
+        if step != PipelineStep.TRACKING:
+            return
+
+        if status != StepStatus.COMPLETED:
+            self._tracking_result = None
+
+        if status == StepStatus.RUNNING:
+            self._start_tracking_if_needed()
+
+    def _start_tracking_if_needed(self) -> None:
+        """Run tracking using the current parameters and demo detections."""
+        if self._pipeline_model.get_status(PipelineStep.TRACKING) != StepStatus.RUNNING:
+            return
+
+        if self._tracking_controller.is_running:
+            return
+
+        config = TrackingConfig(**self._pipeline_model.get_step_params(PipelineStep.TRACKING))
+
+        # Synthetic input until SCRUM-88 provides real blob detections.
+        detections = pd.DataFrame(
+            {
+                "frame": list(range(6)),
+                "z_um": [0.0] * 6,
+                "y_um": [0.0] * 6,
+                "x_um": [float(i) for i in range(6)],
+            }
+        )
+
+        self._tracking_running_config = config
+
+        try:
+            self._tracking_controller.run(detections, config)
+        except Exception as error:
+            self._on_tracking_failed(error)
+
+    def _tracking_result_is_current(self) -> bool:
+        """Check whether the completed task still matches the pipeline."""
+        if self._pipeline_model.get_status(PipelineStep.TRACKING) != StepStatus.RUNNING:
+            return False
+
+        current_config = TrackingConfig(**self._pipeline_model.get_step_params(PipelineStep.TRACKING))
+        return current_config == self._tracking_running_config
+
+    def _on_tracking_ready(self, result: TrackingResult) -> None:
+        """Accept the result only when the running configuration is current."""
+        if not self._tracking_result_is_current():
+            self._start_tracking_if_needed()
+            return
+
+        self._tracking_result = result
+        self._pipeline_controller.complete_stage(PipelineStep.TRACKING)
+
+    def _on_tracking_failed(self, error: Exception) -> None:
+        """Report failures and restore the pipeline to a retryable state."""
+        if not self._tracking_result_is_current():
+            self._start_tracking_if_needed()
+            return
+
+        self._tracking_result = None
+        self._pipeline_model.invalidate_from(PipelineStep.TRACKING)
+
+        reason = str(error) or type(error).__name__
+        self._window.right_panel.set_stats_summary("Trajectory linking failed")
+        self._window.right_panel.set_stats_details(reason)
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller
