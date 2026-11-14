@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSpinBox,
@@ -35,6 +36,7 @@ from apkit4d.gui.theme import (
 )
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
+from apkit4d.gui.views.widgets.batch_inspector import BatchInspector
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
 from apkit4d.gui.views.widgets.trajectory_linking_inspector import TrajectoryLinkingInspector
@@ -93,13 +95,20 @@ class BottomStatsSection(QFrame):
         self._details_label = QLabel(texts.STATS_DEFAULT_DETAILS)
         self._details_label.setObjectName(names.BOTTOM_STATS_DETAILS_LABEL)
         self._details_label.setWordWrap(True)
+        self._details_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._details_layout.addWidget(self._details_label)
 
         # Start collapsed with maximumHeight = 0
         self._details_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._details_frame.setMaximumHeight(0)
 
+        self.progress = QProgressBar(self)
+        self.progress.hide()
         self._main_layout.addWidget(self._header)
+        progress_layout = QHBoxLayout()
+        progress_layout.setContentsMargins(8, 4, 8, 6)
+        progress_layout.addWidget(self.progress)
+        self._main_layout.addLayout(progress_layout)
         self._main_layout.addWidget(self._details_frame)
 
         # Smooth animation setup
@@ -128,6 +137,8 @@ class BottomStatsSection(QFrame):
     def set_details(self, text: str) -> None:
         """Update the detailed stats text."""
         self._details_label.setText(text)
+        if self._is_expanded:
+            self._details_frame.setMaximumHeight(self._details_layout.sizeHint().height() + 12)
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         """
@@ -468,8 +479,20 @@ class RightPanel(SidePanel):
                         lambda: self.step_params_reset.emit(PipelineStep.TRACKING.value)
                     )
                 case PipelineStep.BATCH:
-                    # TODO: implement
-                    pass
+                    self.batch_inspector = BatchInspector()
+                    self.batch_inspector.output_dir.textChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "out_dir", value)
+                    )
+                    self.batch_inspector.format.currentTextChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "format", value)
+                    )
+                    self.batch_inspector.first_frame.valueChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t0", value - 1)
+                    )
+                    self.batch_inspector.last_frame.valueChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t1", value - 1)
+                    )
+                    sec.add_widget(self.batch_inspector)
                 case _:
                     assert_never(step)
 
