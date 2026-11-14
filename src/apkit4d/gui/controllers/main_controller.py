@@ -75,6 +75,10 @@ class MainController(QObject):
 
         self._tracking_result: TrackingResult | None = None
         self._tracking_running_config: TrackingConfig | None = None
+        self._tracking_generation = 0
+        self._tracking_running_generation: int | None = None
+
+        self._pipeline_model.pipeline_reset.connect(self._on_tracking_pipeline_reset)
 
         self._pipeline_model.step_status_changed.connect(self._on_tracking_step_status_changed)
 
@@ -161,7 +165,7 @@ class MainController(QObject):
         return self._tracking_result
 
     def _on_tracking_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
-        """Start tracking when the pipeline reaches its tracking stage."""
+        """Start tracking and invalidate outdated results."""
         if step != PipelineStep.TRACKING:
             return
 
@@ -170,6 +174,13 @@ class MainController(QObject):
 
         if status == StepStatus.RUNNING:
             self._start_tracking_if_needed()
+        else:
+            self._tracking_generation += 1
+
+    def _on_tracking_pipeline_reset(self) -> None:
+        """Invalidate results from previous tracking runs."""
+        self._tracking_generation += 1
+        self._tracking_result = None
 
     def _start_tracking_if_needed(self) -> None:
         """Run tracking using the current parameters and demo detections."""
@@ -192,6 +203,7 @@ class MainController(QObject):
         )
 
         self._tracking_running_config = config
+        self._tracking_running_generation = self._tracking_generation
 
         try:
             self._tracking_controller.run(detections, config)
@@ -200,6 +212,9 @@ class MainController(QObject):
 
     def _tracking_result_is_current(self) -> bool:
         """Check whether the completed task still matches the pipeline."""
+        if self._tracking_running_generation != self._tracking_generation:
+            return False
+
         if self._pipeline_model.get_status(PipelineStep.TRACKING) != StepStatus.RUNNING:
             return False
 
