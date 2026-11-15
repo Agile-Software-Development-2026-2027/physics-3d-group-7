@@ -10,7 +10,7 @@ from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
 
-__all__ = ["HistogramsSection", "ThemeableHistogram"]
+__all__ = ["CollapsibleHistogram", "HistogramsSection", "ThemeableHistogram"]
 
 
 @runtime_checkable
@@ -18,6 +18,13 @@ class ThemeableHistogram(Protocol):
     """Protocol for histogram widgets that support theme updates."""
 
     def apply_theme(self, colors: ThemeColors) -> None: ...
+
+
+@runtime_checkable
+class CollapsibleHistogram(Protocol):
+    """Protocol for histogram widgets that pause recomputation when collapsed."""
+
+    def set_expanded(self, expanded: bool) -> None: ...
 
 
 class HistogramsSection(AccordionSection):
@@ -39,12 +46,15 @@ class HistogramsSection(AccordionSection):
 
         self._roi_histogram: RoiIntensityHistogram = RoiIntensityHistogram(self)
         self._roi_histogram.setObjectName(names.ROI_HISTOGRAM)
+        self._roi_histogram.set_expanded(self.is_expanded())
         self.add_widget(self._roi_histogram)
         self._histograms[0] = self._roi_histogram
 
         # TODO: add other histograms
         self._histogram_2: QWidget | None = None
         self._histogram_3: QWidget | None = None
+
+        self.expanded_changed.connect(self._on_expanded_changed)
 
         tip = QLabel(texts.HISTOGRAMS_TIP, wordWrap=True)
         tip.setContentsMargins(0, 8, 0, 0)
@@ -82,6 +92,9 @@ class HistogramsSection(AccordionSection):
         elif index == 2:
             self._histogram_3 = widget
 
+        if isinstance(widget, CollapsibleHistogram):
+            widget.set_expanded(self.is_expanded())
+
         self.add_widget(widget)
 
     def apply_theme(self, colors: ThemeColors) -> None:
@@ -104,3 +117,8 @@ class HistogramsSection(AccordionSection):
         h3 = getattr(self, "_histogram_3", None)
         if isinstance(h3, ThemeableHistogram):
             h3.apply_theme(colors)
+
+    def _on_expanded_changed(self, expanded: bool) -> None:
+        for hist in self._histograms:
+            if isinstance(hist, CollapsibleHistogram):
+                hist.set_expanded(expanded)

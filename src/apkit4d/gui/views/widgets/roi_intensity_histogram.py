@@ -115,6 +115,11 @@ class RoiIntensityHistogram(pg.PlotWidget):
         self._current_title: str = ""
         self._theme_colors: ThemeColors = THEME_COLORS[DEFAULT_THEME]
 
+        self._is_expanded = False
+        self._dirty: bool = False  # whether we should recompute the histogram
+        self._pending_reset_range: bool = False
+        self._p9999_dirty: bool = False
+
         plot_item = self.getPlotItem()
         plot_item.hideButtons()  # hide the defaults buttons
         plot_item.setMenuEnabled(True)  # right click menu, why not
@@ -199,14 +204,12 @@ class RoiIntensityHistogram(pg.PlotWidget):
         """
 
         self._volume = volume
-        if volume is not None and volume.size > 0:
-            flat = volume.ravel()
-            nonzero = flat[flat > 0]
-            self._p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
-        else:
-            self._p9999 = 0.0
+        self._p9999_dirty = True
+        self._dirty = True
+        self._pending_reset_range = True
 
-        self._recompute_histogram(reset_range=True)
+        if self._is_expanded:
+            self._recompute_histogram(reset_range=True)
 
     def set_intensity_bounds(self, lowest: float, highest: float) -> None:
         """
@@ -225,7 +228,9 @@ class RoiIntensityHistogram(pg.PlotWidget):
         with QSignalBlocker(self._highest_line):
             self._highest_line.setValue(self._highest_intensity)
 
-        self._recompute_histogram()
+        self._dirty = True
+        if self._is_expanded:
+            self._recompute_histogram()
 
     def set_normalization_enabled(self, enabled: bool) -> None:
         self._normalization_enabled = enabled
@@ -251,6 +256,15 @@ class RoiIntensityHistogram(pg.PlotWidget):
         Args:
             reset_range (bool): whether to reset zoom and position of the axes
         """
+        if self._p9999_dirty:
+            if self._volume is not None and self._volume.size > 0:
+                flat = self._volume.ravel()
+                nonzero = flat[flat > 0]
+                self._p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
+            else:
+                self._p9999 = 0.0
+            self._p9999_dirty = False
+
         bins, counts, top = compute_intensity_histogram(
             self._volume, self._lowest_intensity, num_bins=self.NUM_BINS, p9999=self._p9999
         )
@@ -259,6 +273,9 @@ class RoiIntensityHistogram(pg.PlotWidget):
         if reset_range:
             self.reset_zoom()
         self._update_frac_sat_and_title()
+
+        self._dirty = False
+        self._pending_reset_range = False
 
     def _update_frac_sat_and_title(self) -> None:
         self._frac_sat = compute_fraction_saturated(self._volume, self._highest_intensity)
@@ -319,3 +336,10 @@ class RoiIntensityHistogram(pg.PlotWidget):
     def reset_zoom(self) -> None:
         self.getViewBox().setXRange(0.0, self._top, padding=None)
         self.enableAutoRange(axis="y")
+
+    def set_expanded(self, expanded: bool):
+        if self._is_expanded == expanded:
+            return
+        self._is_expanded = expanded
+        if expanded and self._dirty:
+            self._recompute_histogram(reset_range=self._pending_reset_range)

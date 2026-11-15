@@ -1,6 +1,4 @@
-"""
-Unit tests for RoiIntensityHistogram widget and calculation helpers.
-"""
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -75,6 +73,7 @@ def test_histogram_widget_init(qtbot) -> None:
 def test_histogram_set_volume_updates_data_and_title(qtbot) -> None:
     widget = RoiIntensityHistogram()
     qtbot.addWidget(widget)
+    widget.set_expanded(True)
 
     vol = np.arange(1000, dtype=np.uint16).reshape((10, 10, 10))
     widget.set_intensity_bounds(lowest=100.0, highest=800.0)
@@ -90,6 +89,7 @@ def test_histogram_set_volume_updates_data_and_title(qtbot) -> None:
 def test_histogram_set_intensity_bounds(qtbot) -> None:
     widget = RoiIntensityHistogram()
     qtbot.addWidget(widget)
+    widget.set_expanded(True)
 
     vol = np.arange(1000, dtype=np.uint16)
     widget.set_volume(vol)
@@ -100,6 +100,35 @@ def test_histogram_set_intensity_bounds(qtbot) -> None:
     assert widget.lowest_line.value() == pytest.approx(200.0)
     assert widget.highest_line.value() == pytest.approx(500.0)
     assert widget.frac_sat == pytest.approx(0.50)
+
+
+def test_histogram_defers_recomputation_when_collapsed(qtbot) -> None:
+    widget = RoiIntensityHistogram()
+    qtbot.addWidget(widget)
+
+    vol = np.arange(1000, dtype=np.uint16)
+    with patch(
+        "apkit4d.gui.views.widgets.roi_intensity_histogram.compute_intensity_histogram",
+        wraps=compute_intensity_histogram,
+    ) as mock_compute:
+        widget.set_volume(vol)
+        widget.set_intensity_bounds(lowest=200.0, highest=500.0)
+
+        # Stored state updates immediately, but expensive histogram calculation is skipped
+        assert widget.volume is vol
+        assert widget.lowest_intensity == pytest.approx(200.0)
+        assert widget.highest_intensity == pytest.approx(500.0)
+        assert mock_compute.call_count == 0
+        assert widget.frac_sat == 0.0
+
+        # Expanding triggers a single recomputation with the latest volume and bounds
+        widget.set_expanded(True)
+        assert mock_compute.call_count == 1
+        assert widget.frac_sat == pytest.approx(0.50)
+
+        # Expanding again when clean does not recompute
+        widget.set_expanded(True)
+        assert mock_compute.call_count == 1
 
 
 def test_histogram_dragging_lines_emits_signals(qtbot) -> None:
