@@ -270,6 +270,7 @@ class MainController(QObject):
         reason = str(error) or type(error).__name__
         self._window.right_panel.set_stats_summary("Trajectory linking failed")
         self._window.right_panel.set_stats_details(reason)
+        self._pipeline_controller.report_stage_failure("Trajectory linking failed", reason)
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller
