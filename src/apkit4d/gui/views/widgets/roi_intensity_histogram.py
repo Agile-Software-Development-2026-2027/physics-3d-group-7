@@ -22,6 +22,7 @@ def compute_intensity_histogram(
     intensities: NDArray | None,
     lowest_intensity: float,
     num_bins: int = 256,
+    p9999: float | None = None,
 ) -> tuple[NDArray, NDArray, float]:
     """
     Compute a uniform histogram of intensities over the range [0, top].
@@ -32,6 +33,7 @@ def compute_intensity_histogram(
         intensities: Array of voxel intensities, or None.
         lowest_intensity: Lower bound intensity threshold.
         num_bins: Number of uniform bins across [0, top], default 256.
+        p9999: Optional precomputed 99.99th percentile of nonzero voxels. Computed when None.
 
     Returns:
         tuple of (bins, counts, top) where:
@@ -47,8 +49,10 @@ def compute_intensity_histogram(
         return bins, counts, top
 
     flat = intensities.ravel()
-    nonzero = flat[flat > 0]
-    p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
+    if p9999 is None:  # cached percentile
+        nonzero = flat[flat > 0]
+        p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
+
     top = max(1.3 * float(lowest_intensity), p9999)
     if top <= 0.0:
         top = 1.0
@@ -228,12 +232,16 @@ class RoiIntensityHistogram(pg.PlotWidget):
 
     def _on_lowest_dragged(self, line: pg.InfiniteLine) -> None:
         val = max(0.0, round(float(line.value()), 1))
+        if val == self._lowest_intensity:
+            return
         self._lowest_intensity = val
         self._recompute_histogram()
         self.lowest_intensity_changed.emit(val)
 
     def _on_highest_dragged(self, line: pg.InfiniteLine) -> None:
         val = max(0.0, round(float(line.value()), 1))
+        if val == self._highest_intensity:
+            return
         self._highest_intensity = val
         self._update_frac_sat_and_title()
         self.highest_intensity_changed.emit(val)
@@ -244,7 +252,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
             reset_range (bool): whether to reset zoom and position of the axes
         """
         bins, counts, top = compute_intensity_histogram(
-            self._volume, self._lowest_intensity, num_bins=self.NUM_BINS
+            self._volume, self._lowest_intensity, num_bins=self.NUM_BINS, p9999=self._p9999
         )
         self._top = top
         self._curve_item.setData(bins, counts, stepMode="center")
@@ -254,10 +262,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
 
     def _update_frac_sat_and_title(self) -> None:
         self._frac_sat = compute_fraction_saturated(self._volume, self._highest_intensity)
-        title = texts.HISTOGRAM_ROI_TITLE.format(frac_sat=self._frac_sat)
-        self._current_title = title
-        color = self._theme_colors.text
-        self.setTitle(title, color=color, size="9pt")
+        self._render_title()
 
     def apply_theme(self, colors: ThemeColors) -> None:
         """
@@ -300,7 +305,12 @@ class RoiIntensityHistogram(pg.PlotWidget):
         self._highest_line.setPen(pg.mkPen(color=highest_color, width=2, style=Qt.PenStyle.DashLine))
         self._highest_line.setHoverPen(pg.mkPen(color=highest_color, width=4))
 
-        self._update_frac_sat_and_title()
+        self._render_title()
+
+    def _render_title(self) -> None:
+        title = texts.HISTOGRAM_ROI_TITLE.format(frac_sat=self._frac_sat)
+        self._current_title = title
+        self.setTitle(title, color=self._theme_colors.text, size="9pt")
 
     @override
     def mouseDoubleClickEvent(self, event) -> None:
