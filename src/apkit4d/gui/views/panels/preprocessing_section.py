@@ -423,3 +423,11 @@ class PreprocessingSection(AccordionSection):
     def set_intensity_window(self, low: float, high: float):
         self.lowest_instensity.setValue(low)
         self.highest_intensity.setValue(high)
+
+    def set_lowest_intensity(self, low: float) -> None:
+        """Update lowest intensity value in the spinbox."""
+        self.lowest_instensity.setValue(low)
+
+    def set_highest_intensity(self, high: float) -> None:
+        """Update highest intensity value in the spinbox."""
+        self.highest_intensity.setValue(high)

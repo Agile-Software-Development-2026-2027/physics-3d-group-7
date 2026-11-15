@@ -1,0 +1,96 @@
+"""Histograms accordion section in the left panel."""
+
+from typing import Protocol, runtime_checkable
+
+from PySide6.QtWidgets import QWidget
+
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.shared.components.accordion import AccordionSection
+from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
+from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
+
+__all__ = ["HistogramsSection", "ThemeableHistogram"]
+
+
+@runtime_checkable
+class ThemeableHistogram(Protocol):
+    """Protocol for histogram widgets that support theme updates."""
+
+    def apply_theme(self, colors: ThemeColors) -> None: ...
+
+
+class HistogramsSection(AccordionSection):
+    """
+    Accordion section hosting up to 3 histograms in the left sidebar.
+
+    For now hosts the first interactive histogram (ROI voxel intensity distribution)
+    and maintains slots and layout ready for the remaining two histograms.
+
+    Args:
+        parent: Optional parent widget.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(texts.SECTION_HISTOGRAMS, parent=parent)
+        self.setObjectName(names.HISTOGRAMS_SECTION)
+
+        self._histograms: list[QWidget | None] = [None, None, None]
+
+        self._roi_histogram: RoiIntensityHistogram = RoiIntensityHistogram(self)
+        self._roi_histogram.setObjectName(names.ROI_HISTOGRAM)
+        self.add_widget(self._roi_histogram)
+        self._histograms[0] = self._roi_histogram
+
+        # TODO: add other histograms
+        self._histogram_2: QWidget | None = None
+        self._histogram_3: QWidget | None = None
+
+        self.apply_theme(THEME_COLORS[DEFAULT_THEME])
+
+    def set_histogram(self, index: int, widget: QWidget) -> None:
+        """
+        Set or replace one of the 3 histogram slots (index 0, 1, or 2).
+
+        Args:
+            index: Slot index (0, 1, or 2).
+            widget: Histogram widget to install.
+        """
+
+        if index < 0 or index > 2:
+            raise IndexError("Histogram index must be 0, 1, or 2.")
+
+        existing = self._histograms[index]
+        if existing is not None:
+            self.content_layout.removeWidget(existing)
+            existing.setParent(None)
+
+        self._histograms[index] = widget
+        if index == 0 and isinstance(widget, RoiIntensityHistogram):
+            self._roi_histogram = widget
+        elif index == 1:
+            self._histogram_2 = widget
+        elif index == 2:
+            self._histogram_3 = widget
+
+        self.add_widget(widget)
+
+    def apply_theme(self, colors: ThemeColors) -> None:
+        """
+        Apply theme colors to header, content area, and contained histograms.
+
+        Args:
+            colors: Colors of the active theme.
+        """
+
+        super().apply_theme(colors)
+        roi_hist = getattr(self, "_roi_histogram", None)
+        if isinstance(roi_hist, RoiIntensityHistogram):
+            roi_hist.apply_theme(colors)
+
+        h2 = getattr(self, "_histogram_2", None)
+        if isinstance(h2, ThemeableHistogram):
+            h2.apply_theme(colors)
+
+        h3 = getattr(self, "_histogram_3", None)
+        if isinstance(h3, ThemeableHistogram):
+            h3.apply_theme(colors)

@@ -58,8 +58,9 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     assert force_update_1 is False
     assert first_grid.n_points == 8 * 16 * 16
 
-    # Apply preprocessing parameters
+    # Apply preprocessing parameters with normalization enabled so reprocessing runs
     params = PreprocParams(
+        normalization_enabled=True,
         lowest_intensity=50.0,
         highest_intensity=150.0,
     )
@@ -72,7 +73,7 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     assert reset_cam_2 is False
     assert force_update_2 is True
 
-    # Apply default PreprocParams to reset preprocessing
+    # Apply default PreprocParams (normalization_enabled=False) to reset preprocessing
     default_params = PreprocParams()
     controller.apply_preproc_params(default_params)
     assert controller.preproc_params == default_params
@@ -98,7 +99,7 @@ def test_volume_controller_preproc_failed(qtbot, monkeypatch) -> None:
 
     monkeypatch.setattr("apkit4d.gui.controllers.volume_controller.preprocess", broken_preprocess)
 
-    controller.apply_preproc_params(PreprocParams())
+    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
     qtbot.waitUntil(lambda: "Preprocessing failed" in window.statusBar().currentMessage(), timeout=5000)
     wait_for_background_tasks(timeout_s=2.0)
 
@@ -130,7 +131,7 @@ def test_volume_controller_preproc_runs_on_roi(qtbot, monkeypatch) -> None:
     controller.set_roi(roi)
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
-    controller.apply_preproc_params(PreprocParams())
+    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
     qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
 
     assert len(captured) >= 1
@@ -174,7 +175,7 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
 
     # Enable preprocessing first
-    controller.apply_preproc_params(PreprocParams())
+    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
     captured: list[NDArray] = []
