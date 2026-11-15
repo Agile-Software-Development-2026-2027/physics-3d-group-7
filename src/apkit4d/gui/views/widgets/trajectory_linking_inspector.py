@@ -1,0 +1,95 @@
+from PySide6.QtCore import QSignalBlocker, Signal
+from PySide6.QtWidgets import (
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
+from apkit4d.core.models import TrackingConfig
+from apkit4d.gui.constants import names, texts
+
+
+class TrajectoryLinkingInspector(QWidget):
+    """Inspector widget for configuring trajectory linking parameters."""
+
+    min_len_changed: Signal = Signal(int)
+    max_gap_changed: Signal = Signal(int)
+    max_speed_changed: Signal = Signal(float)
+    reset_requested: Signal = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        config = TrackingConfig()
+
+        self._main_layout = QVBoxLayout(self)
+        self._main_layout.setContentsMargins(0, 0, 0, 0)
+        self._main_layout.setSpacing(12)
+
+        group = QGroupBox(texts.INSPECTOR_SECTION_TRACKING_PARAMETERS)
+        group.setObjectName(names.TRACKING_INSPECTOR_PARAMETERS_GROUP)
+
+        form = QFormLayout(group)
+        form.setSpacing(10)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
+        self._min_len = QSpinBox()
+        self._min_len.setObjectName(names.TRACKING_INSPECTOR_MIN_LEN)
+        self._min_len.setRange(2, 1000)
+        self._min_len.setValue(config.min_len)
+        self._min_len.setToolTip(texts.INSPECTOR_TOOLTIP_MIN_LEN)
+        self._min_len.valueChanged.connect(self.min_len_changed.emit)
+
+        form.addRow(
+            texts.INSPECTOR_LABEL_MIN_LEN,
+            self._min_len,
+        )
+
+        self._max_gap = QSpinBox()
+        self._max_gap.setObjectName(names.TRACKING_INSPECTOR_MAX_GAP)
+        self._max_gap.setRange(0, 100)
+        self._max_gap.setValue(config.max_gap)
+        self._max_gap.setToolTip(texts.INSPECTOR_TOOLTIP_MAX_GAP)
+        self._max_gap.valueChanged.connect(self.max_gap_changed.emit)
+
+        form.addRow(
+            texts.INSPECTOR_LABEL_MAX_GAP,
+            self._max_gap,
+        )
+
+        self._max_speed = QDoubleSpinBox()
+        self._max_speed.setObjectName(names.TRACKING_INSPECTOR_MAX_SPEED)
+        self._max_speed.setRange(0.01, 10000.0)
+        self._max_speed.setDecimals(2)
+        self._max_speed.setSingleStep(10.0)
+        self._max_speed.setValue(config.max_speed_um_s)
+        self._max_speed.setToolTip(texts.INSPECTOR_TOOLTIP_MAX_SPEED)
+        self._max_speed.valueChanged.connect(self.max_speed_changed.emit)
+
+        form.addRow(
+            texts.INSPECTOR_LABEL_MAX_SPEED,
+            self._max_speed,
+        )
+
+        reset_button = QPushButton(texts.INSPECTOR_BUTTON_RESET_TRACKING)
+        reset_button.setObjectName(names.TRACKING_INSPECTOR_RESET_BUTTON)
+        reset_button.clicked.connect(self.reset_requested.emit)
+
+        form.addRow(reset_button)
+
+        self._main_layout.addWidget(group)
+
+    def set_params(self, config: TrackingConfig) -> None:
+        """Update tracking parameters without emitting change signals."""
+        with (
+            QSignalBlocker(self._min_len),
+            QSignalBlocker(self._max_gap),
+            QSignalBlocker(self._max_speed),
+        ):
+            self._min_len.setValue(config.min_len)
+            self._max_gap.setValue(config.max_gap)
+            self._max_speed.setValue(config.max_speed_um_s)
