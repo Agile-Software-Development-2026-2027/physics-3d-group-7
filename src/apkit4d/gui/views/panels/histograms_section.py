@@ -2,7 +2,8 @@
 
 from typing import Protocol, runtime_checkable
 
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.shared.components.accordion import AccordionSection
@@ -44,6 +45,15 @@ class HistogramsSection(AccordionSection):
         # TODO: add other histograms
         self._histogram_2: QWidget | None = None
         self._histogram_3: QWidget | None = None
+
+        tip = QLabel(texts.HISTOGRAMS_TIP, wordWrap=True)
+        tip.setContentsMargins(0, 8, 0, 0)
+        tip.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        tip.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
+        font = tip.font()
+        font.setPointSize(8)
+        tip.setFont(font)
+        self.add_widget(tip)
 
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
 
