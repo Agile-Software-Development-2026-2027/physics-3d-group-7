@@ -31,6 +31,9 @@ FILE_DIALOG_FILTER: str = f"CZI files (*{CZI_SUFFIX})"
 MENU_FILE: str = "&File"
 ACTION_OPEN: str = "&Open..."
 ACTION_QUIT: str = "&Quit"
+MENU_VIEW: str = "&View"
+ACTION_SHOW_FPS: str = "Show &FPS Counter"
+FPS_READOUT: str = "Qt: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"
 
 # playback bar
 BUTTON_PREVIOUS: str = "<"

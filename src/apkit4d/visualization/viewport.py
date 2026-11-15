@@ -10,6 +10,7 @@ from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
 from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
 
+from apkit4d.gui.fps_counter import FpsCounter
 from apkit4d.roi import RegionOfInterest
 
 """
@@ -155,10 +156,13 @@ class Viewport(QWidget):
         self._full_quality_timer.setInterval(round(FULL_QUALITY_DELAY * 1000))
         self._full_quality_timer.timeout.connect(self._request_full_quality_render)
 
+        self._render_fps_ticker = FpsCounter(window_seconds=1.0)
+
         # before every redraw the quality of the volume is chosen, see _set_volume_quality
         render_window = self.plotter.render_window
         if render_window is not None:
             render_window.AddObserver("StartEvent", self._set_volume_quality)
+            render_window.AddObserver("EndEvent", self._on_render_end)
 
         # the wheel events are not here: _stop_wheel_event stops them before they get to this observer,
         # so the wheel zoom is kept inside the limits by the clamp in compute_local_zoom_step
@@ -1659,3 +1663,11 @@ class Viewport(QWidget):
             # the upper bound is just the lower bound plus the size, we don't need to clamp it
             out.extend((new_min, new_min + size[axis]))
         return (out[0], out[1], out[2], out[3], out[4], out[5])
+
+    def _on_render_end(self, _obj: object, _event: str) -> None:
+        self._render_fps_ticker.tick()
+
+    @property
+    def render_fps(self) -> float:
+        """Current 3D VTK render rate in frames per second."""
+        return self._render_fps_ticker.fps()

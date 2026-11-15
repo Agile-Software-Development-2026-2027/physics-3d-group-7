@@ -11,6 +11,9 @@ FILE_MENU: str = "file_menu"
 OPEN_ACTION: str = "open_action"
 QUIT_ACTION: str = "quit_action"
 COLUMNS_SPLITTER: str = "columns_splitter"
+VIEW_MENU: str = "view_menu"
+SHOW_FPS_ACTION: str = "show_fps_action"
+FPS_LABEL: str = "fps_label"
 
 # panels
 LEFT_PANEL: str = "left_panel"

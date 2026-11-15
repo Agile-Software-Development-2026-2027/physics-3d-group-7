@@ -1074,3 +1074,23 @@ class TestAppearance:
         assert viewport.plotter.actors["volume"].mapper.lookup_table.scalar_range == pytest.approx(
             (0.0, 4095.0)
         )
+
+
+class TestViewportFpsTicker:
+    def test_render_fps_starts_at_zero(self, viewport):
+        assert viewport.render_fps == 0.0
+
+    def test_render_end_event_updates_render_fps(self, viewport, monkeypatch):
+        now = 10.0
+        monkeypatch.setattr("time.perf_counter", lambda: now)
+
+        window = viewport.plotter.render_window
+        window.InvokeEvent("EndEvent")
+        assert viewport.render_fps == 0.0
+
+        # 3 more EndEvent frames at 50 ms intervals -> 20 FPS
+        for _ in range(3):
+            now += 0.05
+            window.InvokeEvent("EndEvent")
+
+        assert viewport.render_fps == pytest.approx(20.0)
