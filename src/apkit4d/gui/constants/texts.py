@@ -60,6 +60,17 @@ DIALOG_OUTLINE: str = "Outline color"
 BUTTON_THEME: str = "Switch theme"
 RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel has its controls
 
+# histograms
+SECTION_HISTOGRAMS: str = "Histograms"
+HISTOGRAM_ROI_TITLE: str = "Raw ROI Intensities > 0 (sat: {frac_sat:.2%})"
+LABEL_HISTOGRAM_INTENSITY: str = "Intensity"
+LABEL_HISTOGRAM_AU: str = "AU"
+LABEL_HISTOGRAM_COUNTS: str = "Counts"
+ROI_INTENSITIES_MIN_LINE: str = "Normalization window lower bound"
+ROI_INTENSITIES_MAX_LINE: str = "Normalization window upper bound"
+HISTOGRAMS_TIP: str = """🛈 Some histograms have thresholds and bounds that you can drag. Double-click on each
+ histogram to reset its zoom, position and the range of both its axes.""".replace("\n", "")
+
 # right panel and accordion
 BUTTON_TOGGLE_ALL: str = "Toggle All"
 TOOLTIP_TOGGLE_ALL: str = "Toggle collapse/expand state of all accordion sections"
@@ -109,6 +120,7 @@ PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used 
 PREPROC_RESET: str = "Reset All to Defaults"
 PREPROC_SUGGEST_WINDOW_TOOLTIP: str = "Computed the intensity window from the current volume"
 PREPROC_COMPLETE: str = "Done"  # 🤷‍♂️
+
 
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"
@@ -210,6 +222,8 @@ INSPECTOR_STATUS_DETECTING = "detecting blobs..."
 INSPECTOR_STATUS_NO_BLOBS_FOUND = "frame {frame}: no blobs found"
 INSPECTOR_STATUS_BLOBS_FOUND = "frame {frame}: {count} blobs (median volume {volume:.0f} µm³)"
 INSPECTOR_STATUS_DETECTION_FAILED = "detection failed: {reason}"
+INSPECTOR_BUTTON_DISABLED_INFO = "\u24d8 Normalize the volume to enable this button."
+INSPECTOR_CHECKBOX_DISABLED_INFO = "\u24d8 Normalize the volume to enable this checkbox."
 
 # roi inspector
 INSPECTOR_SECTION_ROI_BOUNDS: str = "Region of Interest (µm)"
@@ -238,3 +252,17 @@ INSPECTOR_BUTTON_SAVE_ROI: str = "Save ROI"
 INSPECTOR_TOOLTIP_SAVE_ROI: str = (
     "Save the current Region of Interest in a certain range of frames to a file."
 )
+
+# trajectory linking inspector
+INSPECTOR_SECTION_TRACKING_PARAMETERS: str = "Tracking parameters"
+
+INSPECTOR_LABEL_MIN_LEN: str = "Minimum track length"
+INSPECTOR_TOOLTIP_MIN_LEN: str = "Minimum number of detections required for a trajectory."
+
+INSPECTOR_LABEL_MAX_GAP: str = "Maximum gap"
+INSPECTOR_TOOLTIP_MAX_GAP: str = "Maximum number of consecutive missing frames allowed in a trajectory."
+
+INSPECTOR_LABEL_MAX_SPEED: str = "Maximum speed (µm/s)"
+INSPECTOR_TOOLTIP_MAX_SPEED: str = "Maximum allowed particle speed during trajectory linking."
+
+INSPECTOR_BUTTON_RESET_TRACKING = "Reset to defaults"

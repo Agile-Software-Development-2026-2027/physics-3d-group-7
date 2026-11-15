@@ -21,9 +21,11 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 import pyvista as pv
+from attr import dataclass
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.blob_detection import voxel_offset
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
@@ -62,6 +64,18 @@ class RoiSelectionView(Protocol):
     def cancel_roi_selection(self) -> None: ...
 
 
+@dataclass(frozen=True)
+class PreparedVolume:
+    """What the 3D view is showing, in the form blob detection needs."""
+
+    is_image_normalized: bool
+    frame: int
+    voxel: tuple[float, float, float]  # (z, y, x) in micrometers
+    roi_volume: Image[np.uint16]  # cropped, raw: for the weighted centroid
+    image: Image[np.float32]  # cropped, preprocessed: what the algorithm looks at
+    offset: tuple[int, int, int]  # origin of the crop in voxels (z, y, x)
+
+
 class VolumeController(QObject):
     """
     Reads the frames of the open recording and shows them in the 3D view.
@@ -77,11 +91,15 @@ class VolumeController(QObject):
 
     Signals:
         failed: Emitted when a frame could not be shown, so that the playback can stop.
+        volume_prepared: Emitted when a new volume is prepared.
     """
 
     failed = Signal()
     volume_bounds_changed = Signal(object)
     window_suggested = Signal(float, float)
+    roi_volume_changed = Signal(object)
+    preproc_params_changed = Signal(object)
+    volume_prepared = Signal(object)  # PreparedVolume
 
     def __init__(self, window: MainWindow, view: VolumeView, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -127,6 +145,11 @@ class VolumeController(QObject):
         self._suggest_runner.failed.connect(self._on_suggest_window_failed)
 
     @property
+    def current_roi_volume(self) -> Image[np.uint16] | None:
+        """The volume obtained via taking the ROI from the full volume."""
+        return self._current_roi_volume
+
+    @property
     def preproc_params(self) -> PreprocParams:
         """The currently applied preprocessing parameters, or None if showing raw volume."""
         return self._preproc_params
@@ -138,9 +161,28 @@ class VolumeController(QObject):
         Args:
             params: The preprocessing parameters to apply, or None to show the raw ROI volume.
         """
-
+        old_params = self._preproc_params
         self._preproc_params = params
+        self.preproc_params_changed.emit(params)
+
         if self._current_roi_volume is None or not self._usable:
+            return
+
+        # if normalization is not enabled and only the intensity window changed, there is no effect
+        if (
+            not params.normalization_enabled
+            and old_params.normalization_enabled == params.normalization_enabled
+            and old_params.denoise_xy_scale_um == params.denoise_xy_scale_um
+            and old_params.denoise_z_scale_um == params.denoise_z_scale_um
+            and old_params.bg_mode == params.bg_mode
+            and old_params.bg_percentile == params.bg_percentile
+            and old_params.bg_sigma_xy_um == params.bg_sigma_xy_um
+            and old_params.logarithmic_compression_enabled == params.logarithmic_compression_enabled
+            and old_params.gamma_correction_to_apply == params.gamma_correction_to_apply
+            and old_params.clahe_enabled == params.clahe_enabled
+            and old_params.clahe_clip == params.clahe_clip
+            and old_params.clahe_kernel_xy_um == params.clahe_kernel_xy_um
+        ):
             return
 
         if self._preproc_busy:
@@ -164,10 +206,27 @@ class VolumeController(QObject):
                 return
 
         if self._usable:
-            self._show(
+            shown = self._show(
                 self._current_frame, volume, self._current_roi_origin, force_update=self._params_changed
             )
             self._params_changed = False
+
+            if shown and self._current_roi_volume is not None:
+                offset = (
+                    (0, 0, 0)
+                    if self._current_roi_origin is None
+                    else voxel_offset(self._current_roi_origin, self._voxel)
+                )
+                self.volume_prepared.emit(
+                    PreparedVolume(
+                        self._preproc_params.normalization_enabled,
+                        self._current_frame,
+                        self._voxel,
+                        self._current_roi_volume,
+                        volume,
+                        offset,
+                    )
+                )
 
     def _on_preproc_failed(self, _task_id: int, error: Exception) -> None:
         self._preproc_busy = False
@@ -192,6 +251,7 @@ class VolumeController(QObject):
         self._current_full_volume = None
         self._current_roi_volume = None
         self._current_roi_origin = None
+        self.roi_volume_changed.emit(None)
         self._first_frame = True
         self._wanted = None
         self._current_frame = 0
@@ -246,6 +306,7 @@ class VolumeController(QObject):
         roi_volume, roi_origin = self._extract_roi(full_volume)
         self._current_roi_volume = roi_volume
         self._current_roi_origin = roi_origin
+        self.roi_volume_changed.emit(roi_volume)
         if self._preproc_busy:
             self._preproc_pending = True
         else:
@@ -280,19 +341,27 @@ class VolumeController(QObject):
         volume: Image[np.uint16],
         origin: tuple[float, float, float] | None,
         force_update: bool = False,
-    ) -> None:
-        """Builds a PyVista grid from `volume` and hand gives it to the view"""
+    ) -> bool:
+        """
+        Builds a PyVista grid from `volume` and hand gives it to the view
+
+        Returns:
+            False when the volume is rejected True otherwise
+        """
 
         if volume.ndim != 3:
             self._fail(texts.STATUS_NOT_3D.format(frame=frame, shape=volume.shape))
-            return
+            return False
 
         grid = create_volume_grid(volume, self._voxel, (0, 0, 0) if origin is None else origin)
         if grid.n_points == 0:
             self._fail(texts.STATUS_EMPTY_VOLUME.format(frame=frame))
-            return
+            return False
+
         self._view.show_volume(grid, reset_camera=self._first_frame, force_update=force_update)
         self._first_frame = False
+
+        return True
 
     def _fail(self, message: str) -> None:
         self._wanted = None

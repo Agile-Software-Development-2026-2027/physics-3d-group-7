@@ -17,6 +17,7 @@ from apkit4d.visualization.viewport import Viewport
 
 IGNORED_QT_WARNINGS = (
     "QWaylandTextInputv3::disableSurface",
+    "QtWaylandClient::QWaylandTextInputv3",
     "AtSpiAdaptor::applicationInterface",
     "This plugin does not support propagateSizeHints()",
     "This plugin supports grabbing the mouse only for popup windows",

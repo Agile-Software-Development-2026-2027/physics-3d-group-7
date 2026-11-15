@@ -21,6 +21,7 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
 from apkit4d.gui.models.output_type import OutputType
 from apkit4d.gui.shared.components.v_separator import VSeparator
+from apkit4d.gui.theme import ThemeColors
 
 
 class BlobDetectionInspector(QWidget):
@@ -366,6 +367,12 @@ class BlobDetectionInspector(QWidget):
         )
         self._update_on_change.toggled.connect(self.update_on_change_toggled.emit)
 
+        self._update_on_change_info = QLabel(texts.INSPECTOR_CHECKBOX_DISABLED_INFO)
+        self._update_on_change_info.setObjectName("blob_detection_inspector_update_on_change_info")
+        self._update_on_change_info.setContentsMargins(10, 0, 10, 0)
+        self._update_on_change_info.setWordWrap(True)
+        form.addRow(self._update_on_change_info)
+
         self._show_segments = QCheckBox()
         self._show_segments.setObjectName(names.DETECTION_INSPECTOR_SHOW_SEGMENTS)
         self._add_field(
@@ -380,8 +387,14 @@ class BlobDetectionInspector(QWidget):
         self._find_blobs_button.setObjectName(names.DETECTION_INSPECTOR_FIND_BLOBS_BUTTON)
         self._find_blobs_button.setToolTip(texts.INSPECTOR_TOOLTIP_FIND_BLOBS)
         self._find_blobs_button.clicked.connect(self.find_blob_clicked.emit)
-
         form.addRow(self._find_blobs_button)
+
+        self._find_blob_button_info = QLabel(texts.INSPECTOR_BUTTON_DISABLED_INFO)
+        self._find_blob_button_info.setWordWrap(True)
+        self._find_blob_button_info.setContentsMargins(10, 0, 10, 0)
+        form.addRow(self._find_blob_button_info)
+
+        form.addRow(VSeparator())
 
         self._detection_status = QLabel(texts.INSPECTOR_STATUS_NO_BLOBS)
         self._detection_status.setObjectName(names.DETECTION_INSPECTOR_DETECTION_STATUS)
@@ -429,3 +442,13 @@ class BlobDetectionInspector(QWidget):
     def _sync_diameter_z(self):
         if self._diameter_z_equals_xy.isChecked():
             self._diameter_z.setValue(self._diameter_xy.value())
+
+    def disable_find_blob(self, disabled: bool):
+        self._find_blobs_button.setDisabled(disabled)
+
+    def disable_update_on_change(self, disabled: bool):
+        self._update_on_change.setDisabled(disabled)
+
+    def apply_theme(self, colors: ThemeColors) -> None:
+        self._update_on_change_info.setStyleSheet(f"color: {colors.disabled_text}")
+        self._find_blob_button_info.setStyleSheet(f"color: {colors.disabled_text}")

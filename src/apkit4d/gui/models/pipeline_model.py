@@ -4,10 +4,12 @@ Model representing the analysis pipeline state, stage dependencies, and executio
 
 import copy
 from enum import StrEnum
-from typing import Any
+from typing import Any, assert_never
 
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
 from apkit4d.preprocessing import PreprocParams
 
 
@@ -64,8 +66,9 @@ class PipelineModel(QObject):
         self._statuses: dict[PipelineStep, StepStatus] = {
             step: StepStatus.IDLE for step in PIPELINE_STEP_ORDER
         }
-        self._params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
-        self._params[PipelineStep.PREPROCESSING] = PreprocParams().to_dict()
+        self._params: dict[PipelineStep, dict[str, Any]] = {
+            step: self._default_params(step) for step in PIPELINE_STEP_ORDER
+        }
         self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
 
     @property
@@ -190,12 +193,7 @@ class PipelineModel(QObject):
     def reset_step_params(self, step: PipelineStep) -> None:
         """Reset all parameters for `step` to defaults and notify listeners once."""
 
-        if step == PipelineStep.PREPROCESSING:
-            self._params[step].clear()
-            self._params[step].update(PreprocParams().to_dict())
-        else:
-            self._params[step].clear()
-
+        self._params[step] = self._default_params(step)
         self.step_params_changed.emit(step)
 
     def invalidate_subsequent(self, step: PipelineStep) -> None:
@@ -291,3 +289,20 @@ class PipelineModel(QObject):
             if self._statuses[later_step] != StepStatus.IDLE:
                 self._statuses[later_step] = StepStatus.IDLE
                 self.step_status_changed.emit(later_step, StepStatus.IDLE)
+
+    def _default_params(self, step: PipelineStep) -> dict[str, Any]:
+        """The parameters a step starts from."""
+
+        match step:
+            case PipelineStep.ROI:
+                return {}  # TODO add default params
+            case PipelineStep.PREPROCESSING:
+                return PreprocParams().to_dict()
+            case PipelineStep.DETECTION:
+                return BlobParams().to_dict()
+            case PipelineStep.BATCH:
+                return {}  # TODO add default params
+            case PipelineStep.TRACKING:
+                return TrackingConfig().model_dump()
+            case _:
+                assert_never(step)

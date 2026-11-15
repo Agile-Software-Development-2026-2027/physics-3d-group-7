@@ -2,8 +2,12 @@
 Unit tests for PipelineModel verifying state transitions, dependencies, and cascading invalidation.
 """
 
+from copy import replace
+
 import pytest
 
+from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -203,3 +207,70 @@ def test_pipeline_model_preproc_params(qtbot) -> None:
         model.set_preproc_params(custom)
     assert blocker.args == [PipelineStep.PREPROCESSING]
     assert model.get_preproc_params() == custom
+
+
+def complete_up_to_detection(model: PipelineModel) -> None:
+    for step in (PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION):
+        model.set_step_status(step, StepStatus.COMPLETED)
+
+
+def test_detection_params_start_from_the_blob_params_defaults() -> None:
+    assert PipelineModel().get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+
+
+def test_reset_detection_params_restores_the_defaults() -> None:
+    model = PipelineModel()
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.5)
+
+    model.reset_step_params(PipelineStep.DETECTION)
+
+    assert model.get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+
+
+def test_get_blob_params_returns_the_current_values() -> None:
+    model = PipelineModel()
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.5)
+
+    assert model.get_step_params(PipelineStep.DETECTION) == replace(BlobParams(), threshold=0.5).to_dict()
+
+
+def test_a_completed_detection_is_dirty_when_a_parameter_changes() -> None:
+    model = PipelineModel()
+    complete_up_to_detection(model)
+
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.5)
+
+    assert model.is_step_dirty(PipelineStep.DETECTION)
+
+
+def test_a_completed_detection_is_not_dirty_when_a_parameter_gets_the_same_value() -> None:
+    model = PipelineModel()
+    complete_up_to_detection(model)
+
+    model.update_step_params(PipelineStep.DETECTION, threshold=BlobParams().threshold)
+
+    assert not model.is_step_dirty(PipelineStep.DETECTION)
+
+
+def test_pipeline_model_tracking_params_defaults_and_reset() -> None:
+    model = PipelineModel()
+    defaults = TrackingConfig().model_dump()
+
+    # Tracking starts with the default configuration
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults
+
+    # Parameters can be updated
+    model.update_step_params(
+        PipelineStep.TRACKING,
+        min_len=7,
+        max_gap=4,
+    )
+
+    params = model.get_step_params(PipelineStep.TRACKING)
+    assert params["min_len"] == 7
+    assert params["max_gap"] == 4
+
+    # Reset restores the default configuration
+    model.reset_step_params(PipelineStep.TRACKING)
+
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults

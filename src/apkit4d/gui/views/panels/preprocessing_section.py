@@ -42,6 +42,7 @@ class PreprocessingSection(AccordionSection):
     """The preprocessing accordion"""
 
     suggest_window_clicked = Signal()
+    normalization_toggled = Signal(bool)
 
     def __init__(self, right_panel: RightPanel):
         super().__init__(texts.STAGE_TITLE_PREPROCESSING)
@@ -167,6 +168,7 @@ class PreprocessingSection(AccordionSection):
         self.right_panel.step_param_changed.emit(
             PipelineStep.PREPROCESSING.value, "normalization_enabled", checked
         )
+        self.normalization_toggled.emit(checked)
 
     def _on_gamma_slider_changed(self, int_val: int) -> None:
         gamma_val = round(int_val / 100.0, 2)
@@ -422,4 +424,12 @@ class PreprocessingSection(AccordionSection):
 
     def set_intensity_window(self, low: float, high: float):
         self.lowest_instensity.setValue(low)
+        self.highest_intensity.setValue(high)
+
+    def set_lowest_intensity(self, low: float) -> None:
+        """Update lowest intensity value in the spinbox."""
+        self.lowest_instensity.setValue(low)
+
+    def set_highest_intensity(self, high: float) -> None:
+        """Update highest intensity value in the spinbox."""
         self.highest_intensity.setValue(high)

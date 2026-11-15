@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
@@ -36,6 +37,7 @@ from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
+from apkit4d.gui.views.widgets.trajectory_linking_inspector import TrajectoryLinkingInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -199,6 +201,7 @@ class RightPanel(SidePanel):
         # i need to build it here since as a local variable i couldn't access
         # it from the main controller
         self._roi_inspector: RoiInspector | None = None
+        self._tracking_inspector: TrajectoryLinkingInspector | None = None
 
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
@@ -267,6 +270,15 @@ class RightPanel(SidePanel):
         """The ROI inspector widget."""
         return self._roi_inspector
 
+    @property
+    def detection_inspector(self) -> BlobDetectionInspector | None:
+        section = self.get_section(PipelineStep.DETECTION)
+
+        if section is not None:
+            return section.findChild(BlobDetectionInspector, names.DETECTION_INSPECTOR_STEP)
+
+        return None
+
     def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
         Return the AccordionSection associated with `step`.
@@ -313,6 +325,11 @@ class RightPanel(SidePanel):
             preproc_complete = self._complete_buttons.get(PipelineStep.PREPROCESSING)
             if preproc_complete is not None:
                 preproc_complete.setEnabled(status == StepStatus.COMPLETED)
+
+    def set_tracking_params(self, config: TrackingConfig) -> None:
+        """Synchronize tracking inspector with the model."""
+        if self._tracking_inspector is not None:
+            self._tracking_inspector.set_params(config)
 
     def toggle_all(self) -> None:
         """Toggle all accordion sections."""
@@ -367,6 +384,7 @@ class RightPanel(SidePanel):
         self._plan_buttons.clear()
         self._complete_buttons.clear()
         self._roi_inspector = None
+        self._tracking_inspector = None
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -387,6 +405,9 @@ class RightPanel(SidePanel):
         for section in self._sections:
             section.apply_theme(colors)
         self._bottom_stats.apply_theme(colors)
+
+        if detection_inspector := self.detection_inspector:
+            detection_inspector.apply_theme(colors)
 
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
@@ -423,12 +444,29 @@ class RightPanel(SidePanel):
                 case PipelineStep.PREPROCESSING:
                     sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
-                    self.detection_inspector = BlobDetectionInspector()
-                    self.detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
-                    sec.add_widget(self.detection_inspector)
+                    detection_inspector = BlobDetectionInspector()
+                    detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    sec.add_widget(detection_inspector)
                 case PipelineStep.TRACKING:
-                    # TODO: implement
-                    pass
+                    tracking_inspector = TrajectoryLinkingInspector()
+                    self._tracking_inspector = tracking_inspector
+                    tracking_inspector.setObjectName(names.TRACKING_INSPECTOR_STEP)
+                    sec.add_widget(tracking_inspector)
+
+                    tracking_inspector.min_len_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "min_len", value)
+                    )
+                    tracking_inspector.max_gap_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "max_gap", value)
+                    )
+                    tracking_inspector.max_speed_changed.connect(
+                        lambda value: self.notify_param_changed(
+                            PipelineStep.TRACKING.value, "max_speed_um_s", value
+                        )
+                    )
+                    tracking_inspector.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.TRACKING.value)
+                    )
                 case PipelineStep.BATCH:
                     # TODO: implement
                     pass
