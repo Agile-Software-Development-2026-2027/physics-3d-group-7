@@ -59,6 +59,17 @@ DIALOG_OUTLINE: str = "Outline color"
 BUTTON_THEME: str = "Switch theme"
 RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel has its controls
 
+# histograms
+SECTION_HISTOGRAMS: str = "Histograms"
+HISTOGRAM_ROI_TITLE: str = "Raw ROI Intensities > 0 (sat: {frac_sat:.2%})"
+LABEL_HISTOGRAM_INTENSITY: str = "Intensity"
+LABEL_HISTOGRAM_AU: str = "AU"
+LABEL_HISTOGRAM_COUNTS: str = "Counts"
+ROI_INTENSITIES_MIN_LINE: str = "Normalization window lower bound"
+ROI_INTENSITIES_MAX_LINE: str = "Normalization window upper bound"
+HISTOGRAMS_TIP: str = """🛈 Some histograms have thresholds and bounds that you can drag. Double-click on each
+ histogram to reset its zoom, position and the range of both its axes.""".replace("\n", "")
+
 # right panel and accordion
 BUTTON_TOGGLE_ALL: str = "Toggle All"
 TOOLTIP_TOGGLE_ALL: str = "Toggle collapse/expand state of all accordion sections"
@@ -108,6 +119,7 @@ PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used 
 PREPROC_RESET: str = "Reset All to Defaults"
 PREPROC_SUGGEST_WINDOW_TOOLTIP: str = "Computed the intensity window from the current volume"
 PREPROC_COMPLETE: str = "Done"  # 🤷‍♂️
+
 
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"

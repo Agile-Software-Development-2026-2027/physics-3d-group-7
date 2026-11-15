@@ -12,6 +12,7 @@ from apkit4d.gui.constants import names, texts, view_style
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme.themes import THEME_COLORS, Theme
+from apkit4d.gui.views.panels.histograms_section import HistogramsSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
@@ -98,12 +99,15 @@ class LeftPanel(SidePanel):
         self._layers_section.setObjectName(names.LAYERS_SECTION)
         self._layers_section.add_widget(QLabel(texts.LAYERS_EMPTY))
 
+        self._histograms_section = HistogramsSection()
+
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(4, 4, 4, 4)
         content_layout.setSpacing(6)
         content_layout.addWidget(self._appearance_section)
         content_layout.addWidget(self._layers_section)
+        content_layout.addWidget(self._histograms_section)
         content_layout.addStretch()  # keeps the sections at the top
 
         self._scroll_area.setWidget(content)
@@ -121,6 +125,11 @@ class LeftPanel(SidePanel):
     def layers_section(self) -> AccordionSection:
         """Section with the layers of the 3D view."""
         return self._layers_section
+
+    @property
+    def histograms_section(self) -> HistogramsSection:
+        """Section with the intensity histograms."""
+        return self._histograms_section
 
     @property
     def colormap_box(self) -> QWidget:
@@ -181,6 +190,7 @@ class LeftPanel(SidePanel):
         self._scroll_area.apply_theme(colors)
         self._appearance_section.apply_theme(colors)
         self._layers_section.apply_theme(colors)
+        self._histograms_section.apply_theme(colors)
 
     def _on_opacity_moved(self, percent: int) -> None:
         self._opacity_value.setText(texts.OPACITY_VALUE.format(percent=percent))

@@ -57,6 +57,7 @@ class PipelineController(QObject):
         self._model = model
         self._view = view
         self._target_step: PipelineStep | None = None
+        self._failure_stats: tuple[str, str] | None = None
 
         # 1. Connect Model events -> View
         self._model.step_status_changed.connect(self._on_step_status_changed)
@@ -246,6 +247,10 @@ class PipelineController(QObject):
 
         self._update_pipeline_stats()
 
+    def report_stage_failure(self, summary: str, details: str) -> None:
+        self._failure_stats = (summary, details)
+        self._update_pipeline_stats()
+
     def _update_pipeline_stats(self) -> None:
         """
         Update the bottom statistics pane to reflect the current state of work.
@@ -279,6 +284,12 @@ class PipelineController(QObject):
                     target=target_str,
                 )
             )
+            return
+
+        if self._failure_stats is not None:
+            summary, details = self._failure_stats
+            self._view.set_stats_summary(summary)
+            self._view.set_stats_details(details)
             return
 
         total = len(PIPELINE_STEP_ORDER)

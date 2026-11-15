@@ -20,6 +20,7 @@ from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
+from apkit4d.gui.controllers.histogram_controller import HistogramController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.theme_controller import ThemeController
@@ -96,6 +97,22 @@ class MainController(QObject):
                     self._on_suggest_window_clicked
                 )
 
+        preproc_section = (
+            cast(
+                PreprocessingSection,
+                self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING),
+            )
+            if hasattr(self.pipeline_controller.view, "get_section")
+            else None
+        )
+        self._histogram_controller = HistogramController(
+            window.left_panel.histograms_section._roi_histogram,
+            self._volume_controller,
+            self._pipeline_model,
+            preproc_section=preproc_section,
+            parent=self,
+        )
+
         self._blob_controller: BlobDetectionController | None = None
         if (
             view is not None
@@ -171,6 +188,11 @@ class MainController(QObject):
     def pipeline_controller(self) -> PipelineController:
         """Controller of the analysis pipeline."""
         return self._pipeline_controller
+
+    @property
+    def histogram_controller(self) -> HistogramController:
+        """Controller of the intensity histograms."""
+        return self._histogram_controller
 
     @property
     def tracking_result(self) -> TrackingResult | None:
@@ -255,6 +277,7 @@ class MainController(QObject):
         reason = str(error) or type(error).__name__
         self._window.right_panel.set_stats_summary("Trajectory linking failed")
         self._window.right_panel.set_stats_details(reason)
+        self._pipeline_controller.report_stage_failure("Trajectory linking failed", reason)
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller

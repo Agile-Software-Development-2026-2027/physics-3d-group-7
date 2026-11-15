@@ -46,6 +46,7 @@ class AccordionSection(QWidget):
     """
 
     play_clicked = Signal()
+    expanded_changed = Signal(bool)
 
     def __init__(
         self,
@@ -105,6 +106,7 @@ class AccordionSection(QWidget):
 
         # Connect the click signal
         self.toggle_button.clicked.connect(self.on_toggle)
+        self.toggle_button.toggled.connect(self.expanded_changed.emit)
 
         # Install custom right widget or play button if requested
         if right_widget is not None:
