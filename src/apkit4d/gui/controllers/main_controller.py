@@ -97,13 +97,20 @@ class MainController(QObject):
                 )
 
         self._blob_controller: BlobDetectionController | None = None
-        if view is not None and self._volume_controller is not None:
-            self._blob_controller = BlobDetectionController(
-                window.right_panel.detection_inspector, view, parent=self
-            )
+        if (
+            view is not None
+            and self._volume_controller is not None
+            and (detection_inspector := window.right_panel.detection_inspector)
+        ):
+            self._blob_controller = BlobDetectionController(detection_inspector, view, parent=self)
             self._volume_controller.volume_prepared.connect(self._blob_controller.on_volume_prepared)
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
+            self._blob_controller.params_changed.connect(
+                lambda param, value: window.right_panel.notify_param_changed(
+                    PipelineStep.DETECTION, param, value
+                )
+            )
 
             if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
                 preproc_sec = cast(PreprocessingSection, preproc_sec)
