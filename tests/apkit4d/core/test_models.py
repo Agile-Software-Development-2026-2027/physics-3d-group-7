@@ -19,7 +19,7 @@ def test_tracking_config_defaults() -> None:
     assert cfg.max_dist_um == 20.0
     assert cfg.max_gap == 3
     assert cfg.gap_dist_um == 25.0
-    assert cfg.min_len == 3
+    assert cfg.min_len == 5
     assert cfg.velocity_smoothing == 0.5
     assert cfg.mc_resamples == 20
     assert cfg.max_speed_um_s == 250.0

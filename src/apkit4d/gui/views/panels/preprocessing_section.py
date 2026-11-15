@@ -42,6 +42,7 @@ class PreprocessingSection(AccordionSection):
     """The preprocessing accordion"""
 
     suggest_window_clicked = Signal()
+    normalization_toggled = Signal(bool)
 
     def __init__(self, right_panel: RightPanel):
         super().__init__(texts.STAGE_TITLE_PREPROCESSING)
@@ -167,6 +168,7 @@ class PreprocessingSection(AccordionSection):
         self.right_panel.step_param_changed.emit(
             PipelineStep.PREPROCESSING.value, "normalization_enabled", checked
         )
+        self.normalization_toggled.emit(checked)
 
     def _on_gamma_slider_changed(self, int_val: int) -> None:
         gamma_val = round(int_val / 100.0, 2)

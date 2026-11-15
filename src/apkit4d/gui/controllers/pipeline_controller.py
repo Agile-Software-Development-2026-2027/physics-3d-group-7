@@ -6,6 +6,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -236,7 +237,13 @@ class PipelineController(QObject):
             step = PipelineStep(step_name)
         except ValueError:
             return
+
         self._model.reset_step_params(step)
+
+        if step == PipelineStep.TRACKING:
+            config = TrackingConfig(**self._model.get_step_params(step))
+            self._view.set_tracking_params(config)
+
         self._update_pipeline_stats()
 
     def _update_pipeline_stats(self) -> None:
