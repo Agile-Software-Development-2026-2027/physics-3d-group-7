@@ -9,6 +9,7 @@ from typing import Any, assert_never
 from PySide6.QtCore import QObject, Signal
 
 from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
 from apkit4d.preprocessing import PreprocParams
 
 
@@ -302,6 +303,6 @@ class PipelineModel(QObject):
             case PipelineStep.BATCH:
                 return {}  # TODO add default params
             case PipelineStep.TRACKING:
-                return {}  # TODO add default params
+                return TrackingConfig().model_dump()
             case _:
                 assert_never(step)

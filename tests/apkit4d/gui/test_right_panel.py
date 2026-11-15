@@ -5,7 +5,8 @@ Unit tests for RightPanel, BottomStatsSection, and its theme, layout, and contro
 from typing import assert_never
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QSizePolicy
+from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QSizePolicy, QSpinBox
+from pytestqt.qtbot import QtBot
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
@@ -257,3 +258,28 @@ def test_main_controller_initialization_and_theme_sync(qtbot, qapp) -> None:
     # Toggle back to dark
     window.left_panel.theme_switch_requested.emit()
     assert window.right_panel.theme == Theme.DARK
+
+
+def test_right_panel_tracking_param_changed_signal(qtbot: QtBot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    min_len = panel.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN)
+    max_gap = panel.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP)
+    max_speed = panel.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED)
+
+    assert min_len is not None
+    assert max_gap is not None
+    assert max_speed is not None
+
+    with qtbot.waitSignal(panel.step_param_changed) as blocker:
+        min_len.setValue(6)
+    assert blocker.args == ["tracking", "min_len", 6]
+
+    with qtbot.waitSignal(panel.step_param_changed) as blocker:
+        max_gap.setValue(4)
+    assert blocker.args == ["tracking", "max_gap", 4]
+
+    with qtbot.waitSignal(panel.step_param_changed) as blocker:
+        max_speed.setValue(300.0)
+    assert blocker.args == ["tracking", "max_speed_um_s", 300.0]

@@ -7,6 +7,7 @@ from copy import replace
 import pytest
 
 from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -249,3 +250,27 @@ def test_a_completed_detection_is_not_dirty_when_a_parameter_gets_the_same_value
     model.update_step_params(PipelineStep.DETECTION, threshold=BlobParams().threshold)
 
     assert not model.is_step_dirty(PipelineStep.DETECTION)
+
+
+def test_pipeline_model_tracking_params_defaults_and_reset() -> None:
+    model = PipelineModel()
+    defaults = TrackingConfig().model_dump()
+
+    # Tracking starts with the default configuration
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults
+
+    # Parameters can be updated
+    model.update_step_params(
+        PipelineStep.TRACKING,
+        min_len=7,
+        max_gap=4,
+    )
+
+    params = model.get_step_params(PipelineStep.TRACKING)
+    assert params["min_len"] == 7
+    assert params["max_gap"] == 4
+
+    # Reset restores the default configuration
+    model.reset_step_params(PipelineStep.TRACKING)
+
+    assert model.get_step_params(PipelineStep.TRACKING) == defaults
