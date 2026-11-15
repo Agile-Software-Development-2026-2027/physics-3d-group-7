@@ -258,12 +258,13 @@ class BlobDetectionController(QObject):
             self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS_FOUND.format(frame=display_frame))
             return
 
+        median_vol = float(np.median(blobs["volume_um3"])) if "volume_um3" in blobs.columns else 0.0
         self._view.show_blobs(create_blob_mesh(blobs))
         self._inspector.set_detection_status(
             texts.INSPECTOR_STATUS_BLOBS_FOUND.format(
                 frame=display_frame,
                 count=len(blobs),
-                volume=float(np.median(blobs["volume_um3"])),
+                volume=median_vol,
             )
         )
 

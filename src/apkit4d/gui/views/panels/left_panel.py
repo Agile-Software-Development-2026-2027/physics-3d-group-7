@@ -6,7 +6,16 @@ it announces what the user chooses with signals, and shows what it is told with 
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from apkit4d.gui.constants import names, texts, view_style
 from apkit4d.gui.shared.components.accordion import AccordionSection
@@ -16,6 +25,7 @@ from apkit4d.gui.views.panels.histograms_section import HistogramsSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 
 class LeftPanel(SidePanel):
@@ -28,6 +38,11 @@ class LeftPanel(SidePanel):
         opacity_changed: Emitted with the opacity the user chose, as a factor: 1.0 is the default look.
         background_chosen: Emitted with the hex code of the background color the user chose.
         outline_chosen: Emitted with the hex code of the outline color the user chose.
+        show_trajectories_toggled: Emitted when the trajectory visibility checkbox changes.
+        show_blobs_toggled: Emitted when the blob visibility checkbox changes.
+        trajectory_tail_changed: Emitted with the trajectory tail length (`-1` for all steps).
+        trajectory_color_mode_changed: Emitted with the selected `TrajectoryColorMode`.
+        trajectory_colormap_changed: Emitted with the selected speed colormap name.
     """
 
     theme_switch_requested = Signal()
@@ -35,6 +50,11 @@ class LeftPanel(SidePanel):
     opacity_changed = Signal(float)
     background_chosen = Signal(str)
     outline_chosen = Signal(str)
+    show_trajectories_toggled = Signal(bool)
+    show_blobs_toggled = Signal(bool)
+    trajectory_tail_changed = Signal(int)
+    trajectory_color_mode_changed = Signal(object)
+    trajectory_colormap_changed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__(names.LEFT_PANEL)
@@ -88,16 +108,71 @@ class LeftPanel(SidePanel):
         self._appearance_section = AccordionSection(texts.SECTION_APPEARANCE)
         self._appearance_section.setObjectName(names.APPEARANCE_SECTION)
         self._appearance_section.add_widget(theme_button)
-        self._colormap_box = self._add_box(texts.BOX_COLORMAP, names.COLORMAP_BOX, self._colormap_combo)
-        self._opacity_box = self._add_box(texts.BOX_OPACITY, names.OPACITY_BOX, opacity_row)
-        self._background_box = self._add_box(
-            texts.BOX_BACKGROUND, names.BACKGROUND_BOX, self._background_button
+        self._colormap_box = self._add_box(
+            self._appearance_section, texts.BOX_COLORMAP, names.COLORMAP_BOX, self._colormap_combo
         )
-        self._outline_box = self._add_box(texts.BOX_OUTLINE, names.OUTLINE_BOX, self._outline_button)
+        self._opacity_box = self._add_box(
+            self._appearance_section, texts.BOX_OPACITY, names.OPACITY_BOX, opacity_row
+        )
+        self._background_box = self._add_box(
+            self._appearance_section, texts.BOX_BACKGROUND, names.BACKGROUND_BOX, self._background_button
+        )
+        self._outline_box = self._add_box(
+            self._appearance_section, texts.BOX_OUTLINE, names.OUTLINE_BOX, self._outline_button
+        )
+
+        self._show_trajectories_checkbox = QCheckBox(texts.LABEL_SHOW_TRAJECTORIES)
+        self._show_trajectories_checkbox.setObjectName(names.SHOW_TRAJECTORIES_CHECKBOX)
+        self._show_trajectories_checkbox.setChecked(True)
+        self._show_trajectories_checkbox.toggled.connect(self.show_trajectories_toggled)
+
+        self._show_blobs_checkbox = QCheckBox(texts.LABEL_SHOW_BLOBS)
+        self._show_blobs_checkbox.setObjectName(names.SHOW_BLOBS_CHECKBOX)
+        self._show_blobs_checkbox.setChecked(True)
+        self._show_blobs_checkbox.toggled.connect(self.show_blobs_toggled)
+
+        self._trajectory_tail_spinbox = QSpinBox()
+        self._trajectory_tail_spinbox.setObjectName(names.TRAJECTORY_TAIL_SPINBOX)
+        self._trajectory_tail_spinbox.setRange(view_style.TRAJECTORY_TAIL_MIN, view_style.TRAJECTORY_TAIL_MAX)
+        self._trajectory_tail_spinbox.setSpecialValueText(texts.TRAJECTORY_TAIL_ALL)
+        self._trajectory_tail_spinbox.setValue(view_style.TRAJECTORY_TAIL_DEFAULT)
+        self._trajectory_tail_spinbox.valueChanged.connect(self.trajectory_tail_changed)
+
+        self._trajectory_color_mode_combo = QComboBox()
+        self._trajectory_color_mode_combo.setObjectName(names.TRAJECTORY_COLOR_MODE_COMBO)
+        self._trajectory_color_mode_combo.addItem(texts.TRAJECTORY_COLOR_SPEED, TrajectoryColorMode.SPEED)
+        self._trajectory_color_mode_combo.addItem(
+            texts.TRAJECTORY_COLOR_TRACK_ID, TrajectoryColorMode.TRACK_ID
+        )
+        self._trajectory_color_mode_combo.currentIndexChanged.connect(self._on_trajectory_color_mode_changed)
+
+        self._trajectory_colormap_combo = QComboBox()
+        self._trajectory_colormap_combo.setObjectName(names.TRAJECTORY_COLORMAP_COMBO)
+        self._trajectory_colormap_combo.addItems(list(view_style.TRAJECTORY_COLORMAPS))
+        self._trajectory_colormap_combo.currentTextChanged.connect(self.trajectory_colormap_changed)
 
         self._layers_section = AccordionSection(texts.SECTION_LAYERS)
         self._layers_section.setObjectName(names.LAYERS_SECTION)
-        self._layers_section.add_widget(QLabel(texts.LAYERS_EMPTY))
+        self._layers_section.add_widget(self._show_trajectories_checkbox)
+        self._layers_section.add_widget(self._show_blobs_checkbox)
+        self._trajectory_tail_box = self._add_box(
+            self._layers_section,
+            texts.BOX_TRAJECTORY_TAIL,
+            names.TRAJECTORY_TAIL_BOX,
+            self._trajectory_tail_spinbox,
+        )
+        self._trajectory_color_mode_box = self._add_box(
+            self._layers_section,
+            texts.BOX_TRAJECTORY_COLOR_MODE,
+            names.TRAJECTORY_COLOR_MODE_BOX,
+            self._trajectory_color_mode_combo,
+        )
+        self._trajectory_colormap_box = self._add_box(
+            self._layers_section,
+            texts.BOX_TRAJECTORY_COLORMAP,
+            names.TRAJECTORY_COLORMAP_BOX,
+            self._trajectory_colormap_combo,
+        )
 
         self._histograms_section = HistogramsSection()
 
@@ -161,6 +236,31 @@ class LeftPanel(SidePanel):
         """Opacity chosen in the panel, as a factor: 1.0 is the default look."""
         return self._opacity_slider.value() / 100
 
+    @property
+    def show_trajectories(self) -> bool:
+        """Whether 3D trajectory paths are enabled."""
+        return self._show_trajectories_checkbox.isChecked()
+
+    @property
+    def show_blobs(self) -> bool:
+        """Whether 3D blob markers are enabled."""
+        return self._show_blobs_checkbox.isChecked()
+
+    @property
+    def trajectory_tail_length(self) -> int:
+        """Maximum number of trailing frame steps shown, or `-1` for full history."""
+        return self._trajectory_tail_spinbox.value()
+
+    @property
+    def trajectory_color_mode(self) -> TrajectoryColorMode:
+        """Active trajectory coloring mode."""
+        return self._trajectory_color_mode_combo.currentData()
+
+    @property
+    def trajectory_colormap(self) -> str:
+        """Active matplotlib colormap name when coloring trajectories by speed."""
+        return self._trajectory_colormap_combo.currentText()
+
     def set_background_color(self, color: str) -> None:
         """
         Show `color` as the background color of the 3D view.
@@ -196,12 +296,17 @@ class LeftPanel(SidePanel):
         self._opacity_value.setText(texts.OPACITY_VALUE.format(percent=percent))
         self.opacity_changed.emit(percent / 100)
 
-    def _add_box(self, title: str, name: str, control: QWidget) -> QWidget:
+    def _on_trajectory_color_mode_changed(self, _index: int) -> None:
+        mode = self.trajectory_color_mode
+        self._trajectory_colormap_combo.setEnabled(mode == TrajectoryColorMode.SPEED)
+        self.trajectory_color_mode_changed.emit(mode)
+
+    def _add_box(self, section: AccordionSection, title: str, name: str, control: QWidget) -> QWidget:
         box = QWidget()
         box.setObjectName(name)
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QLabel(title))
         layout.addWidget(control)
-        self._appearance_section.add_widget(box)
+        section.add_widget(box)
         return box

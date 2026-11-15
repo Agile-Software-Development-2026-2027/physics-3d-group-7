@@ -8,8 +8,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from apkit4d.analysis.metrics import compute_track_statistics
 from apkit4d.blob_detection import DETECTION_COLUMNS
 from apkit4d.io.czi import CziInfo
+from apkit4d.io.session import PrecomputedSession
+from apkit4d.tracking.linker import TrackingResult
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +471,22 @@ class MockFrameSource:
     def tracks(self) -> pd.DataFrame:
         """Copy of the precomputed synthetic trajectories DataFrame."""
         return self._tracks.copy()
+
+    @property
+    def tracking_result(self) -> TrackingResult:
+        """Precomputed `TrackingResult` wrapping the synthetic tracks and statistics."""
+        tracks_copy = self.tracks
+        return TrackingResult(
+            tracks=tracks_copy,
+            metadata=self.summary(),
+            stats=compute_track_statistics(tracks_copy),
+        )
+
+    @property
+    def session(self) -> PrecomputedSession:
+        """Precomputed session bundle implementing the `PrecomputedSource` protocol."""
+        result = self.tracking_result
+        return PrecomputedSession(blobs=result.tracks, tracking=result)
 
     @property
     def motion_profiles(self) -> dict[int, str]:

@@ -1,9 +1,12 @@
 from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QFileDialog
 
+from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui import app as gui_app
 from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, texts
@@ -12,6 +15,8 @@ from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.mock import MockConfig, MockFrameSource
+from apkit4d.io.session import PrecomputedSession
+from apkit4d.tracking.linker import TrackingResult
 
 
 @pytest.fixture
@@ -109,18 +114,56 @@ def test_main_controller_open_mock_loads_source_and_playback(qtbot, qapp, window
         PipelineStep.TRACKING,
     ):
         assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
+    assert isinstance(controller.tracking_result, TrackingResult)
     assert view.show_blobs.called
     frame0_poly = view.show_blobs.call_args.args[0]
     assert frame0_poly.n_points == int((source.tracks["frame"] == 0).sum())
+    assert view.show_trajectories.called
+    assert view.show_trajectories.call_args.args[0].n_points == 0
 
-    # Stepping to another frame updates both the mock volume and precomputed blobs live
+    # Stepping to another frame updates volume, precomputed blobs, and live trajectories
     controller.playback_controller.go_to_frame(2)
     qtbot.waitUntil(lambda: view.show_volume.call_count >= 2, timeout=5000)
     wait_for_background_tasks()
     assert frames_seen == [2]
     frame2_poly = view.show_blobs.call_args.args[0]
     assert frame2_poly.n_points == int((source.tracks["frame"] == 2).sum())
+    frame2_tracks = view.show_trajectories.call_args.args[0]
+    assert frame2_tracks.n_points > 0
 
-    # Closing the mock source resets the mock pipeline state cleanly
+    # Closing the mock source resets the session pipeline and trajectory state cleanly
     controller.file_controller.close()
     assert controller.pipeline_model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+    assert controller.tracking_result is None
+    assert view.clear_trajectories.called
+
+
+def test_main_controller_apply_precomputed_session_supports_generic_session(qtbot, qapp, window):
+    view = MagicMock()
+    controller = MainController(window, qapp, window, view=view)
+
+    tracks = pd.DataFrame(
+        {
+            "frame": [0, 1, 2],
+            "x_um": [1.0, 2.0, 3.0],
+            "y_um": [1.0, 2.0, 3.0],
+            "z_um": [1.0, 1.0, 1.0],
+            "track_id": [7, 7, 7],
+            "volume_um3": [150.0, 150.0, 150.0],
+        }
+    )
+    session = PrecomputedSession(
+        tracking=TrackingResult(tracks=tracks, metadata={"num_tracks_retained": 1}),
+        blob_params=BlobParams(threshold=0.25),
+        tracking_config=TrackingConfig(min_len=2),
+    )
+
+    controller.apply_precomputed_session(session, dt_s=0.1)
+    assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED
+    assert controller.pipeline_model.get_step_params(PipelineStep.DETECTION)["threshold"] == 0.25
+    assert controller.pipeline_model.get_step_params(PipelineStep.TRACKING)["min_len"] == 2
+    assert view.show_blobs.call_args.args[0].n_points == 1
+
+    controller.playback_controller.set_frame_count(3)
+    controller.playback_controller.go_to_frame(2)
+    assert view.show_trajectories.call_args.args[0].n_points == 3

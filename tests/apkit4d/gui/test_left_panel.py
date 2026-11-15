@@ -5,7 +5,7 @@ Unit tests for LeftPanel.
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QColorDialog, QComboBox, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QSpinBox, QWidget
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
@@ -15,6 +15,7 @@ from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 
 @pytest.fixture
@@ -162,3 +163,36 @@ def test_set_colors_shows_them_on_the_buttons(panel) -> None:
     panel.set_outline_color("white")
     assert panel.findChild(ColorButton, names.BACKGROUND_BUTTON).color == "#1f2023"
     assert panel.findChild(ColorButton, names.OUTLINE_BUTTON).color == "#ffffff"
+
+
+def test_layers_section_holds_trajectory_controls_and_emits_signals(panel, qtbot) -> None:
+    traj_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
+    blobs_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
+    tail_spin = panel.layers_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
+    mode_combo = panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
+    cmap_combo = panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
+
+    assert traj_cb is not None and panel.show_trajectories is True
+    assert blobs_cb is not None and panel.show_blobs is True
+    assert tail_spin.specialValueText() == texts.TRAJECTORY_TAIL_ALL
+    assert panel.trajectory_tail_length == view_style.TRAJECTORY_TAIL_DEFAULT
+    assert panel.trajectory_color_mode == TrajectoryColorMode.SPEED
+    assert panel.trajectory_colormap == view_style.TRAJECTORY_COLORMAPS[0]
+    assert cmap_combo.isEnabled()
+
+    with qtbot.waitSignal(panel.trajectory_tail_changed, timeout=1000) as blocker:
+        tail_spin.setValue(25)
+    assert blocker.args == [25]
+
+    with qtbot.waitSignal(panel.trajectory_color_mode_changed, timeout=1000) as blocker:
+        mode_combo.setCurrentIndex(1)
+    assert blocker.args == [TrajectoryColorMode.TRACK_ID]
+    assert not cmap_combo.isEnabled()
+
+    with qtbot.waitSignal(panel.show_trajectories_toggled, timeout=1000) as blocker:
+        traj_cb.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(panel.show_blobs_toggled, timeout=1000) as blocker:
+        blobs_cb.setChecked(False)
+    assert blocker.args == [False]
