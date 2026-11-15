@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
-from apkit4d.gui.controllers.volume_controller import VolumeController
+from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.preprocessing import PreprocParams
 from apkit4d.roi import RegionOfInterest
@@ -235,3 +235,135 @@ def test_suggest_intensity_window_uses_full_and_roi_volumes(qtbot) -> None:
         controller.suggest_intensity_window()
     lo, hi = roi_blocker.args
     assert 50.0 <= lo < hi <= 200.0
+
+    def open_recording(qtbot, data: NDArray | None = None):
+        """A controller with a recording open, its first frame shown and announced."""
+        window = MainWindow()
+        qtbot.addWidget(window)
+        view = FakeVolumeView()
+        controller = VolumeController(window, view)
+        announced: list[PreparedVolume] = []
+        controller.volume_prepared.connect(lambda prepared: announced.append(prepared))
+        source = FakeSource(data)
+        controller.set_source(Path("test.czi"), source)
+        qtbot.waitUntil(lambda: len(announced) == 1, timeout=5000)
+        return controller, view, source, announced
+
+    def test_volume_prepared_carries_the_frame_and_the_volumes(qtbot) -> None:
+        _, _, source, announced = open_recording(qtbot)
+
+        prepared = announced[0]
+        assert prepared.frame == 0
+        assert prepared.voxel == source.info.voxel
+        assert prepared.offset == (0, 0, 0)  # no ROI: the crop starts at the origin
+        assert prepared.roi_volume.shape == (8, 16, 16)
+        assert prepared.image.shape == (8, 16, 16)
+
+    def test_volume_prepared_is_emitted_after_the_view_shows_the_volume(qtbot) -> None:
+        window = MainWindow()
+        qtbot.addWidget(window)
+        view = FakeVolumeView()
+        controller = VolumeController(window, view)
+        grids_when_announced: list[int] = []
+        controller.volume_prepared.connect(lambda _prepared: grids_when_announced.append(len(view.grids)))
+
+        controller.set_source(Path("test.czi"), FakeSource())
+        qtbot.waitUntil(lambda: len(grids_when_announced) == 1, timeout=5000)
+
+        assert grids_when_announced == [1]  # the blobs must not appear before their volume
+
+    def test_volume_prepared_carries_what_preprocessing_returned(qtbot, monkeypatch) -> None:
+        produced: list[NDArray] = []
+
+        def fake_preprocess(vol, params, voxel):
+            out = np.full(vol.shape, 0.25, dtype=np.float32)
+            produced.append(out)
+            return out
+
+        monkeypatch.setattr("apkit4d.gui.controllers.volume_controller.preprocess", fake_preprocess)
+        data = np.full((8, 16, 16), 100.0, dtype=np.float32)
+
+        _, _, _, announced = open_recording(qtbot, data)
+
+        prepared = announced[0]
+        assert prepared.image is produced[0]  # the algorithm looks at the preprocessed volume...
+        assert np.array_equal(prepared.roi_volume, data)  # ...and the centroid is weighted by the raw one
+
+    def test_a_new_frame_is_announced_with_its_own_volume(qtbot) -> None:
+        controller, _, _, announced = open_recording(qtbot)
+
+        controller.show_frame(1)
+        qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
+
+        assert announced[1].frame == 1
+        assert announced[1] is not announced[0]
+
+    def test_set_roi_announces_the_cropped_volume(qtbot) -> None:
+        controller, _, source, announced = open_recording(qtbot)
+
+        controller.set_roi(RegionOfInterest(x_min=0.0, x_max=7.0, y_min=0.0, y_max=7.0, z_min=0.0, z_max=3.0))
+        qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
+
+        prepared = announced[1]
+        assert prepared.frame == 0
+        assert prepared.roi_volume.shape != (8, 16, 16)
+        assert (
+            prepared.image.shape == prepared.roi_volume.shape
+        )  # preprocessed on the crop, not on the full frame
+        assert len(source.read_calls) == 1  # the crop was cut from the volume in memory
+
+    def test_prepared_offset_locates_the_crop_inside_the_full_volume(qtbot) -> None:
+        # every voxel has a different value, so a crop can only match at its real position
+        data = np.arange(8 * 16 * 16, dtype=np.float32).reshape(8, 16, 16)
+        controller, _, _, announced = open_recording(qtbot, data)
+
+        controller.set_roi(
+            RegionOfInterest(x_min=4.0, x_max=11.0, y_min=2.0, y_max=9.0, z_min=1.0, z_max=4.0)
+        )
+        qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
+
+        prepared = announced[1]
+        z, y, x = prepared.offset  # voxels, (z, y, x)
+        dz, dy, dx = prepared.roi_volume.shape
+        assert prepared.offset != (0, 0, 0)
+        assert np.array_equal(data[z : z + dz, y : y + dy, x : x + dx], prepared.roi_volume)
+
+    def test_apply_preproc_params_announces_a_new_image_on_the_same_crop(qtbot) -> None:
+        controller, _, source, announced = open_recording(qtbot)
+
+        controller.apply_preproc_params(PreprocParams(lowest_intensity=50.0, highest_intensity=150.0))
+        qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
+
+        assert announced[1].frame == announced[0].frame
+        assert announced[1].image is not announced[0].image
+        assert announced[1].roi_volume is announced[0].roi_volume  # nothing was read or cropped again
+        assert len(source.read_calls) == 1
+
+    def test_opening_another_recording_announces_its_first_frame(qtbot) -> None:
+        controller, _, _, announced = open_recording(qtbot)
+
+        controller.set_source(Path("other.czi"), FakeSource())
+        qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
+
+        assert announced[1].frame == 0
+        assert announced[1] is not announced[0]
+
+    def test_a_volume_that_cannot_be_shown_is_not_announced(qtbot, monkeypatch) -> None:
+        window = MainWindow()
+        qtbot.addWidget(window)
+        view = FakeVolumeView()
+        controller = VolumeController(window, view)
+        announced: list[PreparedVolume] = []
+        controller.volume_prepared.connect(lambda prepared: announced.append(prepared))
+        # a 2D result: the view refuses it ("not 3D") and the controller reports the failure
+        monkeypatch.setattr(
+            "apkit4d.gui.controllers.volume_controller.preprocess",
+            lambda vol, params, voxel: np.zeros((4, 4), dtype=np.float32),
+        )
+
+        with qtbot.waitSignal(controller.failed, timeout=5000):
+            controller.set_source(Path("test.czi"), FakeSource())
+        qtbot.wait(100)
+
+        assert view.grids == []
+        assert announced == []
