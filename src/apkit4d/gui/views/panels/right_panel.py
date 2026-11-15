@@ -270,6 +270,15 @@ class RightPanel(SidePanel):
         """The ROI inspector widget."""
         return self._roi_inspector
 
+    @property
+    def detection_inspector(self) -> BlobDetectionInspector | None:
+        section = self.get_section(PipelineStep.DETECTION)
+
+        if section is not None:
+            return section.findChild(BlobDetectionInspector, names.DETECTION_INSPECTOR_STEP)
+
+        return None
+
     def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
         Return the AccordionSection associated with `step`.
@@ -397,7 +406,8 @@ class RightPanel(SidePanel):
             section.apply_theme(colors)
         self._bottom_stats.apply_theme(colors)
 
-        self.detection_inspector.apply_theme(colors)
+        if detection_inspector := self.detection_inspector:
+            detection_inspector.apply_theme(colors)
 
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
@@ -434,9 +444,9 @@ class RightPanel(SidePanel):
                 case PipelineStep.PREPROCESSING:
                     sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
-                    self.detection_inspector = BlobDetectionInspector()
-                    self.detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
-                    sec.add_widget(self.detection_inspector)
+                    detection_inspector = BlobDetectionInspector()
+                    detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    sec.add_widget(detection_inspector)
                 case PipelineStep.TRACKING:
                     tracking_inspector = TrajectoryLinkingInspector()
                     self._tracking_inspector = tracking_inspector

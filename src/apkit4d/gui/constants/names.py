@@ -54,6 +54,7 @@ PLAN_UP_TO_BUTTON: str = "plan_up_to_button"
 COMPLETE_STAGE_BUTTON: str = "complete_stage_button"
 
 # preprocessing stage controls
+PREPROC_STEP: str = "preprocessing_step"
 PREPROC_DENOISE_XY_FIELD: str = "preproc_denoise_xy_field"
 PREPROC_DENOISE_Z_FIELD: str = "preproc_denoise_z_field"
 PREPROC_BG_MODE_COMBO: str = "preproc_bg_mode_combo"
