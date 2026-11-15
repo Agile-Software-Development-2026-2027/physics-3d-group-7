@@ -171,7 +171,7 @@ def get_accordion_header_frame_stylesheet(
     return f"""
         QFrame#{names.ACCORDION_HEADER_FRAME} {{
             background-color: {bg_col};
-            border: 1px solid {colors.alternate_base};
+            border: 1px solid {colors.separator};
             border-top-left-radius: 4px;
             border-top-right-radius: 4px;
             border-bottom-left-radius: {bottom_radius}px;
@@ -196,6 +196,7 @@ def get_accordion_toggle_button_stylesheet(
     bg_col, text_col = get_status_colors(status, colors)
     is_dark = colors.window == DARK_COLORS.window
     hover_bg = "rgba(255, 255, 255, 0.05)" if is_dark else "rgba(0, 0, 0, 0.04)"
+    # FIXME: when the accordion is expanded use a better color to signify the status instead of colors.window
     checked_bg = colors.window if status == StepStatus.IDLE else bg_col
     bottom_radius = 0 if is_expanded else 4
 
@@ -272,8 +273,8 @@ def get_accordion_content_area_stylesheet(colors: ThemeColors) -> str:
     """
     return f"""
         QFrame#{names.ACCORDION_CONTENT_AREA} {{
-            background-color: {colors.base};
-            border: 1px solid {colors.alternate_base};
+            background-color: {colors.raised_base};
+            border: 1px solid {colors.separator};
             border-top: none;
             border-bottom-left-radius: 4px;
             border-bottom-right-radius: 4px;

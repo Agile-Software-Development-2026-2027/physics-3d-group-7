@@ -102,7 +102,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent=parent)
         self.setObjectName(names.ROI_HISTOGRAM)
-        self.setMinimumHeight(200)
+        self.setMinimumHeight(230)
         self.setMaximumHeight(280)
 
         self._volume: NDArray | None = None
@@ -273,7 +273,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
         """
 
         self._theme_colors = colors
-        self.setBackground(colors.base)
+        self.setBackground(colors.raised_base)
 
         axis_pen = pg.mkPen(color=colors.text, width=1)
         text_pen = pg.mkPen(color=colors.text)
@@ -294,16 +294,15 @@ class RoiIntensityHistogram(pg.PlotWidget):
         self._curve_item.setPen(curve_pen)
         self._curve_item.setBrush(curve_brush)
 
-        # different colors for the threshold lines
-        is_dark = colors.base == "#2b2d31"
-        lowest_color = "#e5c07b" if is_dark else "#b45309"
-        highest_color = "#e06c75" if is_dark else "#dc2626"
+        self._lowest_line.setPen(
+            pg.mkPen(color=colors.lowest_bound_hist, width=2, style=Qt.PenStyle.DashLine)
+        )
+        self._lowest_line.setHoverPen(pg.mkPen(color=colors.lowest_bound_hist, width=4))
 
-        self._lowest_line.setPen(pg.mkPen(color=lowest_color, width=2, style=Qt.PenStyle.DashLine))
-        self._lowest_line.setHoverPen(pg.mkPen(color=lowest_color, width=4))
-
-        self._highest_line.setPen(pg.mkPen(color=highest_color, width=2, style=Qt.PenStyle.DashLine))
-        self._highest_line.setHoverPen(pg.mkPen(color=highest_color, width=4))
+        self._highest_line.setPen(
+            pg.mkPen(color=colors.highest_bound_hist, width=2, style=Qt.PenStyle.DashLine)
+        )
+        self._highest_line.setHoverPen(pg.mkPen(color=colors.highest_bound_hist, width=4))
 
         self._render_title()
 

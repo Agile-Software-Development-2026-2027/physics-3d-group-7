@@ -119,8 +119,7 @@ def test_accordion_stylesheets() -> None:
 
     content_qss = get_accordion_content_area_stylesheet(DARK_COLORS)
     assert names.ACCORDION_CONTENT_AREA in content_qss
-    assert DARK_COLORS.base in content_qss
-    assert DARK_COLORS.alternate_base in content_qss
+    assert DARK_COLORS.raised_base in content_qss
 
     play_qss = get_accordion_play_button_stylesheet(DARK_COLORS, StepStatus.RUNNING)
     assert names.PLAY_STAGE_BUTTON in play_qss
@@ -173,7 +172,7 @@ def test_component_styler_helpers(qtbot) -> None:
 
     AccordionStyler.apply(btn, frame, LIGHT_COLORS, StepStatus.COMPLETED)
     assert LIGHT_STATUS_COLORS.completed_bg in btn.styleSheet()
-    assert LIGHT_COLORS.base in frame.styleSheet()
+    assert LIGHT_COLORS.raised_base in frame.styleSheet()
 
     ScrollAreaStyler.apply(scroll, LIGHT_COLORS)
     assert names.MODERN_SCROLL_AREA in scroll.styleSheet()

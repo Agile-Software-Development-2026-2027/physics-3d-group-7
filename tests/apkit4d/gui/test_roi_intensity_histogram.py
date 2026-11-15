@@ -128,10 +128,10 @@ def test_histogram_apply_theme(qtbot) -> None:
     qtbot.addWidget(widget)
 
     widget.apply_theme(DARK_COLORS)
-    assert widget.lowest_line.pen.color().name().lower() == "#e5c07b"
+    assert widget.lowest_line.pen.color().name().lower() == DARK_COLORS.lowest_bound_hist
 
     widget.apply_theme(LIGHT_COLORS)
-    assert widget.lowest_line.pen.color().name().lower() == "#b45309"
+    assert widget.lowest_line.pen.color().name().lower() == LIGHT_COLORS.lowest_bound_hist
 
 
 def test_set_normalization_enabled(qtbot) -> None:
