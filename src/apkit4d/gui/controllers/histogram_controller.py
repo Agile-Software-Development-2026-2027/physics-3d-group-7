@@ -7,9 +7,10 @@ from typing import cast
 import numpy as np
 from PySide6.QtCore import QObject
 
-from apkit4d.gui.controllers.volume_controller import VolumeController
+from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
 from apkit4d.preprocessing import PreprocParams
 
@@ -37,6 +38,7 @@ class HistogramController(QObject):
         histogram: RoiIntensityHistogram,
         volume_controller: VolumeController | None,
         pipeline_model: PipelineModel,
+        preproc_histogram: PreprocessedIntensityHistogram | None = None,
         preproc_section: PreprocessingSection | None = None,
         parent: QObject | None = None,
     ) -> None:
@@ -45,6 +47,7 @@ class HistogramController(QObject):
         self._volume_controller = volume_controller
         self._pipeline_model = pipeline_model
         self._preproc_section = preproc_section
+        self._preproc_histogram = preproc_histogram
 
         initial_params = pipeline_model.get_preproc_params()
         self._histogram.set_intensity_bounds(
@@ -56,6 +59,8 @@ class HistogramController(QObject):
         if self._volume_controller is not None:
             self._volume_controller.roi_volume_changed.connect(self._on_roi_volume_changed)
             self._volume_controller.preproc_params_changed.connect(self._on_volume_preproc_params_changed)
+            self._volume_controller.volume_prepared.connect(self._on_volume_prepared)
+            self._volume_controller.failed.connect(self._on_volume_failed)
             if self._volume_controller.current_roi_volume is not None:
                 self._histogram.set_volume(self._volume_controller.current_roi_volume)
 
@@ -76,6 +81,18 @@ class HistogramController(QObject):
 
         if volume is None or isinstance(volume, np.ndarray):
             self._histogram.set_volume(cast(np.ndarray | None, volume))
+            if volume is None and self._preproc_histogram is not None:
+                self._preproc_histogram.set_volume(None)
+
+    def _on_volume_prepared(self, prepared: object) -> None:
+        if self._preproc_histogram is None:
+            return
+        if isinstance(prepared, PreparedVolume):
+            self._preproc_histogram.set_volume(prepared.image)
+
+    def _on_volume_failed(self) -> None:
+        if self._preproc_histogram is not None:
+            self._preproc_histogram.set_volume(None)
 
     def _on_volume_preproc_params_changed(self, params: object) -> None:
         """Handle parameter updates directly from VolumeController."""
