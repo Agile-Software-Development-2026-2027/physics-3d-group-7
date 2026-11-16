@@ -3,6 +3,7 @@ from typing import override
 import numpy as np
 import pyqtgraph as pg
 from numpy.typing import NDArray
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
@@ -14,6 +15,7 @@ class IntensityHistogram(pg.PlotWidget):
     """Base PyQtGraph histogram widget with log-Y scale, theme support, and collapse deferral."""
 
     NUM_BINS: int
+    recompute_requested = Signal(bool)  # reset_range
 
     def __init__(self, object_name: str, x_units: str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent=parent)
@@ -28,6 +30,7 @@ class IntensityHistogram(pg.PlotWidget):
         self._is_expanded: bool = False
         self._dirty: bool = False
         self._pending_reset_range: bool = False
+        self._async_mode: bool = False
 
         plot_item = self.getPlotItem()
         plot_item.hideButtons()
@@ -48,12 +51,22 @@ class IntensityHistogram(pg.PlotWidget):
     def title_text(self) -> str:
         return self._current_title
 
+    def set_async_mode(self, enabled: bool) -> None:
+        """When True, delegates recomputation to an external controller via `recompute_requested`."""
+        self._async_mode = enabled
+
     def set_volume(self, volume: NDArray | None) -> None:
         self._volume = volume
         self._dirty = True
         self._pending_reset_range = True
         if self._is_expanded:
-            self._recompute_histogram(reset_range=True)
+            self._trigger_recompute(reset_range=True)
+
+    def _trigger_recompute(self, reset_range: bool = False) -> None:
+        if self._async_mode:
+            self.recompute_requested.emit(reset_range)
+        else:
+            self._recompute_histogram(reset_range=reset_range)
 
     def _recompute_histogram(self, reset_range: bool = False) -> None:
         raise NotImplementedError
@@ -97,4 +110,12 @@ class IntensityHistogram(pg.PlotWidget):
             return
         self._is_expanded = expanded
         if expanded and self._dirty:
-            self._recompute_histogram(reset_range=self._pending_reset_range)
+            self._trigger_recompute(reset_range=self._pending_reset_range)
+
+    @property
+    def is_expanded(self) -> bool:
+        return self._is_expanded
+
+    @property
+    def pending_reset_range(self) -> bool:
+        return self._pending_reset_range

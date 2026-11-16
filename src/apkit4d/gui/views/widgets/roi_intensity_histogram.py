@@ -5,6 +5,8 @@ Plots the distribution of voxel intensities in the currently active Region of In
 using PyQtGraph with a logarithmic counts scale and interactive vertical threshold lines.
 """
 
+import time
+from threading import current_thread
 from typing import override
 
 import numpy as np
@@ -79,6 +81,21 @@ def compute_fraction_saturated(intensities: NDArray | None, highest_intensity: f
     return float((intensities >= highest_intensity).mean())
 
 
+def compute_roi_histogram_stats(
+    volume: NDArray | None,
+    lowest_intensity: float,
+    highest_intensity: float,
+    num_bins: int = 256,
+) -> tuple[NDArray, NDArray, float, float]:
+    start = time.time()
+    bins, counts, top = compute_intensity_histogram(
+        volume, lowest_intensity=lowest_intensity, num_bins=num_bins
+    )
+    frac_sat = compute_fraction_saturated(volume, highest_intensity)
+    print(f"roi histogram in {(time.time() - start) * 1000:.2f} ms, {current_thread().name}")
+    return bins, counts, top, frac_sat
+
+
 class RoiIntensityHistogram(IntensityHistogram):
     """
     Interactive PyQtGraph histogram showing the intensity distribution of the current ROI volume.
@@ -109,10 +126,8 @@ class RoiIntensityHistogram(IntensityHistogram):
         self._lowest_intensity: float = 0.0
         self._highest_intensity: float = 1000.0
         self._normalization_enabled: bool = True
-        self._p9999: float = 0.0
         self._top: float = 1.0
         self._frac_sat: float = 0.0
-        self._p9999_dirty: bool = False
 
         self._lowest_line = pg.InfiniteLine(
             pos=self._lowest_intensity,
@@ -171,11 +186,6 @@ class RoiIntensityHistogram(IntensityHistogram):
     def highest_line(self) -> pg.InfiniteLine:
         return self._highest_line
 
-    @override
-    def set_volume(self, volume: NDArray | None) -> None:
-        self._p9999_dirty = True
-        super().set_volume(volume)
-
     def set_intensity_bounds(self, lowest: float, highest: float) -> None:
         """
         Sets vertical threshold line positions programmatically without emitting drag signals.
@@ -194,7 +204,7 @@ class RoiIntensityHistogram(IntensityHistogram):
 
         self._dirty = True
         if self._is_expanded:
-            self._recompute_histogram()
+            self._trigger_recompute()
 
     def set_normalization_enabled(self, enabled: bool) -> None:
         self._normalization_enabled = enabled
@@ -204,7 +214,9 @@ class RoiIntensityHistogram(IntensityHistogram):
         if val == self._lowest_intensity:
             return
         self._lowest_intensity = val
-        self._recompute_histogram()
+        self._dirty = True
+        if self._is_expanded:
+            self._trigger_recompute(reset_range=False)
         self.lowest_intensity_changed.emit(val)
 
     def _on_highest_dragged(self, line: pg.InfiniteLine) -> None:
@@ -212,35 +224,20 @@ class RoiIntensityHistogram(IntensityHistogram):
         if val == self._highest_intensity:
             return
         self._highest_intensity = val
-        self._update_frac_sat_and_title()
+        self._dirty = True
+        if self._is_expanded:
+            self._trigger_recompute(reset_range=False)
         self.highest_intensity_changed.emit(val)
 
     @override
     def _recompute_histogram(self, reset_range: bool = False) -> None:
-        if self._p9999_dirty:
-            if self._volume is not None and self._volume.size > 0:
-                flat = self._volume.ravel()
-                nonzero = flat[flat > 0]
-                self._p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
-            else:
-                self._p9999 = 0.0
-            self._p9999_dirty = False
-
-        bins, counts, top = compute_intensity_histogram(
-            self._volume, self._lowest_intensity, num_bins=self.NUM_BINS, p9999=self._p9999
+        bins, counts, top, frac_sat = compute_roi_histogram_stats(
+            self._volume,
+            lowest_intensity=self.lowest_intensity,
+            highest_intensity=self.highest_intensity,
+            num_bins=self.NUM_BINS,
         )
-        self._top = top
-        self._curve_item.setData(bins, counts, stepMode="center")
-        if reset_range:
-            self.reset_zoom()
-        self._update_frac_sat_and_title()
-
-        self._dirty = False
-        self._pending_reset_range = False
-
-    def _update_frac_sat_and_title(self) -> None:
-        self._frac_sat = compute_fraction_saturated(self._volume, self._highest_intensity)
-        self._render_title()
+        self.apply_computed_data(bins, counts, top, frac_sat, reset_range=reset_range)
 
     @override
     def apply_theme(self, colors: ThemeColors) -> None:
@@ -265,3 +262,21 @@ class RoiIntensityHistogram(IntensityHistogram):
     @override
     def _x_max(self) -> float:
         return self._top
+
+    def apply_computed_data(
+        self,
+        bins: NDArray,
+        counts: NDArray,
+        top: float,
+        frac_sat: float,
+        reset_range: bool = False,
+    ) -> None:
+        """Apply precomputed ROI histogram results on the GUI thread."""
+        self._top = top
+        self._frac_sat = frac_sat
+        self._curve_item.setData(bins, counts, stepMode="center")
+        if reset_range:
+            self.reset_zoom()
+        self._render_title()
+        self._dirty = False
+        self._pending_reset_range = False
