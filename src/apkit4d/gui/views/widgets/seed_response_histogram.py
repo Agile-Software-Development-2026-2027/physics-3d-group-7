@@ -41,6 +41,7 @@ class SeedResponseHistogram(pg.PlotWidget):
 
         self.setLabel("left", texts.SEED_HISTOGRAM_LEFT_AXIS_LABEL)
         self.setLabel("bottom", texts.SEED_HISTOGRAM_BOTTOM_AXIS_LABEL)
+        self.getAxis("bottom").enableAutoSIPrefix(False)
 
         # a single flat bar until there is data: BarGraphItem does not like empty
         self._bars = pg.BarGraphItem(x=np.zeros(1), height=np.zeros(1), width=1.0)
