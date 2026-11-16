@@ -115,14 +115,6 @@ class HistogramsSection(AccordionSection):
         """
 
         super().apply_theme(colors)
-        roi_hist = getattr(self, "_roi_histogram", None)
-        if isinstance(roi_hist, RoiIntensityHistogram):
-            roi_hist.apply_theme(colors)
-
-        seed_response_hist = getattr(self, "seed_response_histogram", None)
-        if isinstance(seed_response_hist, ThemeableHistogram):
-            seed_response_hist.apply_theme(colors)
-
         for hist in getattr(self, "_histograms", ()):  # gets called before __init__
             if isinstance(hist, ThemeableHistogram):
                 hist.apply_theme(colors)
