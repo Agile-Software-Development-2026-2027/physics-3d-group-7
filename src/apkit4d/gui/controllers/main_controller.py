@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
+from apkit4d.gui.controllers.batch_controller import BatchController
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.histogram_controller import HistogramController
@@ -154,6 +155,12 @@ class MainController(QObject):
         self._full_volume_bounds: Bounds6D | None = None
         self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
+        self._batch_controller = BatchController(
+            window,
+            self.file_controller,
+            self.pipeline_controller,
+            self,
+        )
 
     @property
     def file_controller(self) -> FileController:
@@ -506,16 +513,6 @@ class MainController(QObject):
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         if self._volume_controller is not None and step == PipelineStep.PREPROCESSING:
             self._volume_controller.apply_preproc_params(self.pipeline_model.get_preproc_params())
-
-    def _on_suggest_window_clicked(self) -> None:
-        if self._volume_controller is None:
-            return
-        window = self._volume_controller.suggest_intensity_window()
-        if window is None:
-            return
-        lo, hi = window
-        if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
-            cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)
 
     def _on_suggest_window_clicked(self) -> None:
         if self._volume_controller is not None:
