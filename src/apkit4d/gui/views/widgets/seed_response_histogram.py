@@ -133,6 +133,7 @@ class SeedResponseHistogram(pg.PlotWidget):
             pg.mkPen(color=colors.highest_bound_hist, width=2, style=Qt.PenStyle.DashLine)
         )
         self._lo_g_threshold_line.setHoverPen(pg.mkPen(color=colors.highest_bound_hist, width=4))
+        self._lo_g_threshold_line.label.setColor(colors.text)
 
         self.setTitle("", color=colors.text, size="9pt")
 
