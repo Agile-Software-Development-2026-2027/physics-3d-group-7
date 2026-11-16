@@ -2,6 +2,7 @@
 
 from threading import Event
 
+import pandas as pd
 import pytest
 
 from apkit4d.gui.controllers.main_controller import MainController
@@ -12,6 +13,20 @@ from apkit4d.tracking.linker import ParticleLinker, TrackingResult
 
 def _prepare_tracking(controller: MainController) -> None:
     """Complete prerequisite stages before tracking."""
+    detections = pd.DataFrame(
+        {
+            "frame": list(range(6)),
+            "z_um": [0.0] * 6,
+            "y_um": [0.0] * 6,
+            "x_um": [float(i) for i in range(6)],
+        }
+    )
+
+    controller.pipeline_model.set_batch_results(
+        detections,
+        {"info": {"dt_s": 0.5}},
+    )
+
     for step in (
         PipelineStep.ROI,
         PipelineStep.PREPROCESSING,
@@ -43,7 +58,7 @@ def test_tracking_pipeline_completes(qtbot, qapp) -> None:
 
 def test_tracking_pipeline_handles_failure(qtbot, qapp, monkeypatch) -> None:
     def failing_link(_self, _detections, **_kwargs):
-        raise RuntimeError("Synthetic tracking failure")
+        raise RuntimeError("Tracking failure")
 
     monkeypatch.setattr(ParticleLinker, "link", failing_link)
 
@@ -62,7 +77,7 @@ def test_tracking_pipeline_handles_failure(qtbot, qapp, monkeypatch) -> None:
 
     assert controller.tracking_result is None
     assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
-    assert "Synthetic tracking failure" in (window.right_panel.bottom_stats.details_label.text())
+    assert "Tracking failure" in (window.right_panel.bottom_stats.details_label.text())
 
 
 @pytest.mark.parametrize("action", ["change_params", "reset_pipeline"])
@@ -187,3 +202,65 @@ def test_tracking_play_button_starts_linking(qtbot, qapp) -> None:
     )
 
     assert isinstance(controller.tracking_result, TrackingResult)
+
+
+def test_tracking_uses_stored_detections(qtbot, qapp) -> None:
+    """Tracking should use detections stored in the pipeline model."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    _prepare_tracking(controller)
+
+    detections = pd.DataFrame(
+        {
+            "frame": list(range(8)),
+            "z_um": [0.0] * 8,
+            "y_um": [0.0] * 8,
+            "x_um": [float(i) for i in range(8)],
+        }
+    )
+
+    controller.pipeline_model.set_batch_results(
+        detections,
+        {"info": {"dt_s": 0.5}},
+    )
+
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+
+    qtbot.waitUntil(
+        lambda: controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED,
+        timeout=10000,
+    )
+
+    result = controller.tracking_result
+    assert result is not None
+    assert result.metadata["num_detections"] == 8
+
+
+def test_tracking_requires_real_detections(qtbot, qapp, monkeypatch) -> None:
+    """Tracking must not use synthetic data or rerun detection."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    for step in (
+        PipelineStep.ROI,
+        PipelineStep.PREPROCESSING,
+        PipelineStep.DETECTION,
+    ):
+        controller.pipeline_controller.complete_stage(step)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Tracking must not recompute detections")
+
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.main_controller.detect_sequence",
+        forbidden,
+    )
+
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+
+    assert controller.tracking_result is None
+    assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
+    assert "No detections available" in (window.right_panel.bottom_stats.details_label.text())
