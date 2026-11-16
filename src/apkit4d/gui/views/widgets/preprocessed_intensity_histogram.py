@@ -39,6 +39,8 @@ class PreprocessedIntensityHistogram(IntensityHistogram):
 
     def apply_computed_data(self, bins: NDArray, counts: NDArray, reset_range: bool = False) -> None:
         """Apply precomputed histogram arrays on the GUI thread."""
+        if reset_range:
+            self.getViewBox().disableAutoRange()
         self._curve_item.setData(bins, counts, stepMode="center")
         if reset_range:
             self.reset_zoom()

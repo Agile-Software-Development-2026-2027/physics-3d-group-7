@@ -51,8 +51,10 @@ def compute_intensity_histogram(
         return bins, counts, top
 
     flat = intensities.ravel()
-    if p9999 is None:  # cached percentile
-        nonzero = flat[flat > 0]
+    if p9999 is None:
+        # take a sample of the whole volume, same result basically
+        sample = flat[:: max(1, flat.size // 500_000)]
+        nonzero = sample[sample > 0]
         p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
 
     top = max(1.3 * float(lowest_intensity), p9999)
@@ -272,6 +274,8 @@ class RoiIntensityHistogram(IntensityHistogram):
         reset_range: bool = False,
     ) -> None:
         """Apply precomputed ROI histogram results on the GUI thread."""
+        if reset_range:
+            self.getViewBox().disableAutoRange()
         self._top = top
         self._frac_sat = frac_sat
         self._curve_item.setData(bins, counts, stepMode="center")
