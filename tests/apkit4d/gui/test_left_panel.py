@@ -50,6 +50,8 @@ def test_open_section_is_tall_enough_for_its_content(panel) -> None:
         (names.OPACITY_BOX, texts.BOX_OPACITY),
         (names.BACKGROUND_BOX, texts.BOX_BACKGROUND),
         (names.OUTLINE_BOX, texts.BOX_OUTLINE),
+        (names.TRAJECTORY_COLOR_MODE_BOX, texts.BOX_TRAJECTORY_COLOR_MODE),
+        (names.TRAJECTORY_COLORMAP_BOX, texts.BOX_TRAJECTORY_COLORMAP),
     ],
 )
 def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> None:
@@ -165,19 +167,21 @@ def test_set_colors_shows_them_on_the_buttons(panel) -> None:
     assert panel.findChild(ColorButton, names.OUTLINE_BUTTON).color == "#ffffff"
 
 
-def test_layers_section_holds_trajectory_controls_and_emits_signals(panel, qtbot) -> None:
+def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, qtbot) -> None:
     traj_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
     blobs_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
     tail_spin = panel.layers_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
-    mode_combo = panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
-    cmap_combo = panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
+    mode_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
+    cmap_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
 
-    assert traj_cb is not None and panel.show_trajectories is True
-    assert blobs_cb is not None and panel.show_blobs is True
-    assert tail_spin.specialValueText() == texts.TRAJECTORY_TAIL_ALL
+    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO) is None
+    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO) is None
+    assert traj_cb is not None and traj_cb.isHidden() and panel.show_trajectories is True
+    assert blobs_cb is not None and blobs_cb.isHidden() and panel.show_blobs is True
+    assert tail_spin is not None and tail_spin.specialValueText() == texts.TRAJECTORY_TAIL_ALL
     assert panel.trajectory_tail_length == view_style.TRAJECTORY_TAIL_DEFAULT
-    assert panel.trajectory_color_mode == TrajectoryColorMode.SPEED
-    assert panel.trajectory_colormap == view_style.TRAJECTORY_COLORMAPS[0]
+    assert mode_combo is not None and panel.trajectory_color_mode == TrajectoryColorMode.SPEED
+    assert cmap_combo is not None and panel.trajectory_colormap == view_style.TRAJECTORY_COLORMAPS[0]
     assert cmap_combo.isEnabled()
 
     with qtbot.waitSignal(panel.trajectory_tail_changed, timeout=1000) as blocker:
