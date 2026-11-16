@@ -52,9 +52,7 @@ def compute_intensity_histogram(
 
     flat = intensities.ravel()
     if p9999 is None:
-        # take a sample of the whole volume, same result basically
-        sample = flat[:: max(1, flat.size // 500_000)]
-        nonzero = sample[sample > 0]
+        nonzero = flat[flat > 0]
         p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
 
     top = max(1.3 * float(lowest_intensity), p9999)
@@ -89,12 +87,12 @@ def compute_roi_histogram_stats(
     highest_intensity: float,
     num_bins: int = 256,
 ) -> tuple[NDArray, NDArray, float, float]:
-    start = time.time()
+    start = time.perf_counter()
     bins, counts, top = compute_intensity_histogram(
         volume, lowest_intensity=lowest_intensity, num_bins=num_bins
     )
     frac_sat = compute_fraction_saturated(volume, highest_intensity)
-    print(f"roi histogram in {(time.time() - start) * 1000:.2f} ms, {current_thread().name}")
+    print(f"roi histogram in {(time.perf_counter() - start) * 1000:.2f} ms, thread: {current_thread().name}")
     return bins, counts, top, frac_sat
 
 
