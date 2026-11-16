@@ -5,8 +5,6 @@ Plots the distribution of voxel intensities in the currently active Region of In
 using PyQtGraph with a logarithmic counts scale and interactive vertical threshold lines.
 """
 
-import time
-from threading import current_thread
 from typing import override
 
 import numpy as np
@@ -87,12 +85,10 @@ def compute_roi_histogram_stats(
     highest_intensity: float,
     num_bins: int = 256,
 ) -> tuple[NDArray, NDArray, float, float]:
-    start = time.perf_counter()
     bins, counts, top = compute_intensity_histogram(
         volume, lowest_intensity=lowest_intensity, num_bins=num_bins
     )
     frac_sat = compute_fraction_saturated(volume, highest_intensity)
-    print(f"roi histogram in {(time.perf_counter() - start) * 1000:.2f} ms, thread: {current_thread().name}")
     return bins, counts, top, frac_sat
 
 
