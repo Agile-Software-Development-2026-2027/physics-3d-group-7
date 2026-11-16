@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
+from apkit4d.gui.controllers.batch_controller import BatchController
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.histogram_controller import HistogramController
@@ -117,6 +118,7 @@ class MainController(QObject):
             window.left_panel.histograms_section._roi_histogram,
             self._volume_controller,
             self._pipeline_model,
+            preproc_histogram=window.left_panel.histograms_section._preproc_histogram,
             preproc_section=preproc_section,
             parent=self,
         )
@@ -168,6 +170,12 @@ class MainController(QObject):
         self._full_volume_bounds: Bounds6D | None = None
         self._roi_history: list[RegionOfInterest | None] = []
         self._connect_roi_workflow()
+        self._batch_controller = BatchController(
+            window,
+            self.file_controller,
+            self.pipeline_controller,
+            self,
+        )
 
         self._has_precomputed_session = False
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
@@ -609,16 +617,6 @@ class MainController(QObject):
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         if self._volume_controller is not None and step == PipelineStep.PREPROCESSING:
             self._volume_controller.apply_preproc_params(self.pipeline_model.get_preproc_params())
-
-    def _on_suggest_window_clicked(self) -> None:
-        if self._volume_controller is None:
-            return
-        window = self._volume_controller.suggest_intensity_window()
-        if window is None:
-            return
-        lo, hi = window
-        if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
-            cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)
 
     def _on_suggest_window_clicked(self) -> None:
         if self._volume_controller is not None:

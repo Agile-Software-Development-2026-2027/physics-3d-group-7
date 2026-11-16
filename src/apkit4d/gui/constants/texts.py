@@ -32,6 +32,9 @@ FILE_DIALOG_FILTER: str = f"CZI files (*{CZI_SUFFIX})"
 MENU_FILE: str = "&File"
 ACTION_OPEN: str = "&Open..."
 ACTION_QUIT: str = "&Quit"
+MENU_VIEW: str = "&View"
+ACTION_SHOW_FPS: str = "Show &FPS Counter"
+FPS_READOUT: str = "Qt: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"
 
 # playback bar
 BUTTON_PREVIOUS: str = "<"
@@ -71,6 +74,7 @@ RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel
 # histograms
 SECTION_HISTOGRAMS: str = "Histograms"
 HISTOGRAM_ROI_TITLE: str = "Raw ROI Intensities > 0 (sat: {frac_sat:.2%})"
+HISTOGRAM_PREPROC_TITLE: str = "Preprocessed ROI Intensities in [0, 1]"
 LABEL_HISTOGRAM_INTENSITY: str = "Intensity"
 LABEL_HISTOGRAM_AU: str = "AU"
 LABEL_HISTOGRAM_COUNTS: str = "Counts"
@@ -78,6 +82,7 @@ ROI_INTENSITIES_MIN_LINE: str = "Normalization window lower bound"
 ROI_INTENSITIES_MAX_LINE: str = "Normalization window upper bound"
 HISTOGRAMS_TIP: str = """🛈 Some histograms have thresholds and bounds that you can drag. Double-click on each
  histogram to reset its zoom, position and the range of both its axes.""".replace("\n", "")
+LABEL_HISTOGRAM_NORMALIZED: str = "norm."
 
 # right panel and accordion
 BUTTON_TOGGLE_ALL: str = "Toggle All"
@@ -274,3 +279,26 @@ INSPECTOR_LABEL_MAX_SPEED: str = "Maximum speed (µm/s)"
 INSPECTOR_TOOLTIP_MAX_SPEED: str = "Maximum allowed particle speed during trajectory linking."
 
 INSPECTOR_BUTTON_RESET_TRACKING = "Reset to defaults"
+
+
+# batch output
+BATCH_OUTPUT: str = "Output folder"
+BATCH_BROWSE: str = "Browse..."
+BATCH_FORMAT: str = "Table format"
+BATCH_FIRST_FRAME: str = "First frame (inclusive)"
+BATCH_LAST_FRAME: str = "Last frame (inclusive)"
+BATCH_NO_SOURCE: str = "Open a CZI file to run batch processing."
+BATCH_READY: str = (
+    "Results are saved automatically. Existing output files in this folder will be overwritten."
+)
+BATCH_WORKING: str = "Saving processed pipeline results..."
+BATCH_ERROR_TITLE: str = "Batch failed"
+BATCH_FAILED: str = "Batch failed: {reason}"
+BATCH_SAVED: str = "Saved {blobs} detections from {frames} frames.\nTable: {table}\nParameters: {params}"
+
+BATCH_EMPTY: str = (
+    "No detections found in {frames} frames. No CSV/Parquet file was created.\nParameters: {params}"
+)
+
+BATCH_COMPLETE: str = "Batch completed"
+BATCH_PROGRESS: str = "Working: Batch — {done}/{total} detections"

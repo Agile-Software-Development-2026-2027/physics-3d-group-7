@@ -1,15 +1,18 @@
 import time
 from enum import Enum, auto
+from typing import override
 
 import numpy as np
 import pyvista as pv
 from matplotlib import colormaps
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
 from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
 
+from apkit4d.gui.fps_counter import FpsCounter
 from apkit4d.roi import RegionOfInterest
 
 """
@@ -82,6 +85,18 @@ class Viewport(QWidget):
         # until the mouse moves the view
         self.plotter = QtInteractor(self, auto_update=False)
         self.main_layout.addWidget(self.plotter.interactor)
+
+        # when we drag the 3D view a lot of events fire and they slow down the main thread.
+        # with this we ignore events that happen too cloose to each other
+        self._last_drag_render_time: float = 0.0
+        self._deferred_move_event: (
+            tuple[Qt.MouseButton, Qt.MouseButton, Qt.KeyboardModifier, QPointF] | None
+        ) = None
+        self._drag_coalesce_timer = QTimer(self)
+        self._drag_coalesce_timer.setSingleShot(True)
+        self._drag_coalesce_timer.setInterval(30)
+        self._drag_coalesce_timer.timeout.connect(self._flush_deferred_mouse_move)
+        self.plotter.installEventFilter(self)
 
         # set up of some viewport things
         self.plotter.set_background(DEFAULT_BACKGROUND)
@@ -157,10 +172,13 @@ class Viewport(QWidget):
         self._full_quality_timer.setInterval(round(FULL_QUALITY_DELAY * 1000))
         self._full_quality_timer.timeout.connect(self._request_full_quality_render)
 
+        self._render_fps_ticker = FpsCounter(window_seconds=1.0)
+
         # before every redraw the quality of the volume is chosen, see _set_volume_quality
         render_window = self.plotter.render_window
         if render_window is not None:
             render_window.AddObserver("StartEvent", self._set_volume_quality)
+            render_window.AddObserver("EndEvent", self._on_render_end)
 
         # the wheel events are not here: _stop_wheel_event stops them before they get to this observer,
         # so the wheel zoom is kept inside the limits by the clamp in compute_local_zoom_step
@@ -1710,3 +1728,47 @@ class Viewport(QWidget):
             # the upper bound is just the lower bound plus the size, we don't need to clamp it
             out.extend((new_min, new_min + size[axis]))
         return (out[0], out[1], out[2], out[3], out[4], out[5])
+
+    def _on_render_end(self, _obj: object, _event: str) -> None:
+        self._last_drag_render_time = time.perf_counter()
+        self._render_fps_ticker.tick()
+
+    @property
+    def render_fps(self) -> float:
+        """Current 3D VTK render rate in frames per second."""
+        return self._render_fps_ticker.fps()
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.plotter and isinstance(event, QMouseEvent):
+            etype = event.type()
+            if etype == QEvent.Type.MouseMove and event.buttons() != Qt.MouseButton.NoButton:
+                now = time.perf_counter()  # thousandth of a second
+                if now - self._last_drag_render_time < 0.030:
+                    # the event happened too close to the last one, save it for later
+                    self._deferred_move_event = (
+                        event.button(),
+                        event.buttons(),
+                        event.modifiers(),
+                        event.position(),
+                    )
+                    if not self._drag_coalesce_timer.isActive():
+                        self._drag_coalesce_timer.start()
+                    return True
+                self._deferred_move_event = None
+                self._drag_coalesce_timer.stop()
+            elif etype == QEvent.Type.MouseButtonRelease:
+                self._drag_coalesce_timer.stop()
+                if self._deferred_move_event is not None:
+                    self._flush_deferred_mouse_move()
+        return super().eventFilter(watched, event)
+
+    def _flush_deferred_mouse_move(self) -> None:
+        """When the mouse is released replay the last deferred drag event synthetically"""
+
+        if self._deferred_move_event is None:
+            return
+        btn, btns, mods, pos = self._deferred_move_event
+        self._deferred_move_event = None
+        synthetic = QMouseEvent(QEvent.Type.MouseMove, pos, btn, btns, mods)
+        self.plotter.mouseMoveEvent(synthetic)

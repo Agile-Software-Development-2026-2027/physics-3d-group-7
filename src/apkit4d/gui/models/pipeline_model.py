@@ -6,6 +6,7 @@ import copy
 from enum import StrEnum
 from typing import Any, assert_never
 
+import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
 from apkit4d.blob_detection import BlobParams
@@ -63,6 +64,7 @@ class PipelineModel(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self._batch_results: tuple[pd.DataFrame, dict[str, Any]] | None = None
         self._statuses: dict[PipelineStep, StepStatus] = {
             step: StepStatus.IDLE for step in PIPELINE_STEP_ORDER
         }
@@ -70,6 +72,21 @@ class PipelineModel(QObject):
             step: self._default_params(step) for step in PIPELINE_STEP_ORDER
         }
         self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
+
+    def set_batch_results(self, detections: pd.DataFrame, metadata: dict[str, Any]) -> None:
+        """Receive completed detections for export before advancing to Batch.
+
+        Metadata must describe the actual source, channel, processed t0/t1, acquisition
+        info and analysis parameters. Tables must not be mutated during export.
+        """
+        self._batch_results = (detections, copy.deepcopy(metadata))
+
+    @property
+    def batch_results(self) -> tuple[pd.DataFrame, dict[str, Any]] | None:
+        return self._batch_results
+
+    def clear_batch_results(self) -> None:
+        self._batch_results = None
 
     @property
     def step_order(self) -> tuple[PipelineStep, ...]:
@@ -207,6 +224,8 @@ class PipelineModel(QObject):
             step: Step whose downstream stages should be invalidated.
         """
         idx = PIPELINE_STEP_ORDER.index(step)
+        if idx <= PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION):
+            self.clear_batch_results()
         self._invalidate_subsequent(idx)
 
     def invalidate_from(self, step: PipelineStep) -> None:
@@ -219,6 +238,8 @@ class PipelineModel(QObject):
             step: Earliest pipeline step to invalidate.
         """
         idx = PIPELINE_STEP_ORDER.index(step)
+        if idx <= PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION):
+            self.clear_batch_results()
         for s in PIPELINE_STEP_ORDER[idx:]:
             if self._statuses[s] != StepStatus.IDLE:
                 self._statuses[s] = StepStatus.IDLE
@@ -276,6 +297,7 @@ class PipelineModel(QObject):
 
     def reset_all(self) -> None:
         """Reset all steps to IDLE status."""
+        self._batch_results = None
         self._last_run_params = {step: {} for step in PIPELINE_STEP_ORDER}
         for step in PIPELINE_STEP_ORDER:
             if self._statuses[step] != StepStatus.IDLE:

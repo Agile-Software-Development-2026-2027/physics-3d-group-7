@@ -134,6 +134,7 @@ def test_histogram_defers_recomputation_when_collapsed(qtbot) -> None:
 def test_histogram_dragging_lines_emits_signals(qtbot) -> None:
     widget = RoiIntensityHistogram()
     qtbot.addWidget(widget)
+    widget.set_expanded(True)
 
     vol = np.arange(1000, dtype=np.uint16)
     widget.set_volume(vol)
