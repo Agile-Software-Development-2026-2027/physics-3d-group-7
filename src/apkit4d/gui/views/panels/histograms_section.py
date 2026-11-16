@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
+from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
 from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
 
@@ -51,10 +52,14 @@ class HistogramsSection(AccordionSection):
         self.add_widget(self._roi_histogram)
         self._histograms[0] = self._roi_histogram
 
-        # TODO: add other histograms
-        self._histogram_2: QWidget | None = None
+        self._preproc_histogram: PreprocessedIntensityHistogram = PreprocessedIntensityHistogram(self)
+        self._preproc_histogram.setObjectName(names.PREPROC_HISTOGRAM)
+        self._preproc_histogram.set_expanded(self.is_expanded())
+        self.add_widget(self._preproc_histogram)
+        self._histograms[1] = self._preproc_histogram
 
         self.seed_response_histogram = SeedResponseHistogram(self)
+        self.seed_response_histogram.setObjectName(names.SEED_RESPONSE_HISTOGRAM)
         self.add_widget(self.seed_response_histogram)
         self._histograms[2] = self.seed_response_histogram
 
@@ -91,8 +96,8 @@ class HistogramsSection(AccordionSection):
         self._histograms[index] = widget
         if index == 0 and isinstance(widget, RoiIntensityHistogram):
             self._roi_histogram = widget
-        elif index == 1:
-            self._histogram_2 = widget
+        elif index == 1 and isinstance(widget, PreprocessedIntensityHistogram):
+            self._preproc_histogram = widget
         elif index == 2 and isinstance(widget, SeedResponseHistogram):
             self.seed_response_histogram = widget
 
@@ -114,13 +119,13 @@ class HistogramsSection(AccordionSection):
         if isinstance(roi_hist, RoiIntensityHistogram):
             roi_hist.apply_theme(colors)
 
-        h2 = getattr(self, "_histogram_2", None)
-        if isinstance(h2, ThemeableHistogram):
-            h2.apply_theme(colors)
-
         seed_response_hist = getattr(self, "seed_response_histogram", None)
         if isinstance(seed_response_hist, ThemeableHistogram):
             seed_response_hist.apply_theme(colors)
+
+        for hist in getattr(self, "_histograms", ()):  # gets called before __init__
+            if isinstance(hist, ThemeableHistogram):
+                hist.apply_theme(colors)
 
     def _on_expanded_changed(self, expanded: bool) -> None:
         for hist in self._histograms:
