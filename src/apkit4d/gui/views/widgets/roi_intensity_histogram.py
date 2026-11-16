@@ -5,17 +5,17 @@ Plots the distribution of voxel intensities in the currently active Region of In
 using PyQtGraph with a logarithmic counts scale and interactive vertical threshold lines.
 """
 
-from typing import Final, override
+from typing import override
 
 import numpy as np
 import pyqtgraph as pg
 from numpy.typing import NDArray
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
+from apkit4d.gui.theme.themes import ThemeColors
+from apkit4d.gui.views.widgets.intensity_histogram import IntensityHistogram
 
 
 def compute_intensity_histogram(
@@ -49,7 +49,7 @@ def compute_intensity_histogram(
         return bins, counts, top
 
     flat = intensities.ravel()
-    if p9999 is None:  # cached percentile
+    if p9999 is None:
         nonzero = flat[flat > 0]
         p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
 
@@ -79,14 +79,27 @@ def compute_fraction_saturated(intensities: NDArray | None, highest_intensity: f
     return float((intensities >= highest_intensity).mean())
 
 
-class RoiIntensityHistogram(pg.PlotWidget):
+def compute_roi_histogram_stats(
+    volume: NDArray | None,
+    lowest_intensity: float,
+    highest_intensity: float,
+    num_bins: int = 256,
+) -> tuple[NDArray, NDArray, float, float]:
+    bins, counts, top = compute_intensity_histogram(
+        volume, lowest_intensity=lowest_intensity, num_bins=num_bins
+    )
+    frac_sat = compute_fraction_saturated(volume, highest_intensity)
+    return bins, counts, top, frac_sat
+
+
+class RoiIntensityHistogram(IntensityHistogram):
     """
     Interactive PyQtGraph histogram showing the intensity distribution of the current ROI volume.
 
     The X axis shows the magnitudes of the intensities in arbitrary units (AU) from 0 to top.
     The Y axis shows the voxel count for each magnitude, it has logarithmic scale.
 
-    There are two draggable vertical lines representing the lowest_intensity and hightest_intensity,
+    There are two draggable vertical lines representing the lowest_intensity and highest_intensity,
     used as the normalization window bounds during preprocessing.
 
     Signals:
@@ -94,42 +107,23 @@ class RoiIntensityHistogram(pg.PlotWidget):
         highest_intensity_changed: Emitted with new float value when highest_intensity line is moved.
     """
 
-    NUM_BINS: Final[int] = 256
+    NUM_BINS: int = 256
 
     lowest_intensity_changed = Signal(float)
     highest_intensity_changed = Signal(float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent=parent)
-        self.setObjectName(names.ROI_HISTOGRAM)
-        self.setMinimumHeight(230)
-        self.setMaximumHeight(280)
+        super().__init__(
+            object_name=names.ROI_HISTOGRAM,
+            x_units=texts.LABEL_HISTOGRAM_AU,
+            parent=parent,
+        )
 
-        self._volume: NDArray | None = None
         self._lowest_intensity: float = 0.0
         self._highest_intensity: float = 1000.0
         self._normalization_enabled: bool = True
-        self._p9999: float = 0.0
         self._top: float = 1.0
         self._frac_sat: float = 0.0
-        self._current_title: str = ""
-        self._theme_colors: ThemeColors = THEME_COLORS[DEFAULT_THEME]
-
-        self._is_expanded = False
-        self._dirty: bool = False  # whether we should recompute the histogram
-        self._pending_reset_range: bool = False
-        self._p9999_dirty: bool = False
-
-        plot_item = self.getPlotItem()
-        plot_item.hideButtons()  # hide the defaults buttons
-        plot_item.setMenuEnabled(True)  # right click menu, why not
-        self.setLogMode(x=False, y=True)
-        self.setLabel("bottom", texts.LABEL_HISTOGRAM_INTENSITY, units=texts.LABEL_HISTOGRAM_AU)
-        self.setLabel("left", texts.LABEL_HISTOGRAM_COUNTS)
-
-        bins = np.linspace(0.0, 1.0, self.NUM_BINS + 1)
-        counts = np.zeros(self.NUM_BINS, dtype=float)
-        self._curve_item = self.plot(bins, counts, stepMode="center", fillLevel=0)
 
         self._lowest_line = pg.InfiniteLine(
             pos=self._lowest_intensity,
@@ -139,6 +133,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
         )
         self._lowest_line.setZValue(10)
         self._lowest_line.setToolTip(texts.ROI_INTENSITIES_MIN_LINE)
+
         self._highest_line = pg.InfiniteLine(
             pos=self._highest_intensity,
             angle=90,
@@ -147,6 +142,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
         )
         self._highest_line.setZValue(10)
         self._highest_line.setToolTip(texts.ROI_INTENSITIES_MAX_LINE)
+
         self.addItem(self._lowest_line)
         self.addItem(self._highest_line)
 
@@ -157,11 +153,6 @@ class RoiIntensityHistogram(pg.PlotWidget):
 
         self.apply_theme(self._theme_colors)
         self._recompute_histogram()
-
-    @property
-    def volume(self) -> NDArray | None:
-        """The voxel volume currently displayed."""
-        return self._volume
 
     @property
     def lowest_intensity(self) -> float:
@@ -184,32 +175,12 @@ class RoiIntensityHistogram(pg.PlotWidget):
         return self._frac_sat
 
     @property
-    def title_text(self) -> str:
-        return self._current_title
-
-    @property
     def lowest_line(self) -> pg.InfiniteLine:
         return self._lowest_line
 
     @property
     def highest_line(self) -> pg.InfiniteLine:
         return self._highest_line
-
-    def set_volume(self, volume: NDArray | None) -> None:
-        """
-        Update the voxel intensity volume and refresh the histogram.
-
-        Args:
-            volume: 3D or flattened voxel array, or None if no volume is open.
-        """
-
-        self._volume = volume
-        self._p9999_dirty = True
-        self._dirty = True
-        self._pending_reset_range = True
-
-        if self._is_expanded:
-            self._recompute_histogram(reset_range=True)
 
     def set_intensity_bounds(self, lowest: float, highest: float) -> None:
         """
@@ -219,7 +190,6 @@ class RoiIntensityHistogram(pg.PlotWidget):
             lowest: New lowest_intensity value in arbitrary units.
             highest: New highest_intensity value in arbitrary units.
         """
-
         self._lowest_intensity = float(lowest)
         self._highest_intensity = float(highest)
 
@@ -230,7 +200,7 @@ class RoiIntensityHistogram(pg.PlotWidget):
 
         self._dirty = True
         if self._is_expanded:
-            self._recompute_histogram()
+            self._trigger_recompute()
 
     def set_normalization_enabled(self, enabled: bool) -> None:
         self._normalization_enabled = enabled
@@ -240,7 +210,9 @@ class RoiIntensityHistogram(pg.PlotWidget):
         if val == self._lowest_intensity:
             return
         self._lowest_intensity = val
-        self._recompute_histogram()
+        self._dirty = True
+        if self._is_expanded:
+            self._trigger_recompute(reset_range=False)
         self.lowest_intensity_changed.emit(val)
 
     def _on_highest_dragged(self, line: pg.InfiniteLine) -> None:
@@ -248,68 +220,24 @@ class RoiIntensityHistogram(pg.PlotWidget):
         if val == self._highest_intensity:
             return
         self._highest_intensity = val
-        self._update_frac_sat_and_title()
+        self._dirty = True
+        if self._is_expanded:
+            self._trigger_recompute(reset_range=False)
         self.highest_intensity_changed.emit(val)
 
+    @override
     def _recompute_histogram(self, reset_range: bool = False) -> None:
-        """
-        Args:
-            reset_range (bool): whether to reset zoom and position of the axes
-        """
-        if self._p9999_dirty:
-            if self._volume is not None and self._volume.size > 0:
-                flat = self._volume.ravel()
-                nonzero = flat[flat > 0]
-                self._p9999 = float(np.percentile(nonzero, 99.99)) if nonzero.size > 0 else 0.0
-            else:
-                self._p9999 = 0.0
-            self._p9999_dirty = False
-
-        bins, counts, top = compute_intensity_histogram(
-            self._volume, self._lowest_intensity, num_bins=self.NUM_BINS, p9999=self._p9999
+        bins, counts, top, frac_sat = compute_roi_histogram_stats(
+            self._volume,
+            lowest_intensity=self.lowest_intensity,
+            highest_intensity=self.highest_intensity,
+            num_bins=self.NUM_BINS,
         )
-        self._top = top
-        self._curve_item.setData(bins, counts, stepMode="center")
-        if reset_range:
-            self.reset_zoom()
-        self._update_frac_sat_and_title()
+        self.apply_computed_data(bins, counts, top, frac_sat, reset_range=reset_range)
 
-        self._dirty = False
-        self._pending_reset_range = False
-
-    def _update_frac_sat_and_title(self) -> None:
-        self._frac_sat = compute_fraction_saturated(self._volume, self._highest_intensity)
-        self._render_title()
-
+    @override
     def apply_theme(self, colors: ThemeColors) -> None:
-        """
-        Update background, axes, curve, and threshold line colors to match theme.
-
-        Args:
-            colors: Theme color palette.
-        """
-
-        self._theme_colors = colors
-        self.setBackground(colors.raised_base)
-
-        axis_pen = pg.mkPen(color=colors.text, width=1)
-        text_pen = pg.mkPen(color=colors.text)
-
-        bottom_axis = self.getAxis("bottom")
-        bottom_axis.setPen(axis_pen)
-        bottom_axis.setTextPen(text_pen)
-
-        left_axis = self.getAxis("left")
-        left_axis.setPen(axis_pen)
-        left_axis.setTextPen(text_pen)
-
-        # curve
-        curve_pen = pg.mkPen(color=colors.highlight, width=1.5)
-        c = QColor(colors.highlight)
-        c.setAlpha(90)
-        curve_brush = pg.mkBrush(c)
-        self._curve_item.setPen(curve_pen)
-        self._curve_item.setBrush(curve_brush)
+        super().apply_theme(colors)
 
         self._lowest_line.setPen(
             pg.mkPen(color=colors.lowest_bound_hist, width=2, style=Qt.PenStyle.DashLine)
@@ -321,25 +249,32 @@ class RoiIntensityHistogram(pg.PlotWidget):
         )
         self._highest_line.setHoverPen(pg.mkPen(color=colors.highest_bound_hist, width=4))
 
-        self._render_title()
-
+    @override
     def _render_title(self) -> None:
         title = texts.HISTOGRAM_ROI_TITLE.format(frac_sat=self._frac_sat)
         self._current_title = title
         self.setTitle(title, color=self._theme_colors.text, size="9pt")
 
     @override
-    def mouseDoubleClickEvent(self, event) -> None:
-        self.reset_zoom()
-        super().mouseDoubleClickEvent(event)
+    def _x_max(self) -> float:
+        return self._top
 
-    def reset_zoom(self) -> None:
-        self.getViewBox().setXRange(0.0, self._top, padding=None)
-        self.enableAutoRange(axis="y")
-
-    def set_expanded(self, expanded: bool):
-        if self._is_expanded == expanded:
-            return
-        self._is_expanded = expanded
-        if expanded and self._dirty:
-            self._recompute_histogram(reset_range=self._pending_reset_range)
+    def apply_computed_data(
+        self,
+        bins: NDArray,
+        counts: NDArray,
+        top: float,
+        frac_sat: float,
+        reset_range: bool = False,
+    ) -> None:
+        """Apply precomputed ROI histogram results on the GUI thread."""
+        if reset_range:
+            self.getViewBox().disableAutoRange()
+        self._top = top
+        self._frac_sat = frac_sat
+        self._curve_item.setData(bins, counts, stepMode="center")
+        if reset_range:
+            self.reset_zoom()
+        self._render_title()
+        self._dirty = False
+        self._pending_reset_range = False

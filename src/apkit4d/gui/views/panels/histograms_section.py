@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
+from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
 
 __all__ = ["CollapsibleHistogram", "HistogramsSection", "ThemeableHistogram"]
@@ -50,8 +51,13 @@ class HistogramsSection(AccordionSection):
         self.add_widget(self._roi_histogram)
         self._histograms[0] = self._roi_histogram
 
-        # TODO: add other histograms
-        self._histogram_2: QWidget | None = None
+        self._preproc_histogram: PreprocessedIntensityHistogram = PreprocessedIntensityHistogram(self)
+        self._preproc_histogram.setObjectName(names.PREPROC_HISTOGRAM)
+        self._preproc_histogram.set_expanded(self.is_expanded())
+        self.add_widget(self._preproc_histogram)
+        self._histograms[1] = self._preproc_histogram
+
+        # TODO: add the third histograms
         self._histogram_3: QWidget | None = None
 
         self.expanded_changed.connect(self._on_expanded_changed)
@@ -87,8 +93,8 @@ class HistogramsSection(AccordionSection):
         self._histograms[index] = widget
         if index == 0 and isinstance(widget, RoiIntensityHistogram):
             self._roi_histogram = widget
-        elif index == 1:
-            self._histogram_2 = widget
+        elif index == 1 and isinstance(widget, PreprocessedIntensityHistogram):
+            self._preproc_histogram = widget
         elif index == 2:
             self._histogram_3 = widget
 
@@ -106,17 +112,9 @@ class HistogramsSection(AccordionSection):
         """
 
         super().apply_theme(colors)
-        roi_hist = getattr(self, "_roi_histogram", None)
-        if isinstance(roi_hist, RoiIntensityHistogram):
-            roi_hist.apply_theme(colors)
-
-        h2 = getattr(self, "_histogram_2", None)
-        if isinstance(h2, ThemeableHistogram):
-            h2.apply_theme(colors)
-
-        h3 = getattr(self, "_histogram_3", None)
-        if isinstance(h3, ThemeableHistogram):
-            h3.apply_theme(colors)
+        for hist in getattr(self, "_histograms", ()):  # gets called before __init__
+            if isinstance(hist, ThemeableHistogram):
+                hist.apply_theme(colors)
 
     def _on_expanded_changed(self, expanded: bool) -> None:
         for hist in self._histograms:

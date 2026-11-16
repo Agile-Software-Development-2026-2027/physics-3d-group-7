@@ -109,6 +109,7 @@ class MainController(QObject):
             window.left_panel.histograms_section._roi_histogram,
             self._volume_controller,
             self._pipeline_model,
+            preproc_histogram=window.left_panel.histograms_section._preproc_histogram,
             preproc_section=preproc_section,
             parent=self,
         )
