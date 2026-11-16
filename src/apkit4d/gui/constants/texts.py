@@ -31,6 +31,9 @@ FILE_DIALOG_FILTER: str = f"CZI files (*{CZI_SUFFIX})"
 MENU_FILE: str = "&File"
 ACTION_OPEN: str = "&Open..."
 ACTION_QUIT: str = "&Quit"
+MENU_VIEW: str = "&View"
+ACTION_SHOW_FPS: str = "Show &FPS Counter"
+FPS_READOUT: str = "Qt: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"
 
 # playback bar
 BUTTON_PREVIOUS: str = "<"
@@ -62,6 +65,7 @@ RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel
 # histograms
 SECTION_HISTOGRAMS: str = "Histograms"
 HISTOGRAM_ROI_TITLE: str = "Raw ROI Intensities > 0 (sat: {frac_sat:.2%})"
+HISTOGRAM_PREPROC_TITLE: str = "Preprocessed ROI Intensities in [0, 1]"
 LABEL_HISTOGRAM_INTENSITY: str = "Intensity"
 LABEL_HISTOGRAM_AU: str = "AU"
 LABEL_HISTOGRAM_COUNTS: str = "Counts"
@@ -69,6 +73,7 @@ ROI_INTENSITIES_MIN_LINE: str = "Normalization window lower bound"
 ROI_INTENSITIES_MAX_LINE: str = "Normalization window upper bound"
 HISTOGRAMS_TIP: str = """🛈 Some histograms have thresholds and bounds that you can drag. Double-click on each
  histogram to reset its zoom, position and the range of both its axes.""".replace("\n", "")
+LABEL_HISTOGRAM_NORMALIZED: str = "norm."
 
 # right panel and accordion
 BUTTON_TOGGLE_ALL: str = "Toggle All"
