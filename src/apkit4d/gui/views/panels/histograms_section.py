@@ -9,6 +9,7 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
 
 __all__ = ["CollapsibleHistogram", "HistogramsSection", "ThemeableHistogram"]
 
@@ -52,7 +53,10 @@ class HistogramsSection(AccordionSection):
 
         # TODO: add other histograms
         self._histogram_2: QWidget | None = None
-        self._histogram_3: QWidget | None = None
+
+        self.seed_response_histogram = SeedResponseHistogram(self)
+        self.add_widget(self.seed_response_histogram)
+        self._histograms[2] = self.seed_response_histogram
 
         self.expanded_changed.connect(self._on_expanded_changed)
 
@@ -89,8 +93,8 @@ class HistogramsSection(AccordionSection):
             self._roi_histogram = widget
         elif index == 1:
             self._histogram_2 = widget
-        elif index == 2:
-            self._histogram_3 = widget
+        elif index == 2 and isinstance(widget, SeedResponseHistogram):
+            self.seed_response_histogram = widget
 
         if isinstance(widget, CollapsibleHistogram):
             widget.set_expanded(self.is_expanded())
@@ -114,9 +118,9 @@ class HistogramsSection(AccordionSection):
         if isinstance(h2, ThemeableHistogram):
             h2.apply_theme(colors)
 
-        h3 = getattr(self, "_histogram_3", None)
-        if isinstance(h3, ThemeableHistogram):
-            h3.apply_theme(colors)
+        seed_response_hist = getattr(self, "seed_response_histogram", None)
+        if isinstance(seed_response_hist, ThemeableHistogram):
+            seed_response_hist.apply_theme(colors)
 
     def _on_expanded_changed(self, expanded: bool) -> None:
         for hist in self._histograms:

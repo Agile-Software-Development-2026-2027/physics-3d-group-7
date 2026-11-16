@@ -56,6 +56,9 @@ DETECTION_COLUMNS: Final[list[str]] = [
 class BlobParams:
     """User specified configuration for blob finding"""
 
+    LOG_THRESHOLD_MIN: float = 0.0
+    LOG_THRESHOLD_MAX: float = 5.0
+
     diameter_xy_um: float = 15.0
     diameter_z_um: float = 70.0  # structures are usually elongated on the Z axis
 

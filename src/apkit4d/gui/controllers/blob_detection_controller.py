@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 from typing import Protocol
@@ -6,6 +6,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 import pyvista as pv
+from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from apkit4d.blob_detection import BlobParams, find_blobs
@@ -27,12 +28,13 @@ class BlobView(Protocol):
 class BlobDetection:
     frame: int
     blobs: pd.DataFrame
+    seeds_response: NDArray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
 
 def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
     """Runs in the worker thread: only the detection, the volume is already prepared."""
 
-    blobs, _labels, _seeds = find_blobs(
+    blobs, _labels, seeds = find_blobs(
         prepared.image,
         params,
         prepared.voxel,
@@ -41,7 +43,7 @@ def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
         frame=prepared.frame,
     )
 
-    return BlobDetection(prepared.frame, blobs)
+    return BlobDetection(prepared.frame, blobs, seeds)
 
 
 class BlobDetectionController(QObject):
@@ -61,12 +63,15 @@ class BlobDetectionController(QObject):
 
     Signals:
         params_changed: Emitted when BlobParams properties are changed from the view
+        seeds_response_changed: seeds_response_changed: Emitted with the LoG response of the
+                                candidates of a detection, or None when the recording changes.
     """
 
     # used to debounce properties changes
     DEBOUNCE_MS = 300
 
     params_changed = Signal(str, float)
+    seeds_response_changed = Signal(object)  # NDArray, or None when there is nothing to show
 
     def __init__(
         self,
@@ -156,6 +161,7 @@ class BlobDetectionController(QObject):
         self._prepared = None
         self._stale = False
         self._timer.stop()
+        self.seeds_response_changed.emit(None)
         self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
 
     @Slot(str, float)
@@ -225,6 +231,8 @@ class BlobDetectionController(QObject):
     def _show_blobs(self, result: BlobDetection):
         blobs = result.blobs
         display_frame = result.frame + 1
+
+        self.seeds_response_changed.emit(result.seeds_response)
 
         if blobs.empty:
             self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS_FOUND.format(frame=display_frame))

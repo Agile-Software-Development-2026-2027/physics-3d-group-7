@@ -9,6 +9,7 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.panels.histograms_section import HistogramsSection
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
 
 
 def test_histograms_section_init(qtbot) -> None:
@@ -19,7 +20,7 @@ def test_histograms_section_init(qtbot) -> None:
     assert texts.SECTION_HISTOGRAMS in section.title
     assert section._roi_histogram is not None
     assert section._histogram_2 is None
-    assert section._histogram_3 is None
+    assert section.seed_response_histogram is not None
 
 
 def test_histograms_section_set_histogram(qtbot) -> None:
@@ -27,13 +28,13 @@ def test_histograms_section_set_histogram(qtbot) -> None:
     qtbot.addWidget(section)
 
     label2 = QLabel("Histogram 2")
-    label3 = QLabel("Histogram 3")
 
     section.set_histogram(1, label2)
     assert section._histogram_2 is label2
 
-    section.set_histogram(2, label3)
-    assert section._histogram_3 is label3
+    new_hist_3 = SeedResponseHistogram()
+    section.set_histogram(2, new_hist_3)
+    assert section.seed_response_histogram is new_hist_3
 
     new_hist1 = RoiIntensityHistogram()
     section.set_histogram(0, new_hist1)
@@ -49,6 +50,8 @@ def test_histograms_section_apply_theme(qtbot) -> None:
 
     section.apply_theme(DARK_COLORS)
     assert section._roi_histogram.lowest_line.pen.color().name().lower() == "#e5c07b"
+    assert section.seed_response_histogram._lo_g_threshold_line.pen.color().name().lower() == "#e06c75"
 
     section.apply_theme(LIGHT_COLORS)
     assert section._roi_histogram.lowest_line.pen.color().name().lower() == "#b45309"
+    assert section.seed_response_histogram._lo_g_threshold_line.pen.color().name().lower() == "#dc2626"
