@@ -253,7 +253,6 @@ class MainController(QObject):
         """Return the latest accepted tracking result."""
         return self._tracking_result
 
-
     def _detection_params(
         self,
     ) -> tuple[PreprocParams, BlobParams, RegionOfInterest | None]:
@@ -446,7 +445,6 @@ class MainController(QObject):
         self._tracking_result = None
         self._pipeline_model.reset_all()
 
-
     def _on_tracking_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Start tracking and invalidate outdated results."""
         if step != PipelineStep.TRACKING:
@@ -520,10 +518,6 @@ class MainController(QObject):
             self._start_tracking_if_needed()
             return
 
-        # DEBUG !!!!
-        print("Detections:", result.metadata.get("num_detections"))
-        print("Tracks:", result.metadata.get("num_tracks_retained"))
-        print("Track rows:", len(result.tracks))
         self._tracking_result = result
         if self._trajectory_controller is not None:
             dt_s = (
