@@ -123,6 +123,7 @@ class BlobDetectionController(QObject):
         self._busy = False  # True when a detection is running
         self._stale = False  # True if a new run was requested while one was running
         self._running: PreparedVolume | None = None  # the volume the running detection works on
+        self._precomputed_by_frame: dict[int, pd.DataFrame] | None = None
 
     @Slot(bool)
     def on_normalization_toggled(self, checked: bool):
@@ -144,10 +145,36 @@ class BlobDetectionController(QObject):
         self._prepared = prepared
 
         live = self._inspector.update_on_change
-        # the blobs on screen belong to the previous volume
-        self._clear_blobs(texts.INSPECTOR_STATUS_DETECTING if live else texts.INSPECTOR_STATUS_NO_BLOBS)
         if live:
+            # the blobs on screen belong to the previous volume
+            self._clear_blobs(texts.INSPECTOR_STATUS_DETECTING)
             self._detect()
+        elif self._precomputed_by_frame is not None:
+            self._show_precomputed_frame(prepared.frame)
+        else:
+            self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
+
+    def set_precomputed_blobs(self, blobs_df: pd.DataFrame | None) -> None:
+        """Load precomputed per-frame blobs (e.g. from mock or processed data)."""
+        self._timer.stop()
+        if blobs_df is None or blobs_df.empty:
+            self._precomputed_by_frame = None
+            self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
+            return
+
+        by_frame: dict[int, pd.DataFrame] = {}
+        for _frame_key, group in blobs_df.groupby("frame", sort=False):
+            frame_num = int(group["frame"].iloc[0])
+            by_frame[frame_num] = group.reset_index(drop=True)
+        self._precomputed_by_frame = by_frame
+        current_frame = self._prepared.frame if self._prepared is not None else 0
+        self._show_precomputed_frame(current_frame)
+
+    def _show_precomputed_frame(self, frame: int) -> None:
+        if self._precomputed_by_frame is None:
+            return
+        frame_df = self._precomputed_by_frame.get(frame, pd.DataFrame())
+        self._show_blobs(BlobDetection(frame, frame_df))
 
     def set_source(self, _path: Path, _source: FrameSource):
         """A new recording was opened: forget the volume of the previous one."""
@@ -159,6 +186,7 @@ class BlobDetectionController(QObject):
 
     def _reset(self):
         self._prepared = None
+        self._precomputed_by_frame = None
         self._stale = False
         self._timer.stop()
         self.seeds_response_changed.emit(None)
@@ -238,12 +266,13 @@ class BlobDetectionController(QObject):
             self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS_FOUND.format(frame=display_frame))
             return
 
+        median_vol = float(np.median(blobs["volume_um3"])) if "volume_um3" in blobs.columns else 0.0
         self._view.show_blobs(create_blob_mesh(blobs))
         self._inspector.set_detection_status(
             texts.INSPECTOR_STATUS_BLOBS_FOUND.format(
                 frame=display_frame,
                 count=len(blobs),
-                volume=float(np.median(blobs["volume_um3"])),
+                volume=median_vol,
             )
         )
 

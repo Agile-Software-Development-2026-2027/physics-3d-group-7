@@ -24,7 +24,15 @@ import click
     help="Log every GUI freeze longer than 1 second to ApKit4D_blocchi.log, "
     + "with the line of code responsible.",
 )
-def gui(czi: Path | None, software_gl: bool, diagnostic: bool):
+@click.option(
+    "--mock",
+    is_flag=True,
+    default=False,
+    help="Launch the GUI with a synthetic mock algae dataset (no CZI file required).",
+)
+def gui(czi: Path | None, software_gl: bool, diagnostic: bool, mock: bool):
     from apkit4d.gui.app import run
 
-    run(czi)
+    if czi is not None and mock:
+        raise click.UsageError("Cannot specify both a CZI file and --mock.")
+    run(czi, mock=mock)

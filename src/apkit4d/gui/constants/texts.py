@@ -13,6 +13,7 @@ from apkit4d.gui.models.output_type import OutputType
 PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 
 # main window
+MOCK_SOURCE_NAME: str = "Mock Algae Session"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
 STATUS_NO_FILE: str = "No file open"
 STATUS_OPENING: str = "Opening {name}..."
@@ -52,6 +53,14 @@ COUNTER_EMPTY: str = "–"  # shown instead of the numbers when there is no reco
 SECTION_APPEARANCE: str = "Appearance"
 SECTION_LAYERS: str = "Layers"
 LAYERS_EMPTY: str = "No layers yet"
+LABEL_SHOW_TRAJECTORIES: str = "Show trajectories"
+LABEL_SHOW_BLOBS: str = "Show blobs"
+BOX_TRAJECTORY_TAIL: str = "Trail length (frames)"
+TRAJECTORY_TAIL_ALL: str = "All (-1)"
+BOX_TRAJECTORY_COLOR_MODE: str = "Path color by"
+TRAJECTORY_COLOR_SPEED: str = "Speed"
+TRAJECTORY_COLOR_TRACK_ID: str = "Track ID"
+BOX_TRAJECTORY_COLORMAP: str = "Speed colormap"
 BOX_COLORMAP: str = "Colormap"
 BOX_OPACITY: str = "Opacity"
 BOX_BACKGROUND: str = "Background"

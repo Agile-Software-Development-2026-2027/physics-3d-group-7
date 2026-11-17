@@ -71,6 +71,8 @@ class Viewport(QWidget):
         self._volume_grid: pv.ImageData | None = None
 
         self._blobs_poly: pv.PolyData | None = None
+        self._blobs_visible: bool = True
+        self._trajectories_poly: pv.PolyData | None = None
 
         # Set the margins to 0 so that we use the entire space
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -458,13 +460,14 @@ class Viewport(QWidget):
             # shallow copy substitues the pointers to the data
             self._blobs_poly.shallow_copy(poly)
             self._blobs_poly.Modified()
+            self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
             self._request_render()
             return
 
         # shallow copy gives me an error in the test cause of NoneType here so i use copy
         self._blobs_poly = poly.copy()
         # here we add the dectected blobs in the plotter
-        self.plotter.add_mesh(
+        actor = self.plotter.add_mesh(
             self._blobs_poly,
             color="red",
             point_size=10.0,
@@ -472,7 +475,54 @@ class Viewport(QWidget):
             name="blobs",
             render=False,
         )
+        actor.SetVisibility(self._blobs_visible)
         self._request_render()
+
+    def set_blobs_visible(self, visible: bool) -> None:
+        """Toggle visibility of rendered blob markers without discarding current-frame detections."""
+        self._blobs_visible = bool(visible)
+        if "blobs" in self.plotter.actors:
+            self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
+            self._request_render()
+
+    def show_trajectories(
+        self,
+        highlighted: pv.PolyData | None,
+        *,
+        line_width: float = 2.5,
+    ) -> None:
+        """Render or update grouped 3D trajectory polylines colored by per-vertex RGB scalars."""
+        if highlighted is None or highlighted.n_points == 0 or highlighted.n_cells == 0:
+            self.clear_trajectories()
+            return
+
+        if self._trajectories_poly is not None and "tracks_highlighted" in self.plotter.actors:
+            self._trajectories_poly.shallow_copy(highlighted)
+            self._trajectories_poly.Modified()
+            actor = self.plotter.actors["tracks_highlighted"]
+            actor.GetProperty().SetLineWidth(float(line_width))
+            self._request_render()
+            return
+
+        self._trajectories_poly = highlighted.copy()
+        self.plotter.add_mesh(
+            self._trajectories_poly,
+            scalars="rgb",
+            rgb=True,
+            line_width=float(line_width),
+            name="tracks_highlighted",
+            render=False,
+        )
+        self._request_render()
+
+    def clear_trajectories(self) -> None:
+        """Remove rendered trajectory polyline actors from the 3D scene."""
+        if "tracks_highlighted" in self.plotter.actors:
+            self.plotter.remove_actor("tracks_highlighted", render=False)
+            self._trajectories_poly = None
+            self._request_render()
+        else:
+            self._trajectories_poly = None
 
     def clear(self):
         """
@@ -485,6 +535,7 @@ class Viewport(QWidget):
         """
         self._volume_grid = None
         self._blobs_poly = None
+        self._trajectories_poly = None
         self.volume_center = None
         self.volume_bounds = None
         self.min_zoom_dist = 0.0

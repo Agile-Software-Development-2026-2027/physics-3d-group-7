@@ -82,9 +82,19 @@ class FileController(QObject):
         Args:
             path: File to open.
         """
+        self.open_with(path, partial(self._open_source, path))
+
+    def open_with(self, path: Path, opener: Callable[[], FrameSource]) -> None:
+        """
+        Start opening a recording via a custom zero-argument opener in a background thread.
+
+        Args:
+            path: Display path shown in the window title and status bar once opened.
+            opener: Callable executed in the worker thread returning a `FrameSource`.
+        """
         self._window.set_status(texts.STATUS_OPENING.format(name=path.name))
         self._latest_path = path
-        self._latest_task = self._runner.run(partial(self._open_source, path))
+        self._latest_task = self._runner.run(opener)
 
     def close(self) -> None:
         """Close the recording that is open, if any."""
