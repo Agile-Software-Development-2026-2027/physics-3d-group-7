@@ -419,3 +419,48 @@ def test_precomputed_blobs_render_across_frames_without_detection(setup, fake_de
     controller.set_precomputed_blobs(None)
     assert view.meshes[-1].n_points == 0
     assert fake_detect == []
+
+
+SEEDS = np.array([0.05, 0.2, 0.4], dtype=np.float32)
+
+
+def test_the_response_of_the_candidates_is_announced(qtbot, setup, monkeypatch) -> None:
+    inspector, _, controller = setup
+    monkeypatch.setattr(
+        module, "detect_blobs", lambda prepared, params: BlobDetection(prepared.frame, BLOBS.copy(), SEEDS)
+    )
+    announce(setup)
+
+    with qtbot.waitSignal(controller.seeds_response_changed) as blocker:
+        click_find_blobs(qtbot, inspector)
+
+    assert np.array_equal(blocker.args[0], SEEDS)
+
+
+def test_the_response_is_announced_even_when_no_blob_is_found(qtbot, setup, monkeypatch) -> None:
+    inspector, _, controller = setup
+    monkeypatch.setattr(
+        module, "detect_blobs", lambda prepared, params: BlobDetection(prepared.frame, pd.DataFrame(), SEEDS)
+    )
+    announce(setup)
+
+    with qtbot.waitSignal(controller.seeds_response_changed) as blocker:
+        click_find_blobs(qtbot, inspector)
+
+    assert np.array_equal(blocker.args[0], SEEDS)
+
+
+@pytest.mark.parametrize(
+    "close",
+    [
+        pytest.param(lambda controller: controller.clear_source(), id="clear_source"),
+        pytest.param(lambda controller: controller.set_source(Path("other.czi"), SOURCE), id="set_source"),
+    ],
+)
+def test_closing_the_recording_empties_the_histogram(qtbot, setup, close) -> None:
+    _, _, controller = setup
+
+    with qtbot.waitSignal(controller.seeds_response_changed) as blocker:
+        close(controller)
+
+    assert blocker.args == [None]

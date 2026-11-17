@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
 from apkit4d.gui.models.output_type import OutputType
@@ -297,7 +298,11 @@ class BlobDetectionInspector(QWidget):
         self._diameter_xy.valueChanged.connect(self._sync_diameter_z)
 
         self._lo_g_threshold = self._create_double_spinbox(
-            0, names.DETECTION_INSPECTOR_LOG_THRESHOLD, minimum=0, maximum=5, step=0.01
+            0,
+            names.DETECTION_INSPECTOR_LOG_THRESHOLD,
+            minimum=BlobParams.LOG_THRESHOLD_MIN,
+            maximum=BlobParams.LOG_THRESHOLD_MAX,
+            step=0.01,
         )
         self._add_field(
             form,

@@ -24,6 +24,7 @@ from apkit4d.gui.controllers.file_controller import FileController, FrameSource,
 from apkit4d.gui.controllers.histogram_controller import HistogramController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
+from apkit4d.gui.controllers.seed_histogram_controller import SeedHistogramController
 from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.trajectory_controller import TrajectoryController, TrajectoryView
 from apkit4d.gui.controllers.trajectory_linking_controller import (
@@ -143,6 +144,13 @@ class MainController(QObject):
                 preproc_sec = cast(PreprocessingSection, preproc_sec)
                 self._blob_controller.on_normalization_toggled(preproc_sec.normalization_enabled.isChecked())
                 preproc_sec.normalization_toggled.connect(self._blob_controller.on_normalization_toggled)
+
+            self._seed_histogram_controller = SeedHistogramController(
+                window.left_panel.histograms_section.seed_response_histogram,
+                detection_inspector,
+                self._blob_controller,
+                parent=self,
+            )
 
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
