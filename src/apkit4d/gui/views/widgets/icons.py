@@ -19,6 +19,9 @@ class Icon(Enum):
     NEXT = "next"
     PLAY = "play"
     PAUSE = "pause"
+    MINUS = "minus"
+    PLUS = "plus"
+    RESET = "reset"
 
 
 def paint_icon(painter: QPainter, icon: Icon, area: QRectF, color: QColor) -> None:
@@ -47,7 +50,24 @@ def paint_icon(painter: QPainter, icon: Icon, area: QRectF, color: QColor) -> No
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(QRectF(5.2, 4, 3.6, 12), 1.2, 1.2)
         painter.drawRoundedRect(QRectF(11.2, 4, 3.6, 12), 1.2, 1.2)
+    elif icon in (Icon.MINUS, Icon.PLUS):
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(5.5, 10), QPointF(14.5, 10))
+        if icon is Icon.PLUS:
+            painter.drawLine(QPointF(10, 5.5), QPointF(10, 14.5))
+    elif icon is Icon.RESET:
+        _paint_reset(painter, color)
     painter.restore()
+
+
+def _paint_reset(painter: QPainter, color: QColor) -> None:
+    """A circular arrow around a dot, the symbol of "bring it back to the start"."""
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawArc(QRectF(4.5, 4.5, 11, 11), 40 * 16, 290 * 16)
+    painter.setBrush(color)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawPolygon(QPolygonF([QPointF(15.8, 3.2), QPointF(16.6, 8.6), QPointF(11.4, 7.2)]))
+    painter.drawEllipse(QPointF(10, 10), 1.5, 1.5)
 
 
 def _paint_step(painter: QPainter, *, pointing_left: bool) -> None:

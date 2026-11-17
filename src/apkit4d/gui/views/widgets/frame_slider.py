@@ -32,12 +32,16 @@ class FrameSlider(QSlider):
             room above the groove, and it can choose values that are not frames.
     """
 
+    # a default of the class, and not only of the instance: Qt can still send events to the widget when Python
+    # has already emptied the instance, and the handlers must find a value
+    _hover: int | None = None
+
     def __init__(self, parent: QWidget | None = None, *, preview: bool = True) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
         self._preview = preview
         self.setFixedHeight(self._headroom() + appearance.SLIDER_HEIGHT)
         self.setMouseTracking(preview)  # to follow the mouse also when no button is pressed
-        self._hover: int | None = None
+        self._hover = None
         self._bubble_font = make_bubble_font(self.font())
 
     @override
@@ -129,9 +133,7 @@ class FrameSlider(QSlider):
             self.update()
 
     def _stop_following(self) -> None:
-        # This ugly thing is required to make tests not fail
-        # TODO: THIS NEEDS TO BE FIXED, BECAUSE IT SHOULDN'T BE THIS WAY
-        if getattr(self, "_hover", None) is not None:
+        if self._hover is not None:
             self._hover = None
             self.update()
 
