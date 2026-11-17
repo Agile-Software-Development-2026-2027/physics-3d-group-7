@@ -395,6 +395,32 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
     assert len(result.blobs) == 1
 
 
+def test_precomputed_blobs_render_across_frames_without_detection(setup, fake_detect):
+    _inspector, view, controller = setup
+    precomputed = pd.DataFrame(
+        {
+            "frame": [0, 0, 3],
+            "x_um": [1.0, 2.0, 4.0],
+            "y_um": [2.0, 3.0, 5.0],
+            "z_um": [3.0, 4.0, 6.0],
+            "volume_um3": [500.0, 600.0, 700.0],
+        }
+    )
+
+    controller.set_precomputed_blobs(precomputed)
+    assert view.meshes[-1].n_points == 2
+
+    controller.on_volume_prepared(make_prepared(3))
+    assert view.meshes[-1].n_points == 1
+
+    controller.on_volume_prepared(make_prepared(4))
+    assert view.meshes[-1].n_points == 0
+
+    controller.set_precomputed_blobs(None)
+    assert view.meshes[-1].n_points == 0
+    assert fake_detect == []
+
+
 SEEDS = np.array([0.05, 0.2, 0.4], dtype=np.float32)
 
 

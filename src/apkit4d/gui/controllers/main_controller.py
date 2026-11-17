@@ -26,19 +26,27 @@ from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.seed_histogram_controller import SeedHistogramController
 from apkit4d.gui.controllers.theme_controller import ThemeController
+from apkit4d.gui.controllers.trajectory_controller import TrajectoryController, TrajectoryView
 from apkit4d.gui.controllers.trajectory_linking_controller import (
     TrajectoryLinkingController,
 )
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController, VolumeView
-from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
+from apkit4d.gui.models.pipeline_model import (
+    PIPELINE_STEP_ORDER,
+    PipelineModel,
+    PipelineStep,
+    StepStatus,
+)
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
+from apkit4d.io.mock import MockConfig, create_mock_source
+from apkit4d.io.session import PrecomputedSession, PrecomputedSource, infer_completed_steps
 from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.tracking.linker import TrackingResult
 
 
-class SceneView(VolumeView, AppearanceView, BlobView, Protocol):
+class SceneView(VolumeView, AppearanceView, BlobView, TrajectoryView, Protocol):
     """What the controllers need from the 3D view: showing the frames and changing how they look."""
 
 
@@ -151,13 +159,20 @@ class MainController(QObject):
         )
         if self._appearance_controller is not None:
             self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
-        self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
         self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
         window.right_panel.set_theme(self._theme_controller.theme)
         self._theme_controller.theme_changed.connect(window.left_panel.set_theme)
         window.left_panel.set_theme(self._theme_controller.theme)
+
+        self._trajectory_controller: TrajectoryController | None = (
+            TrajectoryController(window.left_panel, view, parent=self) if view is not None else None
+        )
+        if self._trajectory_controller is not None:
+            self._playback_controller.frame_changed.connect(self._trajectory_controller.on_set_frame)
+            self._file_controller.loaded.connect(self._trajectory_controller.clear_source)
+            self._file_controller.closed.connect(self._trajectory_controller.clear_source)
 
         self._roi_view: RoiSelectionView | None = view if isinstance(view, RoiSelectionView) else None
         self._full_volume_bounds: Bounds6D | None = None
@@ -169,6 +184,11 @@ class MainController(QObject):
             self.pipeline_controller,
             self,
         )
+
+        self._has_precomputed_session = False
+        # Connected after child controllers so source/blob/trajectory resets happen before session hydration
+        self._file_controller.loaded.connect(self._on_file_loaded)
+        self._file_controller.closed.connect(self._on_file_closed)
 
     @property
     def file_controller(self) -> FileController:
@@ -215,6 +235,67 @@ class MainController(QObject):
         """Return the latest accepted tracking result."""
         return self._tracking_result
 
+    @property
+    def trajectory_controller(self) -> TrajectoryController | None:
+        """Controller of 3D trajectory visualization, None if the application has no 3D view."""
+        return self._trajectory_controller
+
+    def open_mock(self, config: MockConfig | None = None) -> None:
+        """Open a synthetic mock recording in the background."""
+        self._file_controller.open_with(
+            Path(texts.MOCK_SOURCE_NAME),
+            lambda: create_mock_source(config),
+        )
+
+    def apply_precomputed_session(self, session: PrecomputedSession, dt_s: float | None = None) -> None:
+        """Hydrate pipeline stages, precomputed blobs, and trajectories from `session`."""
+        self._has_precomputed_session = True
+        self._pipeline_model.reset_all()
+        self._apply_session_params(session)
+
+        completed = set(infer_completed_steps(session))
+        for step in PIPELINE_STEP_ORDER:
+            if step.value not in completed:
+                break
+            self._pipeline_model.set_step_status(step, StepStatus.COMPLETED)
+
+        blobs_df = session.effective_blobs
+        if self._blob_controller is not None:
+            self._blob_controller.set_precomputed_blobs(blobs_df)
+
+        self._tracking_result = session.tracking
+        if self._trajectory_controller is not None:
+            if session.tracking is not None:
+                effective_dt = dt_s
+                if effective_dt is None and self._file_controller.source is not None:
+                    effective_dt = self._file_controller.source.info.dt_s
+                self._trajectory_controller.set_trajectories(
+                    session.tracking.tracks,
+                    dt_s=effective_dt,
+                    current_frame=self._playback_controller.frame,
+                )
+            else:
+                self._trajectory_controller.clear_source()
+
+    def _apply_session_params(self, session: PrecomputedSession) -> None:
+        if session.roi is not None:
+            self._pipeline_model.update_step_params(PipelineStep.ROI, **session.roi.to_dict())
+        if session.preproc_params is not None:
+            self._pipeline_model.update_step_params(
+                PipelineStep.PREPROCESSING, **session.preproc_params.to_dict()
+            )
+        if session.blob_params is not None:
+            self._pipeline_model.update_step_params(PipelineStep.DETECTION, **session.blob_params.to_dict())
+        if session.tracking_config is not None:
+            self._pipeline_model.update_step_params(
+                PipelineStep.TRACKING, **session.tracking_config.model_dump()
+            )
+
+    def _clear_precomputed_session(self) -> None:
+        self._has_precomputed_session = False
+        self._tracking_result = None
+        self._pipeline_model.reset_all()
+
     def _on_tracking_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Start tracking and invalidate outdated results."""
         if step != PipelineStep.TRACKING:
@@ -222,6 +303,8 @@ class MainController(QObject):
 
         if status != StepStatus.COMPLETED:
             self._tracking_result = None
+            if self._trajectory_controller is not None:
+                self._trajectory_controller.clear_source()
 
         if status == StepStatus.RUNNING:
             self._start_tracking_if_needed()
@@ -232,6 +315,8 @@ class MainController(QObject):
         """Invalidate results from previous tracking runs."""
         self._tracking_generation += 1
         self._tracking_result = None
+        if self._trajectory_controller is not None:
+            self._trajectory_controller.clear_source()
 
     def _start_tracking_if_needed(self) -> None:
         """Run tracking using the current parameters and demo detections."""
@@ -279,6 +364,15 @@ class MainController(QObject):
             return
 
         self._tracking_result = result
+        if self._trajectory_controller is not None:
+            dt_s = (
+                self._file_controller.source.info.dt_s if self._file_controller.source is not None else None
+            )
+            self._trajectory_controller.set_trajectories(
+                result.tracks,
+                dt_s=dt_s,
+                current_frame=self._playback_controller.frame,
+            )
         self._pipeline_controller.complete_stage(PipelineStep.TRACKING)
 
     def _on_tracking_failed(self, error: Exception) -> None:
@@ -300,7 +394,17 @@ class MainController(QObject):
         playback.set_playing(False)
         playback.set_frame_count(source.info.n_t)
         playback.go_to_frame(0)
+
+        if isinstance(source, PrecomputedSource):
+            self.apply_precomputed_session(source.session, dt_s=source.info.dt_s)
+        elif self._has_precomputed_session:
+            self._clear_precomputed_session()
+
         self._window.playback_bar.setEnabled(True)
+
+    def _on_file_closed(self) -> None:
+        if self._has_precomputed_session:
+            self._clear_precomputed_session()
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error

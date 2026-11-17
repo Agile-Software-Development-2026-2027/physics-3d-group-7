@@ -43,12 +43,13 @@ def _get_application() -> QApplication:
     return QApplication(sys.argv)
 
 
-def run(path: Path | None = None) -> int:
+def run(path: Path | None = None, *, mock: bool = False) -> int:
     """
     Show the main window and run the Qt event loop until the window is closed.
 
     Args:
         path: Optional .czi file to open at startup.
+        mock: When True, open a synthetic mock recording instead of a file.
 
     Returns:
         Exit code of the Qt event loop, 0 when the window is closed normally.
@@ -57,8 +58,10 @@ def run(path: Path | None = None) -> int:
     window = MainWindow()
     viewport = Viewport()
     window.set_view(viewport)
-    MainController(window, app, window, view=viewport)
+    controller = MainController(window, app, window, view=viewport)
     window.show()
-    if path is not None:
+    if mock:
+        controller.open_mock()
+    elif path is not None:
         window.open_file(path)
     return app.exec()
