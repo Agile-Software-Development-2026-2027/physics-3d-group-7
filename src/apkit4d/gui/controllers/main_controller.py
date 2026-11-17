@@ -60,6 +60,7 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             self._volume_controller.failed.connect(self._on_volume_failed)
+            window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
         self._file_controller.loaded.connect(self._on_file_loaded)
 
         window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)

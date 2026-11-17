@@ -81,6 +81,7 @@ class VolumeController(QObject):
         self._usable = False  # False if the recording cannot be shown at all
         self._generation = 0  # grows with every recording, to ignore what comes from an old one
         self._first_frame = True  # the camera is reset only for the first frame of a recording
+        self._last_grid: pv.ImageData | None = None  # the volume that is on screen
         self._wanted: int | None = None  # the frame to read next, if one was requested meanwhile
         self._busy = False
         self._loading = (0, 0)  # generation and frame that are being read
@@ -107,6 +108,7 @@ class VolumeController(QObject):
         self._roi = None
         self._current_volume = None
         self._first_frame = True
+        self._last_grid = None
         self._wanted = None
         self._usable = self._has_valid_voxel(source)
         if self._usable:
@@ -138,6 +140,11 @@ class VolumeController(QObject):
             self._wanted = None if self._loading == (self._generation, frame) else frame
             return
         self._start_reading(source, frame)
+
+    def reset_camera(self) -> None:
+        """Bring the 3D view back to its initial position, showing again the volume that is on screen."""
+        if self._last_grid is not None:
+            self._view.show_volume(self._last_grid, reset_camera=True)
 
     def _start_reading(self, source: FrameSource, frame: int) -> None:
         self._busy = True
@@ -186,6 +193,7 @@ class VolumeController(QObject):
             return
         self._view.show_volume(grid, reset_camera=self._first_frame)
         self._first_frame = False
+        self._last_grid = grid
 
     def _fail(self, message: str) -> None:
         self._wanted = None

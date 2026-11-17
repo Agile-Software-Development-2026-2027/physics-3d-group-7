@@ -78,3 +78,17 @@ BUBBLE_FONT_POINTS: float = 9.5
 SLIDER_HEADROOM: int = (
     BUBBLE_HEIGHT + BUBBLE_POINTER_HEIGHT + BUBBLE_GAP - (SLIDER_HEIGHT - SLIDER_GROOVE_HEIGHT) // 2 + 1
 )  # the last pixel is a margin, so that the smoothed edge of the bubble is not cut
+
+# playback bar: speed, step and reset camera
+STEPPER_HEIGHT: int = 32
+STEPPER_BUTTON_SIZE: int = 26
+STEPPER_ICON_SIZE: int = 18
+STEPPER_FONT_POINTS: float = 11
+SPEED_STEPPER_WIDTH: int = 148
+STEP_STEPPER_WIDTH: int = 98
+ACTION_BUTTON_HEIGHT: int = 32
+ACTION_BUTTON_PADDING: int = 12  # on the left and on the right of the content of a button with a text
+ACTION_ICON_SIZE: int = 20
+ACTION_ICON_GAP: int = 6  # between the icon and the text of a button
+DIVIDER_HEIGHT: int = 24
+GROUP_SPACING: int = 8  # extra space on both sides of a divider

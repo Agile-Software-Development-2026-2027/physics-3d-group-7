@@ -30,11 +30,15 @@ class FrameSlider(QSlider):
         parent: Qt parent.
     """
 
+    # a default of the class, and not only of the instance: Qt can still send events to the widget when Python
+    # has already emptied the instance, and the handlers must find a value
+    _hover: int | None = None
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
         self.setFixedHeight(appearance.SLIDER_HEADROOM + appearance.SLIDER_HEIGHT)
         self.setMouseTracking(True)  # to follow the mouse also when no button is pressed
-        self._hover: int | None = None
+        self._hover = None
         self._bubble_font = make_bubble_font(self.font())
 
     @override
