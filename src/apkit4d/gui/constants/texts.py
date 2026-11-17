@@ -271,6 +271,11 @@ INSPECTOR_TOOLTIP_MAX_SPEED: str = "Maximum allowed particle speed during trajec
 
 INSPECTOR_BUTTON_RESET_TRACKING = "Reset to defaults"
 
+# LoG histogram
+SEED_HISTOGRAM_EMPTY: str = "LoG response of the candidates"
+SEED_HISTOGRAM_TITLE: str = "{count} candidates above the threshold"
+SEED_HISTOGRAM_LEFT_AXIS_LABEL: str = "Counts"
+SEED_HISTOGRAM_BOTTOM_AXIS_LABEL: str = "LoG Threshold"
 
 # batch output
 BATCH_OUTPUT: str = "Output folder"

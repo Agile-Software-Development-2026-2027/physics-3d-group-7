@@ -10,6 +10,7 @@ from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
 from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
 
 __all__ = ["CollapsibleHistogram", "HistogramsSection", "ThemeableHistogram"]
 
@@ -57,8 +58,10 @@ class HistogramsSection(AccordionSection):
         self.add_widget(self._preproc_histogram)
         self._histograms[1] = self._preproc_histogram
 
-        # TODO: add the third histograms
-        self._histogram_3: QWidget | None = None
+        self.seed_response_histogram = SeedResponseHistogram(self)
+        self.seed_response_histogram.setObjectName(names.SEED_RESPONSE_HISTOGRAM)
+        self.add_widget(self.seed_response_histogram)
+        self._histograms[2] = self.seed_response_histogram
 
         self.expanded_changed.connect(self._on_expanded_changed)
 
@@ -95,8 +98,8 @@ class HistogramsSection(AccordionSection):
             self._roi_histogram = widget
         elif index == 1 and isinstance(widget, PreprocessedIntensityHistogram):
             self._preproc_histogram = widget
-        elif index == 2:
-            self._histogram_3 = widget
+        elif index == 2 and isinstance(widget, SeedResponseHistogram):
+            self.seed_response_histogram = widget
 
         if isinstance(widget, CollapsibleHistogram):
             widget.set_expanded(self.is_expanded())
