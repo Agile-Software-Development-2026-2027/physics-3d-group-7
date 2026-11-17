@@ -115,12 +115,12 @@ def test_accordion_section_theme_application(qtbot) -> None:
     # Apply Dark
     section.apply_theme(DARK_COLORS)
     assert DARK_COLORS.button in section.toggle_button.styleSheet()
-    assert DARK_COLORS.base in section.content_area.styleSheet()
+    assert DARK_COLORS.raised_base in section.content_area.styleSheet()
 
     # Apply Light
     section.apply_theme(LIGHT_COLORS)
     assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
-    assert LIGHT_COLORS.base in section.content_area.styleSheet()
+    assert LIGHT_COLORS.raised_base in section.content_area.styleSheet()
 
 
 def test_accordion_section_status_colors(qtbot) -> None:

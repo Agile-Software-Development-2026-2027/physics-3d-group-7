@@ -56,6 +56,9 @@ DETECTION_COLUMNS: Final[list[str]] = [
 class BlobParams:
     """User specified configuration for blob finding"""
 
+    LOG_THRESHOLD_MIN: float = 0.0
+    LOG_THRESHOLD_MAX: float = 5.0
+
     diameter_xy_um: float = 15.0
     diameter_z_um: float = 70.0  # structures are usually elongated on the Z axis
 
@@ -411,3 +414,21 @@ def find_blobs(
         (labels if return_labels else None),
         seeds_of_log_response,
     )
+
+
+def voxel_offset(
+    origin_um: tuple[float, float, float], voxel: tuple[float, float, float]
+) -> tuple[int, int, int]:
+    """
+    Origin of a sub-volume in voxels, as `find_blobs` wants it.
+
+    Args:
+        origin_um: Origin in micrometers, in the order of the 3D view: (x, y, z).
+        voxel: Size of the voxels in micrometers, in the order of the recording: (z, y, x).
+
+    Returns:
+        The origin in voxels, in the order of the volumes: (z, y, x).
+    """
+    ox, oy, oz = origin_um
+    vz, vy, vx = voxel
+    return round(oz / vz), round(oy / vy), round(ox / vx)

@@ -26,6 +26,7 @@ class ThemeColors:
     window_text: str
     base: str
     alternate_base: str
+    raised_base: str
     text: str
     placeholder_text: str
     button: str
@@ -36,6 +37,10 @@ class ThemeColors:
     tool_tip_base: str
     tool_tip_text: str
     disabled_text: str
+    separator: str
+    lowest_bound_hist: str
+    highest_bound_hist: str
+    threshold_line_hist: str
 
 
 @dataclass(frozen=True)
@@ -77,8 +82,9 @@ LIGHT_STATUS_COLORS: StatusColors = StatusColors(
 LIGHT_COLORS: ThemeColors = ThemeColors(
     window="#f2f3f5",
     window_text="#1f2328",
-    base="#ffffff",
+    base="#f2f3f5",
     alternate_base="#f6f8fa",
+    raised_base="#ededed",
     text="#1f2328",
     placeholder_text="#8b949e",
     button="#e6e8eb",
@@ -89,13 +95,18 @@ LIGHT_COLORS: ThemeColors = ThemeColors(
     tool_tip_base="#fbfbfb",
     tool_tip_text="#1f2328",
     disabled_text="#9aa1a9",
+    separator="#adadad",
+    lowest_bound_hist="#b45309",
+    highest_bound_hist="#dc2626",
+    threshold_line_hist="#dc2626",
 )
 
 DARK_COLORS: ThemeColors = ThemeColors(
-    window="#2b2d31",
+    window="#1f1f21",
     window_text="#dcdfe4",
-    base="#1f2023",
+    base="#1f1f21",
     alternate_base="#26282c",
+    raised_base="#262728",
     text="#dcdfe4",
     placeholder_text="#7d838c",
     button="#383b41",
@@ -106,6 +117,10 @@ DARK_COLORS: ThemeColors = ThemeColors(
     tool_tip_base="#383b41",
     tool_tip_text="#dcdfe4",
     disabled_text="#707680",
+    separator="#404040",
+    lowest_bound_hist="#e5c07b",
+    highest_bound_hist="#e06c75",
+    threshold_line_hist="#e06c75",
 )
 
 THEME_COLORS: dict[Theme, ThemeColors] = {Theme.LIGHT: LIGHT_COLORS, Theme.DARK: DARK_COLORS}

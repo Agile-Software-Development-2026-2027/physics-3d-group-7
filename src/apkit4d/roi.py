@@ -29,6 +29,8 @@ from typing import Self
 import numpy as np
 import pandas as pd
 
+from apkit4d.image import Image
+
 type Bounds6D = tuple[float, float, float, float, float, float]
 type Point3D = tuple[float, float, float] | np.ndarray
 type Shape3D = tuple[int, int, int]
@@ -238,10 +240,10 @@ class RegionOfInterest:
 
     def extract_subvolume(
         self,
-        volume: np.ndarray,
+        volume: Image[np.uint16],
         voxel_size: VoxelSize3D,
         origin_xyz: Origin3D = (0.0, 0.0, 0.0),
-    ) -> tuple[np.ndarray, Origin3D]:
+    ) -> tuple[Image[np.uint16], Origin3D]:
         """
         this method extracts the subvolume of the 3D NumPy array that corresponds to the ROI.
         it returns the cropped volume and the new origin in micrometers of the subvolume by

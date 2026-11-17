@@ -9,12 +9,14 @@ whoever connects to that signal (the controller).
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import override
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QWidget
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
 
 from apkit4d.gui.constants import appearance, application, names, shortcuts, texts
+from apkit4d.gui.fps_counter import FpsCounter
 from apkit4d.gui.views.panels.center_panel import CenterPanel
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.gui.views.panels.right_panel import RightPanel
@@ -44,8 +46,17 @@ class MainWindow(QMainWindow):
         self._center = CenterPanel()
         self._right = RightPanel()
 
+        self._qt_fps_ticker = FpsCounter(window_seconds=1.0)
+        self._qt_frame_pending = False
+        self._render_fps_provider: Callable[[], float] | None = None
+
+        self._fps_timer = QTimer(self)
+        self._fps_timer.setInterval(150)
+        self._fps_timer.timeout.connect(self._update_fps_label)
+
         self._build_columns()
         self._build_file_menu()
+        self._build_view_menu()
         self._build_status_bar()
 
     @property
@@ -71,6 +82,8 @@ class MainWindow(QMainWindow):
             view: Widget that fills the center panel (the 3D view).
         """
         self._center.set_view(view)
+        if hasattr(view, "render_fps"):
+            self._render_fps_provider = lambda: float(view.render_fps)  # type: ignore
 
     def set_status(self, message: str) -> None:
         """
@@ -136,6 +149,51 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._add_action(menu, names.QUIT_ACTION, texts.ACTION_QUIT, shortcuts.QUIT, self.close)
 
+    def _build_view_menu(self) -> None:
+        menu = self.menuBar().addMenu(texts.MENU_VIEW)
+        menu.setObjectName(names.VIEW_MENU)
+
+        action = QAction(texts.ACTION_SHOW_FPS, self)
+        action.setObjectName(names.SHOW_FPS_ACTION)
+        action.setCheckable(True)
+        action.setChecked(False)
+        action.toggled.connect(self._on_show_fps_toggled)
+        menu.addAction(action)
+
+    def _build_status_bar(self) -> None:
+        status_bar = self.statusBar()
+        status_bar.setObjectName(names.STATUS_BAR)
+        status_bar.showMessage(texts.STATUS_NO_FILE)
+
+        self._fps_label = QLabel()
+        self._fps_label.setObjectName(names.FPS_LABEL)
+        self._fps_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        widest = texts.FPS_READOUT.format(qt_fps=999.9, render_fps=999.9)
+        self._fps_label.setFixedWidth(self._fps_label.fontMetrics().horizontalAdvance(widest))
+        self._fps_label.setVisible(False)
+        status_bar.addPermanentWidget(self._fps_label)
+
+    def _on_show_fps_toggled(self, enabled: bool) -> None:
+        self._fps_label.setVisible(enabled)
+        app = QApplication.instance()
+        if enabled:
+            self._qt_fps_ticker.reset()
+            self._qt_frame_pending = False
+            if app is not None:
+                app.installEventFilter(self)
+            self._update_fps_label()
+            self._fps_timer.start()
+        else:
+            self._fps_timer.stop()
+            self._qt_frame_pending = False
+            if app is not None:
+                app.removeEventFilter(self)
+
+    def _update_fps_label(self) -> None:
+        qt_fps = self._qt_fps_ticker.fps()
+        render_fps = self._render_fps_provider() if self._render_fps_provider is not None else 0.0
+        self._fps_label.setText(texts.FPS_READOUT.format(qt_fps=qt_fps, render_fps=render_fps))
+
     def _add_action(
         self, menu: QMenu, name: str, text: str, shortcut: str, slot: Callable[..., object]
     ) -> None:
@@ -145,12 +203,31 @@ class MainWindow(QMainWindow):
         action.triggered.connect(slot)
         menu.addAction(action)
 
-    def _build_status_bar(self) -> None:
-        status_bar = self.statusBar()
-        status_bar.setObjectName(names.STATUS_BAR)
-        status_bar.showMessage(texts.STATUS_NO_FILE)
-
     def _choose_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, texts.FILE_DIALOG_TITLE, "", texts.FILE_DIALOG_FILTER)
         if path:
             self.open_file(Path(path))
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            self._fps_timer.isActive()
+            and event.type() == QEvent.Type.Paint
+            and watched is not self._fps_label
+            and not self._qt_frame_pending
+        ):
+            self._qt_frame_pending = True
+            QTimer.singleShot(0, self._commit_qt_frame)
+        return super().eventFilter(watched, event)
+
+    def _commit_qt_frame(self) -> None:
+        self._qt_frame_pending = False
+        if self._fps_timer.isActive():
+            self._qt_fps_ticker.tick()
+
+    @override
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._fps_timer.stop()
+        if (app := QApplication.instance()) is not None:
+            app.removeEventFilter(self)
+        super().closeEvent(event)

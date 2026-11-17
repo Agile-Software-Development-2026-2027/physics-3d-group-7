@@ -189,7 +189,7 @@ def test_subtract_background_produces_clips_value_above_zero():
 
 def test_normalize_intensity():
     vol = np.array([10.0, 60.0, 110.0], dtype=np.float32)
-    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+    p = PreprocParams(normalization_enabled=True, lowest_intensity=10.0, highest_intensity=110.0)
 
     result = normalize_intensity(vol, p)
 
@@ -199,7 +199,7 @@ def test_normalize_intensity():
 
 def test_normalize_intensity_clips_values_below_lowest_intensity():
     vol = np.array([-5.0, 0.0, 10.0, 50.0], dtype=np.float32)
-    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+    p = PreprocParams(normalization_enabled=True, lowest_intensity=10.0, highest_intensity=110.0)
 
     result = normalize_intensity(vol, p)
 
@@ -210,7 +210,7 @@ def test_normalize_intensity_clips_values_below_lowest_intensity():
 
 def test_normalize_intensity_clips_values_above_highest_intensity():
     vol = np.array([50.0, 110.0, 150.0, 300.0], dtype=np.float32)
-    p = PreprocParams(lowest_intensity=10.0, highest_intensity=110.0)
+    p = PreprocParams(normalization_enabled=True, lowest_intensity=10.0, highest_intensity=110.0)
 
     result = normalize_intensity(vol, p)
 
@@ -221,7 +221,7 @@ def test_normalize_intensity_clips_values_above_highest_intensity():
 
 def test_normalize_intensity_zero_span_is_handled():
     vol = np.array([50.0, 55.0], dtype=np.float32)
-    p = PreprocParams(lowest_intensity=50.0, highest_intensity=50.0)
+    p = PreprocParams(normalization_enabled=True, lowest_intensity=50.0, highest_intensity=50.0)
 
     result = normalize_intensity(vol, p)
 
@@ -304,6 +304,7 @@ def test_preprocess_pipeline():
     vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
 
     p = PreprocParams(
+        normalization_enabled=True,
         lowest_intensity=0.0,
         highest_intensity=100.0,
         logarithmic_compression_enabled=False,
@@ -322,6 +323,7 @@ def test_preprocess_pipeline_with_clache():
     vol = np.random.rand(4, 32, 32).astype(np.float32) * 100.0
 
     p = PreprocParams(
+        normalization_enabled=True,
         lowest_intensity=0.0,
         highest_intensity=100.0,
         logarithmic_compression_enabled=False,
@@ -341,6 +343,7 @@ def test_preprocess_logarithmic_compression():
     vol = np.random.rand(2, 10, 16).astype(np.float32) * 100.0
 
     p = PreprocParams(
+        normalization_enabled=True,
         lowest_intensity=0.0,
         highest_intensity=100.0,
         logarithmic_compression_enabled=True,

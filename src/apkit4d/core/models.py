@@ -55,7 +55,7 @@ class TrackingConfig(BaseModel):
         description="Search radius per gap frame during gap closing in micrometers.",
     )
     min_len: int = Field(
-        default=3,
+        default=5,
         ge=2,
         description="Minimum number of detection points required to retain a trajectory.",
     )

@@ -13,6 +13,7 @@ from apkit4d.gui.models.output_type import OutputType
 PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
 
 # main window
+MOCK_SOURCE_NAME: str = "Mock Algae Session"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
 STATUS_NO_FILE: str = "No file open"
 STATUS_OPENING: str = "Opening {name}..."
@@ -31,6 +32,9 @@ FILE_DIALOG_FILTER: str = f"CZI files (*{CZI_SUFFIX})"
 MENU_FILE: str = "&File"
 ACTION_OPEN: str = "&Open..."
 ACTION_QUIT: str = "&Quit"
+MENU_VIEW: str = "&View"
+ACTION_SHOW_FPS: str = "Show &FPS Counter"
+FPS_READOUT: str = "Qt: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"
 
 # playback bar
 BUTTON_PREVIOUS: str = "<"
@@ -58,8 +62,36 @@ TOOLTIP_INCREASE: str = "Increase"
 SECTION_APPEARANCE: str = "Appearance"
 SECTION_LAYERS: str = "Layers"
 LAYERS_EMPTY: str = "No layers yet"
+LABEL_SHOW_TRAJECTORIES: str = "Show trajectories"
+LABEL_SHOW_BLOBS: str = "Show blobs"
+BOX_TRAJECTORY_TAIL: str = "Trail length (frames)"
+TRAJECTORY_TAIL_ALL: str = "All (-1)"
+BOX_TRAJECTORY_COLOR_MODE: str = "Path color by"
+TRAJECTORY_COLOR_SPEED: str = "Speed"
+TRAJECTORY_COLOR_TRACK_ID: str = "Track ID"
+BOX_TRAJECTORY_COLORMAP: str = "Speed colormap"
+BOX_COLORMAP: str = "Colormap"
+BOX_OPACITY: str = "Opacity"
+BOX_BACKGROUND: str = "Background"
+BOX_OUTLINE: str = "Outline"
+OPACITY_VALUE: str = "{percent}%"
+DIALOG_BACKGROUND: str = "Background color"
+DIALOG_OUTLINE: str = "Outline color"
 BUTTON_THEME: str = "Switch theme"
 RIGHT_PANEL_PLACEHOLDER: str = "RIGHT PANEL"  # temporary, until the right panel has its controls
+
+# histograms
+SECTION_HISTOGRAMS: str = "Histograms"
+HISTOGRAM_ROI_TITLE: str = "Raw ROI Intensities > 0 (sat: {frac_sat:.2%})"
+HISTOGRAM_PREPROC_TITLE: str = "Preprocessed ROI Intensities in [0, 1]"
+LABEL_HISTOGRAM_INTENSITY: str = "Intensity"
+LABEL_HISTOGRAM_AU: str = "AU"
+LABEL_HISTOGRAM_COUNTS: str = "Counts"
+ROI_INTENSITIES_MIN_LINE: str = "Normalization window lower bound"
+ROI_INTENSITIES_MAX_LINE: str = "Normalization window upper bound"
+HISTOGRAMS_TIP: str = """🛈 Some histograms have thresholds and bounds that you can drag. Double-click on each
+ histogram to reset its zoom, position and the range of both its axes.""".replace("\n", "")
+LABEL_HISTOGRAM_NORMALIZED: str = "norm."
 
 # right panel and accordion
 BUTTON_TOGGLE_ALL: str = "Toggle All"
@@ -74,6 +106,43 @@ BUTTON_PLAN_UP_TO: str = "Plan up to this"
 TOOLTIP_PLAN_UP_TO: str = "Plan execution up to this stage"
 BUTTON_COMPLETE_STAGE: str = "Complete this"
 TOOLTIP_COMPLETE_STAGE: str = "Mark this stage as completed"
+
+# preprocessing stage controls
+LABEL_PREPROC_DENOISE_XY: str = "Denoise XY (µm):"
+LABEL_PREPROC_DENOISE_Z: str = "Denoise Z (µm):"
+LABEL_PREPROC_BG_MODE: str = "Background Mode:"
+LABEL_PREPROC_BG_PERCENTILE: str = "BG Percentile (%):"
+LABEL_PREPROC_BG_SIGMA_XY: str = "BG Sigma XY (µm):"
+LABEL_PREPROC_NORMALIZATION_ENABLED: str = "Window Normalize Intensities"
+LABEL_PREPROC_LOWEST_INTENSITY: str = "Window Min (AU):"
+LABEL_PREPROC_LOWEST_INTENSITY: str = "Window Min (AU):"
+PREPROC_SUGGEST_WINDOW: str = "Suggest Window"
+LABEL_PREPROC_HIGHEST_INTENSITY: str = "Window Max (AU):"
+LABEL_PREPROC_LOG_COMPRESSION: str = "Logarithmic Compression"
+LABEL_PREPROC_GAMMA: str = "Gamma Correction:"
+LABEL_PREPROC_CLAHE: str = "CLAHE Enhancement"
+LABEL_PREPROC_CLAHE_CLIP: str = "CLAHE Clip Limit:"
+LABEL_PREPROC_CLAHE_KERNEL_XY: str = "CLAHE Kernel XY (µm):"
+PREPROC_DENOISE_XY_TOOLTIP: str = "Scale of the Gaussian smoothing along the X, Y axes for denoise"
+PREPROC_DENOISE_Z_TOOLTIP: str = "Scale of the Gaussian smoothing along the Z axis for denoise (anisotropic)"
+PREPROC_DENOISE_BG_MODE_TOOLTIP: str = "Background removal strategy"
+PREPROC_BG_PERCENTILE_TOOLTIP: str = (
+    "Subtract the specified percentile of each 2D Z-slice from each voxel in that slice"
+)
+PREPROC_BG_WIDE_GAUSSIAN_TOOLTIP: str = """Blur radius in µm along the X, Y axes for the Gaussian
+smoothing. The Z axis is not affected. Preserves high intensities."""
+PREPROC_NORMALIZATION_TOGGLE_TOOLTIP: str = "Toggle intensity normalization from the window to [0, 1]"
+PREPROC_LOGARITHMIC_COMPRESSION_TOOLTIP: str = "Highlights dim details and dims bright peaks"
+PREPROC_GAMMA_TOOLTIP: str = "Non-linear gamma correction applied when ≠ 1.0"
+PREPROC_CLAHE_TOOLTIP: str = (
+    "Contrast Limited Adaptive Histogram Equalization (requires window normalization)"
+)
+PREPROC_CLAHE_CLIP_TOOLTIP: str = "Controls noise amplification"
+PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used by CLAHE"
+PREPROC_RESET: str = "Reset All to Defaults"
+PREPROC_SUGGEST_WINDOW_TOOLTIP: str = "Computed the intensity window from the current volume"
+PREPROC_COMPLETE: str = "Done"  # 🤷‍♂️
+
 
 # pipeline stages titles
 STAGE_TITLE_ROI: str = "1 · Cropping & ROI"
@@ -171,7 +240,12 @@ INSPECTOR_TOOLTIP_RUN_BATCH: str = (
     "using the current ROI and detection parameters.\n "
     "Runs in a separate process."
 )
-
+INSPECTOR_STATUS_DETECTING = "detecting blobs..."
+INSPECTOR_STATUS_NO_BLOBS_FOUND = "frame {frame}: no blobs found"
+INSPECTOR_STATUS_BLOBS_FOUND = "frame {frame}: {count} blobs (median volume {volume:.0f} µm³)"
+INSPECTOR_STATUS_DETECTION_FAILED = "detection failed: {reason}"
+INSPECTOR_BUTTON_DISABLED_INFO = "\u24d8 Normalize the volume to enable this button."
+INSPECTOR_CHECKBOX_DISABLED_INFO = "\u24d8 Normalize the volume to enable this checkbox."
 
 # roi inspector
 INSPECTOR_SECTION_ROI_BOUNDS: str = "Region of Interest (µm)"
@@ -200,3 +274,45 @@ INSPECTOR_BUTTON_SAVE_ROI: str = "Save ROI"
 INSPECTOR_TOOLTIP_SAVE_ROI: str = (
     "Save the current Region of Interest in a certain range of frames to a file."
 )
+
+# trajectory linking inspector
+INSPECTOR_SECTION_TRACKING_PARAMETERS: str = "Tracking parameters"
+
+INSPECTOR_LABEL_MIN_LEN: str = "Minimum track length"
+INSPECTOR_TOOLTIP_MIN_LEN: str = "Minimum number of detections required for a trajectory."
+
+INSPECTOR_LABEL_MAX_GAP: str = "Maximum gap"
+INSPECTOR_TOOLTIP_MAX_GAP: str = "Maximum number of consecutive missing frames allowed in a trajectory."
+
+INSPECTOR_LABEL_MAX_SPEED: str = "Maximum speed (µm/s)"
+INSPECTOR_TOOLTIP_MAX_SPEED: str = "Maximum allowed particle speed during trajectory linking."
+
+INSPECTOR_BUTTON_RESET_TRACKING = "Reset to defaults"
+
+# LoG histogram
+SEED_HISTOGRAM_EMPTY: str = "LoG response of the candidates"
+SEED_HISTOGRAM_TITLE: str = "{count} candidates above the threshold"
+SEED_HISTOGRAM_LEFT_AXIS_LABEL: str = "Counts"
+SEED_HISTOGRAM_BOTTOM_AXIS_LABEL: str = "LoG Threshold"
+
+# batch output
+BATCH_OUTPUT: str = "Output folder"
+BATCH_BROWSE: str = "Browse..."
+BATCH_FORMAT: str = "Table format"
+BATCH_FIRST_FRAME: str = "First frame (inclusive)"
+BATCH_LAST_FRAME: str = "Last frame (inclusive)"
+BATCH_NO_SOURCE: str = "Open a CZI file to run batch processing."
+BATCH_READY: str = (
+    "Results are saved automatically. Existing output files in this folder will be overwritten."
+)
+BATCH_WORKING: str = "Saving processed pipeline results..."
+BATCH_ERROR_TITLE: str = "Batch failed"
+BATCH_FAILED: str = "Batch failed: {reason}"
+BATCH_SAVED: str = "Saved {blobs} detections from {frames} frames.\nTable: {table}\nParameters: {params}"
+
+BATCH_EMPTY: str = (
+    "No detections found in {frames} frames. No CSV/Parquet file was created.\nParameters: {params}"
+)
+
+BATCH_COMPLETE: str = "Batch completed"
+BATCH_PROGRESS: str = "Working: Batch — {done}/{total} detections"

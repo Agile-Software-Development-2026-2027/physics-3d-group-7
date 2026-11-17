@@ -34,3 +34,27 @@ Example:
 Missing fields use their default values. If `--params` is omitted, saved parameters are used, or defaults if none exist.
 
 CLI frame options (`--first-frame`, `--last-frame`) override the JSON values. If both new and legacy frame keys are present, the new keys take precedence.
+
+## GUI batch export
+
+The Batch stage uses the normal pipeline execution order. Choose CSV/Parquet
+(default: Parquet), an output folder (default: the CZI file's parent directory),
+and a frame range numbered from 1 like the playback slider. Use the stage's play
+arrow to run the pipeline up to export. Progress and result paths appear in the
+shared status panel. Export never reruns detection or preprocessing.
+
+The preceding processing stage must supply completed detections and their actual
+metadata before advancing to Batch:
+
+```python
+pipeline_model.set_batch_results(detections, metadata)
+```
+
+Metadata contains `czi`, `channel`, zero-based inclusive `t0`/`t1`, acquisition
+`info`, `preproc` and `blob` settings. The GUI processing stages do not yet supply
+this full-run data automatically; missing data produces an explicit export error.
+Export integration can be tested with synthetic results without a real CZI.
+
+Saved frame indices remain zero-based. If no detections are found, only JSON
+metadata is saved. Existing matching files are overwritten; use another output
+folder to retain previous exports. CLI batch processing is unchanged.

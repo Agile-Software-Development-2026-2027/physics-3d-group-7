@@ -4,9 +4,14 @@ Model representing the analysis pipeline state, stage dependencies, and executio
 
 import copy
 from enum import StrEnum
-from typing import Any
+from typing import Any, assert_never
 
+import pandas as pd
 from PySide6.QtCore import QObject, Signal
+
+from apkit4d.blob_detection import BlobParams
+from apkit4d.core.models import TrackingConfig
+from apkit4d.preprocessing import PreprocParams
 
 
 class StepStatus(StrEnum):
@@ -59,11 +64,29 @@ class PipelineModel(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self._batch_results: tuple[pd.DataFrame, dict[str, Any]] | None = None
         self._statuses: dict[PipelineStep, StepStatus] = {
             step: StepStatus.IDLE for step in PIPELINE_STEP_ORDER
         }
-        self._params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
+        self._params: dict[PipelineStep, dict[str, Any]] = {
+            step: self._default_params(step) for step in PIPELINE_STEP_ORDER
+        }
         self._last_run_params: dict[PipelineStep, dict[str, Any]] = {step: {} for step in PIPELINE_STEP_ORDER}
+
+    def set_batch_results(self, detections: pd.DataFrame, metadata: dict[str, Any]) -> None:
+        """Receive completed detections for export before advancing to Batch.
+
+        Metadata must describe the actual source, channel, processed t0/t1, acquisition
+        info and analysis parameters. Tables must not be mutated during export.
+        """
+        self._batch_results = (detections, copy.deepcopy(metadata))
+
+    @property
+    def batch_results(self) -> tuple[pd.DataFrame, dict[str, Any]] | None:
+        return self._batch_results
+
+    def clear_batch_results(self) -> None:
+        self._batch_results = None
 
     @property
     def step_order(self) -> tuple[PipelineStep, ...]:
@@ -184,6 +207,12 @@ class PipelineModel(QObject):
         self._params[step].update(params)
         self.step_params_changed.emit(step)
 
+    def reset_step_params(self, step: PipelineStep) -> None:
+        """Reset all parameters for `step` to defaults and notify listeners once."""
+
+        self._params[step] = self._default_params(step)
+        self.step_params_changed.emit(step)
+
     def invalidate_subsequent(self, step: PipelineStep) -> None:
         """
         Invalidate all steps following `step`, resetting their status to IDLE.
@@ -195,6 +224,8 @@ class PipelineModel(QObject):
             step: Step whose downstream stages should be invalidated.
         """
         idx = PIPELINE_STEP_ORDER.index(step)
+        if idx <= PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION):
+            self.clear_batch_results()
         self._invalidate_subsequent(idx)
 
     def invalidate_from(self, step: PipelineStep) -> None:
@@ -207,6 +238,8 @@ class PipelineModel(QObject):
             step: Earliest pipeline step to invalidate.
         """
         idx = PIPELINE_STEP_ORDER.index(step)
+        if idx <= PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION):
+            self.clear_batch_results()
         for s in PIPELINE_STEP_ORDER[idx:]:
             if self._statuses[s] != StepStatus.IDLE:
                 self._statuses[s] = StepStatus.IDLE
@@ -216,6 +249,14 @@ class PipelineModel(QObject):
     def get_step_params(self, step: PipelineStep) -> dict[str, Any]:
         """Return a copy of the configuration dictionary for `step`."""
         return dict(self._params[step])
+
+    def get_preproc_params(self) -> PreprocParams:
+        """Return the PreprocParams dataclass instance for the preprocessing step."""
+        return PreprocParams.from_dict(self._params[PipelineStep.PREPROCESSING])
+
+    def set_preproc_params(self, params: PreprocParams) -> None:
+        """Update preprocessing parameters from a PreprocParams instance."""
+        self.update_step_params(PipelineStep.PREPROCESSING, **params.to_dict())
 
     def plan_execution(
         self,
@@ -256,6 +297,7 @@ class PipelineModel(QObject):
 
     def reset_all(self) -> None:
         """Reset all steps to IDLE status."""
+        self._batch_results = None
         self._last_run_params = {step: {} for step in PIPELINE_STEP_ORDER}
         for step in PIPELINE_STEP_ORDER:
             if self._statuses[step] != StepStatus.IDLE:
@@ -269,3 +311,20 @@ class PipelineModel(QObject):
             if self._statuses[later_step] != StepStatus.IDLE:
                 self._statuses[later_step] = StepStatus.IDLE
                 self.step_status_changed.emit(later_step, StepStatus.IDLE)
+
+    def _default_params(self, step: PipelineStep) -> dict[str, Any]:
+        """The parameters a step starts from."""
+
+        match step:
+            case PipelineStep.ROI:
+                return {}  # TODO add default params
+            case PipelineStep.PREPROCESSING:
+                return PreprocParams().to_dict()
+            case PipelineStep.DETECTION:
+                return BlobParams().to_dict()
+            case PipelineStep.BATCH:
+                return {}  # TODO add default params
+            case PipelineStep.TRACKING:
+                return TrackingConfig().model_dump()
+            case _:
+                assert_never(step)

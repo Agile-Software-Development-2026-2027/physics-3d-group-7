@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSpinBox,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.shared.components.accordion import AccordionSection
@@ -32,9 +34,12 @@ from apkit4d.gui.theme import (
     Theme,
     ThemeColors,
 )
+from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
+from apkit4d.gui.views.widgets.batch_inspector import BatchInspector
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
+from apkit4d.gui.views.widgets.trajectory_linking_inspector import TrajectoryLinkingInspector
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 
@@ -90,13 +95,20 @@ class BottomStatsSection(QFrame):
         self._details_label = QLabel(texts.STATS_DEFAULT_DETAILS)
         self._details_label.setObjectName(names.BOTTOM_STATS_DETAILS_LABEL)
         self._details_label.setWordWrap(True)
+        self._details_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._details_layout.addWidget(self._details_label)
 
         # Start collapsed with maximumHeight = 0
         self._details_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._details_frame.setMaximumHeight(0)
 
+        self.progress = QProgressBar(self)
+        self.progress.hide()
         self._main_layout.addWidget(self._header)
+        progress_layout = QHBoxLayout()
+        progress_layout.setContentsMargins(8, 4, 8, 6)
+        progress_layout.addWidget(self.progress)
+        self._main_layout.addLayout(progress_layout)
         self._main_layout.addWidget(self._details_frame)
 
         # Smooth animation setup
@@ -125,6 +137,8 @@ class BottomStatsSection(QFrame):
     def set_details(self, text: str) -> None:
         """Update the detailed stats text."""
         self._details_label.setText(text)
+        if self._is_expanded:
+            self._details_frame.setMaximumHeight(self._details_layout.sizeHint().height() + 12)
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         """
@@ -183,6 +197,7 @@ class RightPanel(SidePanel):
     plan_stage_requested = Signal(object)
     complete_stage_requested = Signal(object)
     step_param_changed = Signal(str, str, object)
+    step_params_reset = Signal(str)
 
     def __init__(self) -> None:
         super().__init__(names.RIGHT_PANEL)
@@ -197,6 +212,7 @@ class RightPanel(SidePanel):
         # i need to build it here since as a local variable i couldn't access
         # it from the main controller
         self._roi_inspector: RoiInspector | None = None
+        self._tracking_inspector: TrajectoryLinkingInspector | None = None
 
         # Remove the inherited bottom stretch
         while self._layout.count() > 0:
@@ -265,6 +281,15 @@ class RightPanel(SidePanel):
         """The ROI inspector widget."""
         return self._roi_inspector
 
+    @property
+    def detection_inspector(self) -> BlobDetectionInspector | None:
+        section = self.get_section(PipelineStep.DETECTION)
+
+        if section is not None:
+            return section.findChild(BlobDetectionInspector, names.DETECTION_INSPECTOR_STEP)
+
+        return None
+
     def get_section(self, step: str | PipelineStep) -> AccordionSection | None:
         """
         Return the AccordionSection associated with `step`.
@@ -305,6 +330,17 @@ class RightPanel(SidePanel):
         section = self.get_section(step)
         if section is not None:
             section.set_status(status)
+
+        # enabled the button to complete the preprocessing stage after completing the ROI stage
+        if step == PipelineStep.ROI:
+            preproc_complete = self._complete_buttons.get(PipelineStep.PREPROCESSING)
+            if preproc_complete is not None:
+                preproc_complete.setEnabled(status == StepStatus.COMPLETED)
+
+    def set_tracking_params(self, config: TrackingConfig) -> None:
+        """Synchronize tracking inspector with the model."""
+        if self._tracking_inspector is not None:
+            self._tracking_inspector.set_params(config)
 
     def toggle_all(self) -> None:
         """Toggle all accordion sections."""
@@ -359,6 +395,7 @@ class RightPanel(SidePanel):
         self._plan_buttons.clear()
         self._complete_buttons.clear()
         self._roi_inspector = None
+        self._tracking_inspector = None
         for section in list(self._sections):
             self.remove_section(section)
 
@@ -379,6 +416,9 @@ class RightPanel(SidePanel):
         for section in self._sections:
             section.apply_theme(colors)
         self._bottom_stats.apply_theme(colors)
+
+        if detection_inspector := self.detection_inspector:
+            detection_inspector.apply_theme(colors)
 
     def _style_top_bar(self, colors: ThemeColors) -> None:
         """Style the top control bar with the active theme colors."""
@@ -413,18 +453,46 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    # TODO: implement
-                    pass
+                    sec = PreprocessingSection(self)
                 case PipelineStep.DETECTION:
                     detection_inspector = BlobDetectionInspector()
                     detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
                     sec.add_widget(detection_inspector)
                 case PipelineStep.TRACKING:
-                    # TODO: implement
-                    pass
+                    tracking_inspector = TrajectoryLinkingInspector()
+                    self._tracking_inspector = tracking_inspector
+                    tracking_inspector.setObjectName(names.TRACKING_INSPECTOR_STEP)
+                    sec.add_widget(tracking_inspector)
+
+                    tracking_inspector.min_len_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "min_len", value)
+                    )
+                    tracking_inspector.max_gap_changed.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.TRACKING.value, "max_gap", value)
+                    )
+                    tracking_inspector.max_speed_changed.connect(
+                        lambda value: self.notify_param_changed(
+                            PipelineStep.TRACKING.value, "max_speed_um_s", value
+                        )
+                    )
+                    tracking_inspector.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.TRACKING.value)
+                    )
                 case PipelineStep.BATCH:
-                    # TODO: implement
-                    pass
+                    self.batch_inspector = BatchInspector()
+                    self.batch_inspector.output_dir.textChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "out_dir", value)
+                    )
+                    self.batch_inspector.format.currentTextChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "format", value)
+                    )
+                    self.batch_inspector.first_frame.valueChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t0", value - 1)
+                    )
+                    self.batch_inspector.last_frame.valueChanged.connect(
+                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t1", value - 1)
+                    )
+                    sec.add_widget(self.batch_inspector)
                 case _:
                     assert_never(step)
 

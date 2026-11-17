@@ -1044,3 +1044,87 @@ class TestAppearance:
         getattr(viewport, method)(value)
 
         assert calls
+
+    def test_show_volume_updates_in_place_when_grid_matches_and_force_update_is_false(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.full(first.n_points, 1.0)
+        viewport.show_volume(first, reset_camera=False)
+        cached_grid = viewport._volume_grid
+
+        second = make_grid(5)
+        second.point_data["values"] = np.full(second.n_points, 2.0)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+
+        assert viewport._volume_grid is cached_grid
+        np.testing.assert_allclose(viewport._volume_grid.point_data["values"], 2.0)
+        assert viewport.plotter.actors["volume"].mapper.scalar_range == pytest.approx((2.0, 2.0))
+
+    def test_show_volume_rebuilds_grid_and_transfer_functions_when_force_update_is_true(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.linspace(0.0, 1.0, first.n_points)
+        viewport.show_volume(first, reset_camera=False)
+        cached_grid = viewport._volume_grid
+
+        second = make_grid(5)
+        second.point_data["values"] = np.linspace(0.0, 4095.0, second.n_points)
+        viewport.show_volume(second, reset_camera=False, force_update=True)
+
+        assert viewport._volume_grid is not cached_grid
+        assert viewport.plotter.actors["volume"].mapper.scalar_range == pytest.approx((0.0, 4095.0))
+        assert viewport.plotter.actors["volume"].mapper.lookup_table.scalar_range == pytest.approx(
+            (0.0, 4095.0)
+        )
+
+    def test_show_and_clear_trajectories_and_blob_visibility(self, viewport):
+        pts1 = np.array([[0.0, 0.0, 0.0], [5.0, 5.0, 5.0]], dtype=np.float32)
+        lines1 = np.array([2, 0, 1], dtype=np.int64)
+        poly1 = pv.PolyData(pts1, lines=lines1)
+        poly1.point_data["rgb"] = np.array([[255, 0, 0], [0, 255, 0]], dtype=np.uint8)
+
+        viewport.show_trajectories(poly1, line_width=3.0)
+        assert "tracks_highlighted" in viewport.plotter.actors
+
+        # Updating trajectories reuses the actor cleanly
+        pts2 = np.array([[0.0, 0.0, 0.0], [5.0, 5.0, 5.0], [10.0, 5.0, 5.0]], dtype=np.float32)
+        lines2 = np.array([3, 0, 1, 2], dtype=np.int64)
+        poly2 = pv.PolyData(pts2, lines=lines2)
+        poly2.point_data["rgb"] = np.array([[255, 0, 0], [0, 255, 0], [0, 0, 255]], dtype=np.uint8)
+        viewport.show_trajectories(poly2, line_width=4.0)
+        assert viewport.plotter.actors["tracks_highlighted"].GetProperty().GetLineWidth() == pytest.approx(
+            4.0
+        )
+
+        # Hiding blobs preserves visibility state across subsequent show_blobs calls
+        viewport.show_blobs(make_poly())
+        assert viewport.plotter.actors["blobs"].GetVisibility() == 1
+        viewport.set_blobs_visible(False)
+        assert viewport.plotter.actors["blobs"].GetVisibility() == 0
+        viewport.show_blobs(make_poly(2))
+        assert viewport.plotter.actors["blobs"].GetVisibility() == 0
+
+        viewport.clear_trajectories()
+        assert "tracks_highlighted" not in viewport.plotter.actors
+
+        viewport.show_trajectories(poly1)
+        viewport.clear()
+        assert "tracks_highlighted" not in viewport.plotter.actors
+
+
+class TestViewportFpsTicker:
+    def test_render_fps_starts_at_zero(self, viewport):
+        assert viewport.render_fps == 0.0
+
+    def test_render_end_event_updates_render_fps(self, viewport, monkeypatch):
+        now = 10.0
+        monkeypatch.setattr("time.perf_counter", lambda: now)
+
+        window = viewport.plotter.render_window
+        window.InvokeEvent("EndEvent")
+        assert viewport.render_fps == 0.0
+
+        # 3 more EndEvent frames at 50 ms intervals -> 20 FPS
+        for _ in range(3):
+            now += 0.05
+            window.InvokeEvent("EndEvent")
+
+        assert viewport.render_fps == pytest.approx(20.0)

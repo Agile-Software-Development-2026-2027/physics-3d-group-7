@@ -2,10 +2,12 @@
 Controller managing the analysis pipeline, bridging PipelineModel and RightPanel.
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QObject
 
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -56,6 +58,9 @@ class PipelineController(QObject):
         self._model = model
         self._view = view
         self._target_step: PipelineStep | None = None
+        self._failure_stats: tuple[str, str] | None = None
+        self._batch_message: tuple[str, str] | None = None
+        self._batch_runner: Callable[[], None] | None = None
 
         # 1. Connect Model events -> View
         self._model.step_status_changed.connect(self._on_step_status_changed)
@@ -66,6 +71,7 @@ class PipelineController(QObject):
         self._view.run_stage_requested.connect(self.run_up_to)
         self._view.complete_stage_requested.connect(self.complete_stage)
         self._view.step_param_changed.connect(self._on_view_param_changed)
+        self._view.step_params_reset.connect(self._on_view_params_reset)
 
         # Synchronize initial state
         self._sync_view()
@@ -183,6 +189,7 @@ class PipelineController(QObject):
         Args:
             target_step: The target PipelineStep or step string.
         """
+        self._batch_message = None
         planned_steps = self.plan_up_to(target_step)
         if not planned_steps:
             return
@@ -211,10 +218,13 @@ class PipelineController(QObject):
     def _on_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Handle status updates emitted by the model."""
         self._view.set_step_status(step, status)
+        if step == PipelineStep.BATCH and status == StepStatus.RUNNING and self._batch_runner is not None:
+            self._batch_runner()
 
     def _on_pipeline_reset(self) -> None:
         """Handle model reset event."""
         self._target_step = None
+        self._batch_message = None
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, StepStatus.IDLE)
         self._update_pipeline_stats()
@@ -226,6 +236,41 @@ class PipelineController(QObject):
         except ValueError:
             return
         self._model.update_step_params(step, **{param_name: value})
+
+        self._update_pipeline_stats()
+
+    def _on_view_params_reset(self, step_name: str) -> None:
+        """Handle atomic parameter reset from the view."""
+        try:
+            step = PipelineStep(step_name)
+        except ValueError:
+            return
+
+        self._model.reset_step_params(step)
+
+        if step == PipelineStep.TRACKING:
+            config = TrackingConfig(**self._model.get_step_params(step))
+            self._view.set_tracking_params(config)
+        self._update_pipeline_stats()
+
+    def report_stage_failure(self, summary: str, details: str) -> None:
+        self._failure_stats = (summary, details)
+        self._update_pipeline_stats()
+
+    def set_batch_runner(self, runner: Callable[[], None]) -> None:
+        """Register the export handler invoked only when Batch enters RUNNING."""
+        self._batch_runner = runner
+
+    def report_batch(self, summary: str, details: str, status: StepStatus) -> None:
+        """Report export through the authoritative pipeline model and shared status panel."""
+        self._model.set_step_status(PipelineStep.BATCH, status)
+        self._batch_message = (summary, details)
+        if status != StepStatus.RUNNING:
+            self._target_step = None
+        self._update_pipeline_stats()
+
+    def clear_batch_status(self) -> None:
+        self._batch_message = None
         self._update_pipeline_stats()
 
     def _update_pipeline_stats(self) -> None:
@@ -235,6 +280,13 @@ class PipelineController(QObject):
         Shows what the pipeline is currently doing (if a step is running) or what
         has been completed, avoiding transient event logs or error messages.
         """
+        if self._batch_message is not None:
+            summary, details = self._batch_message
+            self._view.set_stats_summary(summary)
+            self._view.set_stats_details(details)
+            return
+        self._view.bottom_stats.progress.hide()
+
         running_step: PipelineStep | None = None
         completed_steps: list[PipelineStep] = []
 
@@ -261,6 +313,12 @@ class PipelineController(QObject):
                     target=target_str,
                 )
             )
+            return
+
+        if self._failure_stats is not None:
+            summary, details = self._failure_stats
+            self._view.set_stats_summary(summary)
+            self._view.set_stats_details(details)
             return
 
         total = len(PIPELINE_STEP_ORDER)
