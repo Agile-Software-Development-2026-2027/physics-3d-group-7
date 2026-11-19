@@ -26,11 +26,11 @@ from apkit4d.batching.worker import (
     cap_workers,
     detect_frame,
 )
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import BatchConfig
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import TableWriter, table_path
-from apkit4d.preprocessing import PreprocParams
 
 
 def _json_serializable(obj: Any) -> Any:

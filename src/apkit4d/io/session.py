@@ -6,11 +6,11 @@ from typing import Any, Protocol, runtime_checkable
 import pandas as pd
 from numpy.typing import NDArray
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import RegionOfInterest
 from apkit4d.tracking.linker import TrackingResult
 
 _BLOB_REQUIRED_COLUMNS: tuple[str, ...] = ("frame", "x_um", "y_um", "z_um")

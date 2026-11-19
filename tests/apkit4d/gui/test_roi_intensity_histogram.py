@@ -5,7 +5,7 @@ import pytest
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
-from apkit4d.gui.views.widgets.roi_intensity_histogram import (
+from apkit4d.gui.views.histograms.roi_intensity_histogram import (
     RoiIntensityHistogram,
     compute_fraction_saturated,
     compute_intensity_histogram,
@@ -108,7 +108,7 @@ def test_histogram_defers_recomputation_when_collapsed(qtbot) -> None:
 
     vol = np.arange(1000, dtype=np.uint16)
     with patch(
-        "apkit4d.gui.views.widgets.roi_intensity_histogram.compute_intensity_histogram",
+        "apkit4d.gui.views.histograms.roi_intensity_histogram.compute_intensity_histogram",
         wraps=compute_intensity_histogram,
     ) as mock_compute:
         widget.set_volume(vol)

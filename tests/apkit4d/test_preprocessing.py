@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from apkit4d.preprocessing import (
+from apkit4d.detection.preprocessing import (
     BgMode,
     PreprocParams,
     clahe,

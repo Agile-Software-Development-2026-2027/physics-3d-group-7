@@ -1,0 +1,30 @@
+"""
+Texts of the main window: placeholder, menus and status bar.
+"""
+
+from apkit4d.gui.constants.application import CZI_SUFFIX
+
+# center panel
+PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
+# main window
+MOCK_SOURCE_NAME: str = "Mock Algae Session"
+WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
+STATUS_NO_FILE: str = "No file open"
+STATUS_OPENING: str = "Opening {name}..."
+STATUS_OPENED: str = "{path}"
+STATUS_OPEN_FAILED: str = "Cannot open {name}: {reason}"
+STATUS_INVALID_VOXEL: str = "Cannot show {name}: invalid voxel size {voxel}"
+STATUS_FRAME_FAILED: str = "Cannot read frame {frame}: {reason}"
+STATUS_NOT_3D: str = "Cannot show frame {frame}: expected a 3D volume, got shape {shape}"
+STATUS_EMPTY_VOLUME: str = "Cannot show frame {frame}: the volume is empty"
+STATUS_NOT_CZI: str = f"Not a {CZI_SUFFIX} file: {{name}}"
+STATUS_NOT_FOUND: str = "File not found: {path}"
+FILE_DIALOG_TITLE: str = f"Open a {CZI_SUFFIX} file"
+FILE_DIALOG_FILTER: str = f"CZI files (*{CZI_SUFFIX})"
+# menus
+MENU_FILE: str = "&File"
+ACTION_OPEN: str = "&Open..."
+ACTION_QUIT: str = "&Quit"
+MENU_VIEW: str = "&View"
+ACTION_SHOW_FPS: str = "Show &FPS Counter"
+FPS_READOUT: str = "Qt: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"

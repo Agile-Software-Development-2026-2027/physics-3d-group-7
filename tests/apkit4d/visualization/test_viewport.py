@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 
-from apkit4d.roi import RegionOfInterest
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.viewport import (
     DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,

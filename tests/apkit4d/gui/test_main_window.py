@@ -6,8 +6,8 @@ from PySide6.QtCore import QEvent
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QWidget
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui import app as gui_app
 from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, texts

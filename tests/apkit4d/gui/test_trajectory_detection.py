@@ -6,9 +6,9 @@ import pandas as pd
 import pytest
 
 from apkit4d.batching.processor import BatchProcessor, BatchResult
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.trajectory_detection import detect_sequence
-from apkit4d.preprocessing import PreprocParams
 
 
 def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

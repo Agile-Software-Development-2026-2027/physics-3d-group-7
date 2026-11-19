@@ -5,9 +5,9 @@ from typing import Any
 import click
 
 from apkit4d.batching.processor import run_batch
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import BatchConfig
-from apkit4d.preprocessing import PreprocParams
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 
 
 def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:

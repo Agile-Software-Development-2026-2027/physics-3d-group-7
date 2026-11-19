@@ -1,6 +1,6 @@
 import pytest
 
-from apkit4d.gui.fps_counter import FpsCounter
+from apkit4d.visualization.fps_counter import FpsCounter
 
 
 def test_fps_counter_initial_and_single_tick_return_zero(monkeypatch) -> None:

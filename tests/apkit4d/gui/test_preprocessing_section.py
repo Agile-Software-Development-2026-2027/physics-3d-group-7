@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
+from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.volume_controller import VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
-from apkit4d.preprocessing import BgMode, PreprocParams
 
 
 class SignalCatcher:

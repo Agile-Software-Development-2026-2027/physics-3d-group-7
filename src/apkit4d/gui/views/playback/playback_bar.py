@@ -13,8 +13,8 @@ from PySide6.QtGui import QPalette, QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLayout, QVBoxLayout, QWidget
 
 from apkit4d.gui.constants import appearance, names, playback, texts
+from apkit4d.gui.views.playback.frame_counter import FrameCounter
 from apkit4d.gui.views.widgets.divider import Divider
-from apkit4d.gui.views.widgets.frame_counter import FrameCounter
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
