@@ -10,7 +10,7 @@ of the playback: the step, that is how many frames are skipped at every move, an
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from apkit4d.gui.constants import playback
-from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
+from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 
 
 class PlaybackController(QObject):

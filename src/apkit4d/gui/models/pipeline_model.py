@@ -9,9 +9,9 @@ from typing import Any, assert_never
 import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
-from apkit4d.preprocessing import PreprocParams
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 
 
 class StepStatus(StrEnum):

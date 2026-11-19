@@ -3,8 +3,10 @@
 import numpy as np
 import pandas as pd
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import (
@@ -13,8 +15,6 @@ from apkit4d.io.session import (
     PrecomputedSource,
     infer_completed_steps,
 )
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import RegionOfInterest
 from apkit4d.tracking.linker import TrackingResult
 
 

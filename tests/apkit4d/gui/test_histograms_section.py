@@ -1,9 +1,9 @@
 from apkit4d.gui.constants import names
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
-from apkit4d.gui.views.panels.histograms_section import HistogramsSection
-from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
-from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
-from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.histograms.histograms_section import HistogramsSection
+from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
+from apkit4d.gui.views.histograms.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.histograms.seed_response_histogram import SeedResponseHistogram
 
 
 def test_histograms_section_contains_both_histograms(qtbot) -> None:

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from apkit4d.gui.constants import texts
-from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.histograms.seed_response_histogram import SeedResponseHistogram
 
 
 @pytest.fixture

@@ -29,7 +29,7 @@ import pandas as pd
 from scipy import ndimage
 from skimage.segmentation import watershed
 
-from apkit4d.image import Image
+from apkit4d.core.image import Image
 
 SQRT_3: Final[np.float64] = np.sqrt(3)
 

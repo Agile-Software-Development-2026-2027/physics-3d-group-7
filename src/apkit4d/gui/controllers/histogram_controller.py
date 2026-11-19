@@ -9,19 +9,19 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject
 
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
-from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
-from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import (
+from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import (
     PreprocessedIntensityHistogram,
     compute_preprocessed_histogram,
 )
-from apkit4d.gui.views.widgets.roi_intensity_histogram import (
+from apkit4d.gui.views.histograms.roi_intensity_histogram import (
     RoiIntensityHistogram,
     compute_roi_histogram_stats,
 )
-from apkit4d.preprocessing import PreprocParams
+from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
 
 
 class HistogramController(QObject):

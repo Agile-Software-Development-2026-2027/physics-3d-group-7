@@ -12,8 +12,8 @@ from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
 from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
 
-from apkit4d.gui.fps_counter import FpsCounter
-from apkit4d.roi import RegionOfInterest
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.visualization.fps_counter import FpsCounter
 
 """
     in this file we define the viewport class, that is the widget that will be placed 

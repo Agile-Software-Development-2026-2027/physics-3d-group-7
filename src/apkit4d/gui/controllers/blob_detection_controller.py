@@ -9,12 +9,12 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
-from apkit4d.blob_detection import BlobParams, find_blobs
+from apkit4d.detection.blob_detection import BlobParams, find_blobs
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.visualization.data_mapper import create_blob_mesh
 
 

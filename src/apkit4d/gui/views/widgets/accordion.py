@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import StepStatus
-from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme import (
     DEFAULT_THEME,
     THEME_COLORS,
@@ -30,6 +29,7 @@ from apkit4d.gui.theme import (
     ThemeColors,
     apply_theme,
 )
+from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 
 __all__ = ["AccordionSection"]
 

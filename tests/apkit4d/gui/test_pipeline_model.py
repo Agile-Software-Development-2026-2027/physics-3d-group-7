@@ -6,15 +6,15 @@ from copy import replace
 
 import pytest
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
     PipelineStep,
     StepStatus,
 )
-from apkit4d.preprocessing import BgMode, PreprocParams
 
 
 def test_pipeline_model_init(qtbot) -> None:

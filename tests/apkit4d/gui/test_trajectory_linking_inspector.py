@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QDoubleSpinBox, QGroupBox, QSpinBox
 from pytestqt.qtbot import QtBot
 
 from apkit4d.gui.constants import names
-from apkit4d.gui.views.widgets.trajectory_linking_inspector import (
+from apkit4d.gui.views.stages.trajectory_linking_inspector import (
     TrajectoryLinkingInspector,
 )
 

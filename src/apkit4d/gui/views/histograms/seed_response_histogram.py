@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.theme import ThemeColors
 

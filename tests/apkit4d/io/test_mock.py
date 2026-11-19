@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from scipy.spatial.distance import pdist
 
-from apkit4d.blob_detection import BlobParams, find_blobs
-from apkit4d.image import Image
+from apkit4d.core.image import Image
+from apkit4d.detection.blob_detection import BlobParams, find_blobs
 from apkit4d.io.mock import (
     MOCK_TRACK_COLUMNS,
     MockConfig,

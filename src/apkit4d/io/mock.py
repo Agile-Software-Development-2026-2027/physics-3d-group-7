@@ -9,7 +9,7 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from apkit4d.analysis.metrics import compute_track_statistics
-from apkit4d.blob_detection import DETECTION_COLUMNS
+from apkit4d.detection.blob_detection import DETECTION_COLUMNS
 from apkit4d.io.czi import CziInfo
 from apkit4d.io.session import PrecomputedSession
 from apkit4d.tracking.linker import TrackingResult

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.output_type import OutputType
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 from tests.apkit4d.gui.helper import find_widget
 
 

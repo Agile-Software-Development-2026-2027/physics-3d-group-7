@@ -6,8 +6,8 @@ from PySide6.QtCore import QObject, Signal
 
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController
 from apkit4d.gui.controllers.seed_histogram_controller import SeedHistogramController
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
-from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.histograms.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 
 
 class FakeBlobController(QObject):
