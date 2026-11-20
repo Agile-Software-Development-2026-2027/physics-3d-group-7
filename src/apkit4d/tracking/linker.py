@@ -105,12 +105,13 @@ class ParticleLinker:
             if col not in detections.columns:
                 raise ValueError(f"Detections DataFrame missing required column '{col}'")
 
+        effective_config = self.config.resolve_for_dt(dt_s) if dt_s is not None else self.config
         det = detections.sort_values(["frame"]).reset_index(drop=True)
         total_detections = len(det)
 
         f2f_res = link_consecutive_frames(
             detections=det,
-            config=self.config,
+            config=effective_config,
             seed=seed,
             lap_solver=self.lap_solver,
         )
@@ -125,14 +126,14 @@ class ParticleLinker:
         consolidated_labels = close_trajectory_gaps(
             detections=det,
             segment_labels=f2f_res.labels,
-            config=self.config,
+            config=effective_config,
             lap_solver=self.lap_solver,
         )
         num_tracks_gap_closed = int(len(np.unique(consolidated_labels)))
 
         tracks = det.assign(track_id=consolidated_labels)
         track_sizes = tracks.groupby("track_id")["frame"].size()
-        retained_ids = track_sizes[track_sizes >= self.config.min_len].index
+        retained_ids = track_sizes[track_sizes >= effective_config.min_len].index
         tracks = tracks[tracks["track_id"].isin(retained_ids)].copy()
 
         # Chronological renumbering ordered by first appearance frame
@@ -151,6 +152,8 @@ class ParticleLinker:
             "num_tracks_after_gap_closing": num_tracks_gap_closed,
             "num_tracks_retained": num_retained,
             "gaps_closed": num_segments_f2f - num_tracks_gap_closed,
+            "max_dist_um": effective_config.max_dist_um,
+            "gap_dist_um": effective_config.gap_dist_um,
         }
 
         stats = compute_track_statistics(tracks) if compute_stats else pd.DataFrame(columns=STATS_COLUMNS)
@@ -160,7 +163,7 @@ class ParticleLinker:
                 tracks=tracks,
                 stats=stats,
                 info=metadata,
-                config=self.config,
+                config=effective_config,
                 name=dataset_name,
                 dt_s=dt_s,
             )
