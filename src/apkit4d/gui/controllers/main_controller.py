@@ -110,10 +110,8 @@ class MainController(QObject):
         self._tracking_generation = 0
         self._tracking_running_generation: int | None = None
 
-        self._pipeline_model.pipeline_reset.connect(self._on_detection_pipeline_reset)
         self._pipeline_model.pipeline_reset.connect(self._on_tracking_pipeline_reset)
 
-        self._pipeline_model.step_status_changed.connect(self._on_detection_step_status_changed)
         self._pipeline_model.step_status_changed.connect(self._on_tracking_step_status_changed)
 
         self._volume_controller = VolumeController(window, view, self) if view is not None else None
@@ -149,13 +147,16 @@ class MainController(QObject):
         )
 
         self._blob_controller: BlobDetectionController | None = None
-        if (
-            view is not None
-            and self._volume_controller is not None
-            and (detection_inspector := window.right_panel.detection_inspector)
-        ):
-            self._blob_controller = BlobDetectionController(detection_inspector, view, parent=self)
-            self._volume_controller.volume_prepared.connect(self._blob_controller.on_volume_prepared)
+        if detection_inspector := window.right_panel.detection_inspector:
+            self._blob_controller = BlobDetectionController(
+                detection_inspector,
+                view,
+                parent=self,
+                pipeline_model=self._pipeline_model,
+                pipeline_controller=self._pipeline_controller,
+                file_controller=self._file_controller,
+                volume_controller=self._volume_controller,
+            )
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
             self._blob_controller.params_changed.connect(
@@ -169,12 +170,14 @@ class MainController(QObject):
                 self._blob_controller.on_normalization_toggled(preproc_sec.normalization_enabled.isChecked())
                 preproc_sec.normalization_toggled.connect(self._blob_controller.on_normalization_toggled)
 
-            self._seed_histogram_controller = SeedHistogramController(
-                window.left_panel.histograms_section.seed_response_histogram,
-                detection_inspector,
-                self._blob_controller,
-                parent=self,
-            )
+            if view is not None and self._volume_controller is not None:
+                self._volume_controller.volume_prepared.connect(self._blob_controller.on_volume_prepared)
+                self._seed_histogram_controller = SeedHistogramController(
+                    window.left_panel.histograms_section.seed_response_histogram,
+                    detection_inspector,
+                    self._blob_controller,
+                    parent=self,
+                )
 
         self._appearance_controller = (
             AppearanceController(window.left_panel, view, self._theme_controller.theme, self)
@@ -262,6 +265,11 @@ class MainController(QObject):
     def roi_controller(self) -> RoiStageController:
         """Controller managing the Stage 1 Region of Interest workflow."""
         return self._roi_controller
+
+    @property
+    def blob_controller(self) -> BlobDetectionController | None:
+        """Controller managing single-frame and Stage 3 blob detection."""
+        return self._blob_controller
 
     @property
     def pipeline_controller(self) -> PipelineController:
