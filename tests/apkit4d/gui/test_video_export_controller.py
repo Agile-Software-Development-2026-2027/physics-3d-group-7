@@ -153,6 +153,29 @@ class TestVideoExportControllerConfig:
 
 
 class TestVideoExportExecution:
+    def test_dialog_uses_one_based_frame_numbers(self, mock_playback, qtbot) -> None:
+        volume = MockVolumeController()
+        controller = VideoExportController(
+            playback=mock_playback,
+            view=MockView(),
+            volume=volume,  # type: ignore
+        )
+        controller.set_frame_range(2, 7)
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        first_frame = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_FIRST_FRAME)
+        last_frame = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_LAST_FRAME)
+        assert first_frame is not None
+        assert last_frame is not None
+        assert (first_frame.value(), last_frame.value()) == (3, 8)
+
+        first_frame.setValue(4)
+        last_frame.setValue(9)
+
+        assert (controller.first_frame, controller.last_frame) == (3, 8)
+        assert volume.requested_frames == [2, 3]
+
     def test_dialog_resolution_controls_update_export_settings(self, mock_playback, qtbot) -> None:
         controller = VideoExportController(playback=mock_playback, view=MockView())
         dialog = VideoExportDialog(controller)

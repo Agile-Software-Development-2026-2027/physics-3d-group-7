@@ -213,13 +213,13 @@ class VideoExportDialog(QDialog):
     def _sync_from_controller(self) -> None:
         """Pull the current controller state into every widget."""
         total = self._controller.total_frames
-        max_frame = max(0, total - 1)
+        max_frame = max(1, total)
 
-        self._first_frame_spin.setRange(0, max_frame)
-        self._first_frame_spin.setValue(self._controller.first_frame)
+        self._first_frame_spin.setRange(1, max_frame)
+        self._first_frame_spin.setValue(self._controller.first_frame + 1)
 
-        self._last_frame_spin.setRange(0, max_frame)
-        self._last_frame_spin.setValue(self._controller.last_frame)
+        self._last_frame_spin.setRange(1, max_frame)
+        self._last_frame_spin.setValue(self._controller.last_frame + 1)
 
         self._crf_slider.setValue(self._controller.crf)
         self._crf_value_label.setText(str(self._controller.crf))
@@ -263,12 +263,13 @@ class VideoExportDialog(QDialog):
             self._controller.request_preview_frame(self._controller.first_frame)
 
     def _on_first_frame_changed(self, value: int) -> None:
-        self._controller.set_first_frame(value)
+        frame = value - 1
+        self._controller.set_first_frame(frame)
         if self._controller.total_frames > 0:
-            self._controller.request_preview_frame(value)
+            self._controller.request_preview_frame(frame)
 
     def _on_last_frame_changed(self, value: int) -> None:
-        self._controller.set_last_frame(value)
+        self._controller.set_last_frame(value - 1)
 
     def _on_crf_changed(self, value: int) -> None:
         self._controller.set_crf(value)
@@ -277,7 +278,7 @@ class VideoExportDialog(QDialog):
     def _on_fps_changed(self, value: int) -> None:
         self._controller.set_fps(value)
 
-    def _on_resolution_changed(self, _value: int) -> None:
+    def _on_resolution_changed(self, _: int) -> None:
         self._controller.set_resolution(self._width_spin.value(), self._height_spin.value())
 
     def _on_browse(self) -> None:
@@ -346,9 +347,11 @@ class VideoExportDialog(QDialog):
     def _on_config_changed(self) -> None:
         """Re-sync spin-box ranges when the controller state changes externally."""
         total = self._controller.total_frames
-        max_frame = max(0, total - 1)
-        self._first_frame_spin.setRange(0, max_frame)
-        self._last_frame_spin.setRange(0, max_frame)
+        max_frame = max(1, total)
+        self._first_frame_spin.setRange(1, max_frame)
+        self._last_frame_spin.setRange(1, max_frame)
+        self._first_frame_spin.setValue(self._controller.first_frame + 1)
+        self._last_frame_spin.setValue(self._controller.last_frame + 1)
         self._update_export_button_state()
 
     def _set_preview_image(self, arr: NDArray) -> None:
