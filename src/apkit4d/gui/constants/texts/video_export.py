@@ -1,4 +1,6 @@
-"""Texts of the video export dialog"""
+"""
+Texts of the video export dialog.
+"""
 
 ACTION_EXPORT_VIDEO: str = "Export &Video..."
 EXPORT_DIALOG_TITLE: str = "Export As Video"
