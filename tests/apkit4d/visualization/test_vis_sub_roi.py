@@ -1,0 +1,176 @@
+import numpy as np
+import pandas as pd
+import pytest
+
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.visualization.data_mapper import (
+    PreparedTrajectories,
+    TrajectoryColorMode,
+    TrajectoryRenderConfig,
+)
+from apkit4d.visualization.vis_sub_roi import (
+    DEFAULT_OUTSIDE_OPACITY,
+    VisSubRoiState,
+    build_sub_roi_trajectory_polydata,
+    clamp_outside_opacity,
+    compute_inside_mask,
+    outside_opacity_to_alpha_uint8,
+    world_bounds_to_normalized_tex_coords,
+)
+
+
+class TestVisSubRoiState:
+    # test that the default values are set correctly and that the outside alpha is computed as expected
+    def test_defaults_and_outside_alpha(self):
+        state = VisSubRoiState()
+        assert state.enabled is False
+        assert state.bounds is None
+        assert state.outside_opacity == pytest.approx(0.01)
+        assert pytest.approx(0.01) == DEFAULT_OUTSIDE_OPACITY
+        assert state.outside_alpha == 3
+
+    def test_normalizes_bounds_and_clamps_outside_opacity(self):
+        state = VisSubRoiState(
+            enabled=True,
+            bounds=(20.0, 5.0, 30.0, 10.0, 8.0, 2.0),
+            outside_opacity=1.5,
+        )
+        assert state.bounds == (5.0, 20.0, 10.0, 30.0, 2.0, 8.0)
+        assert state.outside_opacity == pytest.approx(1.0)
+        assert state.outside_alpha == 255
+
+        low_state = VisSubRoiState(
+            enabled=True, bounds=(0.0, 10.0, 0.0, 10.0, 0.0, 10.0), outside_opacity=-0.2
+        )
+        assert low_state.outside_opacity == pytest.approx(0.0)
+        assert low_state.outside_alpha == 0
+
+    @pytest.mark.parametrize("bad_val", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_outside_opacity_raises(self, bad_val: float):
+        # test that non-finite outside_opacity values raise a
+        # ValueError when clamped or converted to alpha
+        with pytest.raises(ValueError, match="finite"):
+            clamp_outside_opacity(bad_val)
+        with pytest.raises(ValueError, match="finite"):
+            outside_opacity_to_alpha_uint8(bad_val)
+
+    def test_with_clamped_bounds_respects_non_zero_origin(self):
+        grid_bounds = (10.0, 50.0, 20.0, 60.0, 5.0, 25.0)
+        state = VisSubRoiState(
+            enabled=True,
+            bounds=(0.0, 30.0, 40.0, 80.0, 10.0, 15.0),
+            outside_opacity=0.05,
+        )
+        clamped = state.with_clamped_bounds(grid_bounds)
+        assert clamped.bounds is not None
+        assert clamped.bounds[0] >= 10.0
+        assert clamped.bounds[1] <= 50.0
+        assert clamped.bounds[2] >= 20.0
+        assert clamped.bounds[3] <= 60.0
+        assert clamped.bounds[4] >= 5.0
+        assert clamped.bounds[5] <= 25.0
+        assert clamped.enabled is True
+        assert clamped.outside_opacity == pytest.approx(0.05)
+
+
+class TestSpatialHelpersAndBlobsMask:
+    def test_world_bounds_to_normalized_tex_coords_with_offset(self):
+        grid_bounds = (10.0, 30.0, 5.0, 25.0, 0.0, 40.0)
+        roi_bounds = (15.0, 25.0, 5.0, 15.0, 10.0, 40.0)
+
+        u_min, u_max = world_bounds_to_normalized_tex_coords(roi_bounds, grid_bounds)
+        np.testing.assert_allclose(u_min, (0.25, 0.0, 0.25))
+        np.testing.assert_allclose(u_max, (0.75, 0.5, 1.0))
+
+    def test_compute_inside_mask_includes_boundary_and_excludes_outside(self):
+        bounds = (0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+        pts = np.array(
+            [
+                [5.0, 5.0, 5.0],
+                [0.0, 10.0, 5.0],
+                [10.1, 5.0, 5.0],
+                [5.0, -0.1, 5.0],
+            ],
+            dtype=np.float64,
+        )
+        mask = compute_inside_mask(pts, bounds)
+        np.testing.assert_array_equal(mask, np.array([True, True, False, False]))
+
+    def test_roi_filter_blobs_df_does_not_mutate_source(self):
+        roi = RegionOfInterest(x_min=0.0, x_max=10.0, y_min=0.0, y_max=10.0, z_min=0.0, z_max=10.0)
+        df = pd.DataFrame(
+            {
+                "frame": [0, 0],
+                "label": [1, 2],
+                "x_um": [5.0, 20.0],
+                "y_um": [5.0, 5.0],
+                "z_um": [5.0, 5.0],
+            }
+        )
+        original_copy = df.copy(deep=True)
+        filtered = roi.filter_blobs_df(df)
+        pd.testing.assert_frame_equal(df, original_copy)
+        assert list(filtered["label"]) == [1]
+
+
+class TestSubRoiTrajectorySplitting:
+    @staticmethod
+    def _sample_prepared() -> PreparedTrajectories:
+        df = pd.DataFrame(
+            {
+                "track_id": [1, 1, 2, 2, 3, 3],
+                "frame": [0, 2, 0, 1, 0, 1],
+                "x_um": [-10.0, 10.0, 0.0, 2.0, -9.0, -6.0],
+                "y_um": [0.0, 0.0, 0.0, 0.0, 8.0, 8.0],
+                "z_um": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                "t_s": [0.0, 2.0, 0.0, 1.0, 0.0, 1.0],
+            }
+        )
+        return PreparedTrajectories.from_dataframe(df)
+
+    def test_disabled_or_none_bounds_keeps_full_alpha_and_does_not_mutate_prepared(self):
+        prepared = self._sample_prepared()
+        pts_before = prepared.points_um.copy()
+        frames_before = prepared.frames.copy()
+        tids_before = prepared.track_ids.copy()
+        speeds_before = prepared.speeds.copy()
+
+        cfg = TrajectoryRenderConfig(color_mode=TrajectoryColorMode.TRACK_ID)
+        state = VisSubRoiState(enabled=False, bounds=(-4.0, 4.0, -4.0, 4.0, -4.0, 4.0), outside_opacity=0.01)
+
+        poly = build_sub_roi_trajectory_polydata(prepared, current_frame=2, config=cfg, state=state)
+        assert poly.n_points > 0
+        assert "rgba" in poly.point_data
+        np.testing.assert_array_equal(
+            poly.point_data["rgba"][:, 3], np.full(poly.n_points, 255, dtype=np.uint8)
+        )
+
+        np.testing.assert_array_equal(prepared.points_um, pts_before)
+        np.testing.assert_array_equal(prepared.frames, frames_before)
+        np.testing.assert_array_equal(prepared.track_ids, tids_before)
+        np.testing.assert_array_equal(prepared.speeds, speeds_before)
+
+    def test_crossing_track_splits_at_aabb_faces_and_assigns_inside_outside_alpha(self):
+        prepared = self._sample_prepared()
+        cfg = TrajectoryRenderConfig(color_mode=TrajectoryColorMode.SPEED, colormap="turbo")
+        state = VisSubRoiState(enabled=True, bounds=(-4.0, 4.0, -4.0, 4.0, -4.0, 4.0), outside_opacity=0.01)
+
+        poly = build_sub_roi_trajectory_polydata(prepared, current_frame=2, config=cfg, state=state)
+        assert poly.n_points > 0
+        assert poly.n_cells > 0
+
+        # Track 1 crosses x = -4.0 (t=0.3) and x = +4.0 (t=0.7), so frame values 0.6 and 1.4 appear
+        frames = poly.point_data["frame"]
+        assert np.any(np.isclose(frames, 0.6, atol=1e-3))
+        assert np.any(np.isclose(frames, 1.4, atol=1e-3))
+
+        # Track 2 is inside (-4..4); Track 3 is outside (x=-9..-6, y=8)
+        tids = poly.point_data["track_id"]
+        alphas = poly.point_data["rgba"][:, 3]
+
+        track2_alphas = alphas[tids == 2]
+        track3_alphas = alphas[tids == 3]
+        assert len(track2_alphas) > 0
+        assert len(track3_alphas) > 0
+        assert np.all(track2_alphas == 255)
+        assert np.all(track3_alphas == state.outside_alpha)
