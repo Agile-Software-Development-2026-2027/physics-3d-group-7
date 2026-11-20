@@ -40,7 +40,7 @@ def coerce_preproc_params(params: PreprocParams | Mapping[str, Any] | None) -> P
     if isinstance(params, PreprocParams):
         return params
     if isinstance(params, Mapping):
-        # May want to add a check for keys that are not in BlobParams to avoid silent errors
+        # May want to add a check for keys that are not in PreprocParams to avoid silent errors
         return PreprocParams.from_dict(dict(params))
 
 

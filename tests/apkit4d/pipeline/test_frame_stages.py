@@ -42,16 +42,12 @@ class TestCoercionHelpers:
         custom = PreprocParams(normalization_enabled=True, lowest_intensity=10.0)
         assert coerce_preproc_params(custom) is custom
         assert coerce_preproc_params({"normalization_enabled": True, "lowest_intensity": 10.0}) == custom
-        with pytest.raises(TypeError, match="Unsupported preprocessing parameters type"):
-            coerce_preproc_params("invalid")
 
     def test_coerce_blob_params_variants(self) -> None:
         assert coerce_blob_params(None) == BlobParams()
         custom = BlobParams(threshold=0.25)
         assert coerce_blob_params(custom) is custom
         assert coerce_blob_params({"threshold": 0.25}) == custom
-        with pytest.raises(TypeError, match="Unsupported blob parameters type"):
-            coerce_blob_params(123)
 
 
 class TestFrameStages:

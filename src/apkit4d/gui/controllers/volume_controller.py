@@ -25,12 +25,12 @@ from attr import dataclass
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
-from apkit4d.blob_detection import voxel_offset
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.image import Image
+from apkit4d.pipeline.frame_stages import crop_frame
 from apkit4d.preprocessing import PreprocParams, preprocess, suggest_window
 from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.visualization.data_mapper import create_volume_grid
@@ -71,7 +71,7 @@ class PreparedVolume:
     is_image_normalized: bool
     frame: int
     voxel: tuple[float, float, float]  # (z, y, x) in micrometers
-    roi_volume: Image[np.uint16]  # cropped, raw: for the weighted centroid
+    roi_volume: Image[np.float32]  # cropped, raw: for the weighted centroid
     image: Image[np.float32]  # cropped, preprocessed: what the algorithm looks at
     offset: tuple[int, int, int]  # origin of the crop in voxels (z, y, x)
 
@@ -123,13 +123,14 @@ class VolumeController(QObject):
         self._current_frame: int = 0
 
         # the unaltered raw volume read from the CZI
-        self._current_full_volume: Image[np.uint16] | None = None
+        self._current_full_volume: Image[np.float32] | None = None
 
         # the volume obtained via taking the ROI from the full volume
-        self._current_roi_volume: Image[np.uint16] | None = None
+        self._current_roi_volume: Image[np.float32] | None = None
 
         # origin of the roi, None = (0, 0, 0)
         self._current_roi_origin: tuple[float, float, float] | None = None
+        self._current_roi_offset: tuple[int, int, int] = (0, 0, 0)
 
         self._preproc_params = PreprocParams()
         self._preproc_busy = False
@@ -146,7 +147,7 @@ class VolumeController(QObject):
         self._suggest_runner.failed.connect(self._on_suggest_window_failed)
 
     @property
-    def current_roi_volume(self) -> Image[np.uint16] | None:
+    def current_roi_volume(self) -> Image[np.float32] | None:
         """The volume obtained via taking the ROI from the full volume."""
         return self._current_roi_volume
 
@@ -213,11 +214,6 @@ class VolumeController(QObject):
             self._params_changed = False
 
             if shown and self._current_roi_volume is not None:
-                offset = (
-                    (0, 0, 0)
-                    if self._current_roi_origin is None
-                    else voxel_offset(self._current_roi_origin, self._voxel)
-                )
                 self.volume_prepared.emit(
                     PreparedVolume(
                         self._preproc_params.normalization_enabled,
@@ -225,7 +221,7 @@ class VolumeController(QObject):
                         self._voxel,
                         self._current_roi_volume,
                         volume,
-                        offset,
+                        self._current_roi_offset,
                     )
                 )
 
@@ -252,6 +248,7 @@ class VolumeController(QObject):
         self._current_full_volume = None
         self._current_roi_volume = None
         self._current_roi_origin = None
+        self._current_roi_offset = (0, 0, 0)
         self.roi_volume_changed.emit(None)
         self._first_frame = True
         self._last_grid = None
@@ -307,23 +304,17 @@ class VolumeController(QObject):
             self._apply_roi_and_show(volume)
         self._read_the_next_frame()
 
-    def _apply_roi_and_show(self, full_volume: Image[np.uint16]) -> None:
-        """Extract the ROI slice from `full_volume`, then preprocess or display it"""
-
-        roi_volume, roi_origin = self._extract_roi(full_volume)
-        self._current_roi_volume = roi_volume
-        self._current_roi_origin = roi_origin
-        self.roi_volume_changed.emit(roi_volume)
+    def _apply_roi_and_show(self, full_volume: Image[np.float32]) -> None:
+        """Extract the ROI slice from `full_volume`, then preprocess or display it."""
+        cropped = crop_frame(full_volume, self._current_frame, self._voxel, self._roi)
+        self._current_roi_volume = cropped.raw_roi_volume
+        self._current_roi_origin = cropped.origin_xyz_um if self._roi is not None else None
+        self._current_roi_offset = cropped.voxel_offset_zyx
+        self.roi_volume_changed.emit(cropped.raw_roi_volume)
         if self._preproc_busy:
             self._preproc_pending = True
         else:
-            self._start_preprocessing(roi_volume, self._preproc_params)
-
-    def _extract_roi(self, volume: NDArray) -> tuple[NDArray, tuple[float, float, float] | None]:
-        if self._roi is not None:
-            sub_vol, sub_origin = self._roi.extract_subvolume(volume, self._voxel)
-            return sub_vol, sub_origin
-        return volume, None
+            self._start_preprocessing(cropped.raw_roi_volume, self._preproc_params)
 
     def _on_read_failed(self, _task_id: int, error: Exception) -> None:
         generation, frame = self._finish_reading()
@@ -345,7 +336,7 @@ class VolumeController(QObject):
     def _show(
         self,
         frame: int,
-        volume: Image[np.uint16],
+        volume: Image[np.float32],
         origin: tuple[float, float, float] | None,
         force_update: bool = False,
     ) -> bool:

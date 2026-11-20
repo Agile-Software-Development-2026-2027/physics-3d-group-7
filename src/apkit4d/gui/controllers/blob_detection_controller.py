@@ -9,12 +9,15 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
-from apkit4d.blob_detection import BlobParams, find_blobs
+from apkit4d.blob_detection import BlobParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
 from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.pipeline.contracts import CroppedFrame, PreprocessedFrame
+from apkit4d.pipeline.frame_stages import detect_blobs_in_frame
+from apkit4d.preprocessing import PreprocParams
 from apkit4d.visualization.data_mapper import create_blob_mesh
 
 
@@ -33,17 +36,29 @@ class BlobDetection:
 
 def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
     """Runs in the worker thread: only the detection, the volume is already prepared."""
-
-    blobs, _labels, seeds = find_blobs(
-        prepared.image,
-        params,
-        prepared.voxel,
-        intensity=prepared.roi_volume,
-        offset=prepared.offset,
+    cropped = CroppedFrame(
         frame=prepared.frame,
+        raw_roi_volume=prepared.roi_volume,
+        voxel_um=prepared.voxel,
+        origin_xyz_um=(
+            prepared.offset[2] * prepared.voxel[2],
+            prepared.offset[1] * prepared.voxel[1],
+            prepared.offset[0] * prepared.voxel[0],
+        ),
+        voxel_offset_zyx=prepared.offset,
     )
-
-    return BlobDetection(prepared.frame, blobs, seeds)
+    preproc = PreprocessedFrame(
+        cropped=cropped,
+        image=prepared.image,
+        params=PreprocParams(normalization_enabled=prepared.is_image_normalized),
+    )
+    result = detect_blobs_in_frame(
+        preproc,
+        params,
+        include_time=False,
+        require_normalized=True,
+    )
+    return BlobDetection(result.frame, result.detections, result.seeds_response)
 
 
 class BlobDetectionController(QObject):

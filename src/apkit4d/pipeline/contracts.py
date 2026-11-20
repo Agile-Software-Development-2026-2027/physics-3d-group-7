@@ -17,7 +17,11 @@ type ProgressCallback = Callable[[int, int, str], None]
 
 
 class CancelToken(Protocol):
-    """Cooperative cancellation contract for background tasks."""
+    """Cooperative cancellation contract for background tasks.
+
+    This is mainly meant for upsies, liek starting a long queue butr forgot to edit something, currently we
+    cannot stop a job, while we migth never add this it is there.
+    """
 
     @property
     def is_cancelled(self) -> bool: ...

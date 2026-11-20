@@ -11,13 +11,20 @@ RefactorNote:
 from pathlib import Path
 from typing import Any, Final
 
-import numpy as np
 import pandas as pd
 import psutil
 
-from apkit4d.blob_detection import BlobParams, find_blobs
+from apkit4d.blob_detection import BlobParams
 from apkit4d.io.czi import CziSource
-from apkit4d.preprocessing import PreprocParams, preprocess
+from apkit4d.pipeline.frame_stages import (
+    coerce_blob_params,
+    coerce_preproc_params,
+    coerce_roi,
+    crop_frame,
+    detect_blobs_in_frame,
+    preprocess_frame,
+)
+from apkit4d.preprocessing import PreprocParams
 from apkit4d.roi import RegionOfInterest
 
 # Estimated memory peak per worker process on a typical 3D volume (in gigabytes)
@@ -88,67 +95,21 @@ def detect_frame(
         Refactored from `batch.py`, function `detect_frame`.
     """
     volume = src.read(t)
+    roi_obj = coerce_roi(roi)
+    preproc_obj = coerce_preproc_params(pp)
+    blob_obj = coerce_blob_params(bp)
 
-    roi_obj: RegionOfInterest | None
-    if not roi:
-        roi_obj = None
-    elif isinstance(roi, RegionOfInterest):
-        roi_obj = roi
-    elif isinstance(roi, dict):
-        roi_obj = RegionOfInterest.from_dict(roi)
-    else:
-        roi_obj = RegionOfInterest(
-            x_min=roi.x_min,
-            x_max=roi.x_max,
-            y_min=roi.y_min,
-            y_max=roi.y_max,
-            z_min=roi.z_min,
-            z_max=roi.z_max,
-        )
-
-    if roi_obj is None:
-        # no ROI: the whole volume is processed
-        slices = (slice(None), slice(None), slice(None))
-        offset = (0, 0, 0)
-    else:
-        # the ROI is in micrometers, so it is converted to voxel indices (Z, Y, X)
-        slices, _ = roi_obj.to_voxel_slices(volume.shape, src.info.voxel)
-        offset = (slices[0].start, slices[1].start, slices[2].start)
-    vol_roi = volume[slices]
-
-    preproc_obj: PreprocParams
-    if pp is None:
-        preproc_obj = PreprocParams()
-    elif isinstance(pp, dict):
-        preproc_obj = PreprocParams.from_dict(pp)
-    else:
-        preproc_obj = pp
-
-    preprocessed_img = preprocess(vol_roi, preproc_obj, src.info.voxel)
-
-    blob_obj: BlobParams
-    if bp is None:
-        blob_obj = BlobParams()
-    elif isinstance(bp, dict):
-        blob_obj = BlobParams.from_dict(bp)
-    else:
-        blob_obj = bp
-
-    detections, _, _ = find_blobs(
-        image=preprocessed_img,
-        p=blob_obj,
-        voxel_dim=src.info.voxel,
-        intensity=vol_roi,
-        frame=t,
-        offset=offset,
+    cropped = crop_frame(volume, frame=t, voxel_um=src.info.voxel, roi=roi_obj)
+    preproc = preprocess_frame(cropped, preproc_obj)
+    result = detect_blobs_in_frame(
+        preproc,
+        blob_obj,
+        dt_s=src.info.dt_s,
+        include_time=include_time,
+        return_labels=False,
+        require_normalized=False,
     )
-
-    if include_time and len(detections) > 0:
-        detections = detections.copy()
-        time_seconds = t * src.info.dt_s if src.info.dt_s is not None else np.nan
-        detections.insert(1, "t_s", time_seconds)
-
-    return detections
+    return result.detections
 
 
 def _detect_frames_worker(
@@ -191,29 +152,9 @@ def _detect_frames_worker(
     if bp is None and bp_dict is not None:
         bp = bp_dict
 
-    preproc_params: PreprocParams
-    if isinstance(pp, PreprocParams):
-        preproc_params = pp
-    elif isinstance(pp, dict):
-        preproc_params = PreprocParams.from_dict(pp)
-    else:
-        preproc_params = PreprocParams()
-
-    blob_params: BlobParams
-    if isinstance(bp, BlobParams):
-        blob_params = bp
-    elif isinstance(bp, dict):
-        blob_params = BlobParams.from_dict(bp)
-    else:
-        blob_params = BlobParams()
-
-    roi_params: RegionOfInterest | dict[str, Any] | Any | None
-    if isinstance(roi, RegionOfInterest) or roi is None:
-        roi_params = roi
-    elif isinstance(roi, dict):
-        roi_params = RegionOfInterest.from_dict(roi) if roi else None
-    else:
-        roi_params = roi
+    preproc_params = coerce_preproc_params(pp)
+    blob_params = coerce_blob_params(bp)
+    roi_params = coerce_roi(roi)
 
     frame_list = frames if frames is not None else []
     src = CziSource(Path(czi_path), channel=channel)
