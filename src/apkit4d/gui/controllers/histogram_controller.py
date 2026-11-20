@@ -9,7 +9,6 @@ import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject
 
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
@@ -76,10 +75,9 @@ class HistogramController(QObject):
         )
         self._histogram.set_normalization_enabled(initial_params.normalization_enabled)
 
-        # connect VolumeController volume and params events
+        # connect VolumeController volume events
         if self._volume_controller is not None:
             self._volume_controller.roi_volume_changed.connect(self._on_roi_volume_changed)
-            self._volume_controller.preproc_params_changed.connect(self._on_volume_preproc_params_changed)
             self._volume_controller.volume_prepared.connect(self._on_volume_prepared)
             self._volume_controller.failed.connect(self._on_volume_failed)
             if self._volume_controller.current_roi_volume is not None:
@@ -220,29 +218,25 @@ class HistogramController(QObject):
         if self._preproc_histogram is not None:
             self._preproc_histogram.set_volume(None)
 
-    def _on_volume_preproc_params_changed(self, params: object) -> None:
-        """Handle parameter updates directly from VolumeController."""
-        if isinstance(params, PreprocParams):
-            self._histogram.set_intensity_bounds(params.lowest_intensity, params.highest_intensity)
-            self._histogram.set_normalization_enabled(params.normalization_enabled)
-
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         """Handle pipeline step parameter updates from PipelineModel."""
         if step == PipelineStep.PREPROCESSING:
             params = self._pipeline_model.get_preproc_params()
-            self._histogram.set_intensity_bounds(params.lowest_intensity, params.highest_intensity)
+            if (
+                self._histogram.lowest_intensity != params.lowest_intensity
+                or self._histogram.highest_intensity != params.highest_intensity
+            ):
+                self._histogram.set_intensity_bounds(params.lowest_intensity, params.highest_intensity)
             self._histogram.set_normalization_enabled(params.normalization_enabled)
 
     def _on_lowest_intensity_dragged(self, value: float) -> None:
-        """Update PreprocessingSection and model when lowest_intensity line is dragged."""
+        """Update PreprocessingSection (with signals blocked) and PipelineModel directly."""
         if self._preproc_section is not None:
             self._preproc_section.set_lowest_intensity(value)
-        else:
-            self._pipeline_model.update_step_params(PipelineStep.PREPROCESSING, lowest_intensity=value)
+        self._pipeline_model.update_step_params(PipelineStep.PREPROCESSING, lowest_intensity=value)
 
     def _on_highest_intensity_dragged(self, value: float) -> None:
-        """Update PreprocessingSection and model when highest_intensity line is dragged."""
+        """Update PreprocessingSection (with signals blocked) and PipelineModel directly."""
         if self._preproc_section is not None:
             self._preproc_section.set_highest_intensity(value)
-        else:
-            self._pipeline_model.update_step_params(PipelineStep.PREPROCESSING, highest_intensity=value)
+        self._pipeline_model.update_step_params(PipelineStep.PREPROCESSING, highest_intensity=value)
