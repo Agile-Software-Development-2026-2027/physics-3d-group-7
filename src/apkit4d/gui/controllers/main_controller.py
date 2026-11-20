@@ -48,6 +48,7 @@ from apkit4d.gui.models.pipeline_model import (
 )
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import PrecomputedSession, PrecomputedSource, infer_completed_steps
@@ -214,6 +215,7 @@ class MainController(QObject):
             files=self._file_controller,
             parent=self,
         )
+        window.video_export_requested.connect(self._show_video_export_dialog)
 
         self._has_precomputed_session = False
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
@@ -280,6 +282,10 @@ class MainController(QObject):
             BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
             roi,
         )
+
+    def _show_video_export_dialog(self) -> None:
+        dialog = VideoExportDialog(self._video_export_controller, self._window)
+        dialog.exec()
 
     def _on_detection_step_status_changed(
         self,

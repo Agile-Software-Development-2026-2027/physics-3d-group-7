@@ -1,0 +1,18 @@
+"""
+Object names of the video export dialog.
+"""
+
+EXPORT_VIDEO_ACTION: str = "export_video_action"
+VIDEO_EXPORT_DIALOG: str = "video_export_dialog"
+VIDEO_EXPORT_PREVIEW: str = "video_export_preview"
+VIDEO_EXPORT_FIRST_FRAME: str = "video_export_first_frame"
+VIDEO_EXPORT_LAST_FRAME: str = "video_export_last_frame"
+VIDEO_EXPORT_CRF_SLIDER: str = "video_export_crf_slider"
+VIDEO_EXPORT_CRF_VALUE: str = "video_export_crf_value"
+VIDEO_EXPORT_FPS: str = "video_export_fps"
+VIDEO_EXPORT_OUTPUT_PATH: str = "video_export_output_path"
+VIDEO_EXPORT_BROWSE_BUTTON: str = "video_export_browse_button"
+VIDEO_EXPORT_EXPORT_BUTTON: str = "video_export_export_button"
+VIDEO_EXPORT_CANCEL_BUTTON: str = "video_export_cancel_button"
+VIDEO_EXPORT_PROGRESS_BAR: str = "video_export_progress_bar"
+VIDEO_EXPORT_STATUS_LABEL: str = "video_export_status_label"
