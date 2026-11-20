@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, Signal
 
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
-from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
+from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.io.czi import CziInfo, CziSource
 
 
