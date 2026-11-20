@@ -127,7 +127,6 @@ class VideoExportDialog(QDialog):
 
         layout.addLayout(crf_slider_row)
 
-        # FPS row
         fps_row = QHBoxLayout()
         fps_row.addWidget(QLabel(texts.EXPORT_LABEL_FPS))
         self._fps_spin = QSpinBox()

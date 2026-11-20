@@ -377,7 +377,9 @@ class VideoExportController(QObject):
 
         if self._pending_preview_frame is not None and frame_idx == self._pending_preview_frame:
             self._pending_preview_frame = None
-            if self._view is not None:
+            if self._view is not None and not (
+                self._is_exporting and frame_idx == self._export_current_frame
+            ):
                 img = self._view.screenshot()
                 self.preview_ready.emit(frame_idx, img)
 
@@ -405,7 +407,10 @@ class VideoExportController(QObject):
                 raise RuntimeError("No 3D view available to capture frame.")
 
             assert self._writer is not None, "Writer is created when export starts"
-            self._writer.append_data(self._view.screenshot(window_size=self._resolution))
+            frame = self._export_current_frame
+            image = self._view.screenshot(window_size=self._resolution)
+            self._writer.append_data(image)
+            self.preview_ready.emit(frame, image)
 
             done = self._export_current_frame - self._first_frame + 1  # next
             self.progress_changed.emit(done, self.export_frame_count)

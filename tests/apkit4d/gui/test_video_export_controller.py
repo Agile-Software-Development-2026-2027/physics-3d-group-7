@@ -182,6 +182,8 @@ class TestVideoExportExecution:
         controller.set_frame_range(0, 2)
         controller.set_resolution(1280, 720)
         controller.set_output_path(out)
+        previewed_frames: list[int] = []
+        controller.preview_ready.connect(lambda frame, _: previewed_frames.append(frame))
 
         with qtbot.waitSignal(controller.export_started):
             controller.start_export()
@@ -202,6 +204,7 @@ class TestVideoExportExecution:
         assert out.stat().st_size > 0
         assert view.screenshot_call_count == 3
         assert view.screenshot_window_sizes == [(1280, 720)] * 3
+        assert previewed_frames == [0, 1, 2]
         assert mock_playback.frame == 4
         assert volume.requested_frames == [0, 1, 2, 4]
 
