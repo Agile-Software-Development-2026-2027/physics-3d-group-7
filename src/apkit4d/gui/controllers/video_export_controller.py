@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import imageio
-import numpy as np
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -328,7 +327,7 @@ class VideoExportController(QObject):
             if self._playback_controller.frame != frame:
                 self._playback_controller.go_to_frame(frame)  # updates the main view
                 if self._volume_controller is None:
-                    QTimer.singleShot(0, self._capture_and_advance)  # capture diretly
+                    QTimer.singleShot(0, self._capture_and_advance)  # capture directly
                 return
             else:  # already on the frame
                 if (
@@ -374,19 +373,8 @@ class VideoExportController(QObject):
             if self._view is None:
                 raise RuntimeError("No 3D view available to capture frame.")
 
-            frame_img = self._view.screenshot()
-            arr = np.asarray(frame_img)
-            if arr.ndim == 3 and arr.shape[2] == 4:
-                arr = arr[:, :, :3]
-
-            if arr.dtype != np.uint8:
-                if np.issubdtype(arr.dtype, np.floating):
-                    arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
-                else:
-                    arr = np.clip(arr, 0, 255).astype(np.uint8)
-
             assert self._writer is not None, "Writer is created when export starts"
-            self._writer.append_data(arr)  # append the bytes of the image
+            self._writer.append_data(self._view.screenshot())  # append the bytes of the image
 
             done = self._export_current_frame - self._first_frame + 1  # next
             self.progress_changed.emit(done, self.export_frame_count)
