@@ -8,7 +8,6 @@ frames, the `VolumeController` shows them in the 3D view, the `AppearanceControl
 orchestrates the analysis pipeline.
 """
 
-from functools import partial
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -16,9 +15,6 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
 from apkit4d.core.models import TrackingConfig
-from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
@@ -29,10 +25,8 @@ from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.roi_controller import RoiStageController
 from apkit4d.gui.controllers.seed_histogram_controller import SeedHistogramController
-from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.controllers.theme_controller import ThemeController
 from apkit4d.gui.controllers.trajectory_controller import TrajectoryController, TrajectoryView
-from apkit4d.gui.controllers.trajectory_detection import DetectionData, detect_sequence
 from apkit4d.gui.controllers.trajectory_linking_controller import (
     TrajectoryLinkingController,
 )
@@ -88,18 +82,6 @@ class MainController(QObject):
         self._theme_controller = ThemeController(app, self)
         self._pipeline_model = PipelineModel(self)
         self._pipeline_controller = PipelineController(self._pipeline_model, window.right_panel, self)
-        self._detection_runner = TaskRunner(self)
-        self._detection_runner.succeeded.connect(self._on_detection_ready)
-        self._detection_runner.failed.connect(self._on_detection_failed)
-
-        self._detection_task: int | None = None
-        self._detection_generation = 0
-        self._detection_running_generation: int | None = None
-        self._detection_running_source: FrameSource | None = None
-
-        self._detection_running_params: tuple[PreprocParams, BlobParams, RegionOfInterest | None] | None = (
-            None
-        )
 
         self._tracking_controller = TrajectoryLinkingController(self)
         self._tracking_controller.result_ready.connect(self._on_tracking_ready)
@@ -285,137 +267,6 @@ class MainController(QObject):
     def tracking_result(self) -> TrackingResult | None:
         """Return the latest accepted tracking result."""
         return self._tracking_result
-
-    def _detection_params(
-        self,
-    ) -> tuple[PreprocParams, BlobParams, RegionOfInterest | None]:
-        """Take a snapshot of the sequence detection parameters."""
-        roi = self._volume_controller.roi if self._volume_controller is not None else None
-
-        if self._volume_controller is None:
-            roi_dict = self._pipeline_model.get_step_params(PipelineStep.ROI)
-            roi = RegionOfInterest.from_dict(roi_dict) if roi_dict else None
-
-        return (
-            self._pipeline_model.get_preproc_params(),
-            BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
-            roi,
-        )
-
-    def _on_detection_step_status_changed(
-        self,
-        step: PipelineStep,
-        status: StepStatus,
-    ) -> None:
-        if step != PipelineStep.DETECTION:
-            return
-
-        if status == StepStatus.RUNNING:
-            self._start_detection_if_needed()
-        else:
-            self._detection_generation += 1
-
-    def _on_detection_pipeline_reset(self) -> None:
-        self._detection_generation += 1
-
-    def _start_detection_if_needed(self) -> None:
-        """Compute detections using the already-open CZI source."""
-        if (
-            self._pipeline_model.get_status(PipelineStep.DETECTION) != StepStatus.RUNNING
-            or self._detection_task is not None
-        ):
-            return
-
-        # Reuse detections already stored in the pipeline.
-        if self._pipeline_model.batch_results is not None:
-            self._pipeline_controller.complete_stage(PipelineStep.DETECTION)
-            return
-
-        try:
-            source = self._file_controller.source
-
-            if source is None:
-                raise ValueError("Open a CZI file before running detection.")
-
-            params = self._detection_params()
-
-            self._detection_running_source = source
-            self._detection_running_params = params
-            self._detection_running_generation = self._detection_generation
-
-            preproc, blob, roi = params
-
-            self._detection_task = self._detection_runner.run(
-                partial(
-                    detect_sequence,
-                    cast(CziSource, source),
-                    preproc,
-                    blob,
-                    roi,
-                )
-            )
-
-        except Exception as error:
-            self._report_detection_failure(error)
-
-    def _detection_result_is_current(self) -> bool:
-        return (
-            self._detection_running_generation == self._detection_generation
-            and self._pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.RUNNING
-            and self._file_controller.source is self._detection_running_source
-            and self._detection_running_params == self._detection_params()
-        )
-
-    def _on_detection_ready(
-        self,
-        task_id: int,
-        result: object,
-    ) -> None:
-        if task_id != self._detection_task:
-            return
-
-        self._detection_task = None
-
-        if not self._detection_result_is_current():
-            self._start_detection_if_needed()
-            return
-
-        if not isinstance(result, DetectionData):
-            self._report_detection_failure(TypeError("Detection returned an unexpected result."))
-            return
-
-        self._pipeline_model.set_batch_results(
-            result.detections,
-            result.metadata,
-        )
-
-        self._pipeline_controller.complete_stage(PipelineStep.DETECTION)
-
-    def _on_detection_failed(
-        self,
-        task_id: int,
-        error: object,
-    ) -> None:
-        if task_id != self._detection_task:
-            return
-
-        self._detection_task = None
-
-        if not self._detection_result_is_current():
-            self._start_detection_if_needed()
-            return
-
-        self._report_detection_failure(error)
-
-    def _report_detection_failure(self, error: object) -> None:
-        self._pipeline_model.invalidate_from(PipelineStep.DETECTION)
-
-        reason = str(error) or type(error).__name__
-
-        self._pipeline_controller.report_stage_failure(
-            "Blob detection failed",
-            reason,
-        )
 
     @property
     def trajectory_controller(self) -> TrajectoryController | None:

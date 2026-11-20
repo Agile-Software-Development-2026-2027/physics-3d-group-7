@@ -173,7 +173,7 @@ def test_detection_reuses_stored_results(qtbot, qapp, monkeypatch):
         raise AssertionError("Sequence detection was run again")
 
     monkeypatch.setattr(
-        "apkit4d.gui.controllers.main_controller.detect_sequence",
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
         forbidden,
     )
 
