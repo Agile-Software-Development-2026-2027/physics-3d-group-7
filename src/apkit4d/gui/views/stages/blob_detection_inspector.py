@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -453,6 +453,58 @@ class BlobDetectionInspector(QWidget):
 
     def disable_update_on_change(self, disabled: bool):
         self._update_on_change.setDisabled(disabled)
+
+    def get_params(self) -> BlobParams:
+        """Read current detection widget values into a `BlobParams` instance."""
+        return BlobParams(
+            diameter_xy_um=self._diameter_xy.value(),
+            diameter_z_um=self._diameter_z.value(),
+            threshold=self._lo_g_threshold.value(),
+            split=self._seed_separation.value(),
+            grow_frac=self._boundary.value(),
+            min_volume_um3=self._min_volume.value(),
+            max_volume_um3=self._max_volume.value(),
+        )
+
+    def set_params(self, params: BlobParams) -> None:
+        """Populate detection parameter widgets from `params` with signals blocked."""
+        sync_z = self._diameter_z_equals_xy.isChecked() and params.diameter_z_um == params.diameter_xy_um
+        with (
+            QSignalBlocker(self._diameter_xy),
+            QSignalBlocker(self._diameter_z),
+            QSignalBlocker(self._diameter_z_equals_xy),
+            QSignalBlocker(self._lo_g_threshold),
+            QSignalBlocker(self._seed_separation),
+            QSignalBlocker(self._boundary),
+            QSignalBlocker(self._min_volume),
+            QSignalBlocker(self._max_volume),
+        ):
+            self._diameter_z_equals_xy.setChecked(sync_z)
+            self._diameter_z.setDisabled(sync_z)
+            self._diameter_xy.setValue(params.diameter_xy_um)
+            self._diameter_z.setValue(params.diameter_z_um)
+            self._lo_g_threshold.setValue(params.threshold)
+            self._seed_separation.setValue(params.split)
+            self._boundary.setValue(params.grow_frac)
+            self._min_volume.setValue(params.min_volume_um3)
+            self._max_volume.setValue(params.max_volume_um3)
+
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable interactive detection parameter controls."""
+        for widget in (
+            self._diameter_xy,
+            self._diameter_z_equals_xy,
+            self._lo_g_threshold,
+            self._seed_separation,
+            self._boundary,
+            self._min_volume,
+            self._max_volume,
+            self._update_on_change,
+            self._show_segments,
+            self._find_blobs_button,
+        ):
+            widget.setEnabled(enabled)
+        self._diameter_z.setEnabled(enabled and not self._diameter_z_equals_xy.isChecked())
 
     def apply_theme(self, colors: ThemeColors) -> None:
         self._update_on_change_info.setStyleSheet(f"color: {colors.disabled_text}")

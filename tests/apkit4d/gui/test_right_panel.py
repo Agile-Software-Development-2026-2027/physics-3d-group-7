@@ -283,3 +283,23 @@ def test_right_panel_tracking_param_changed_signal(qtbot: QtBot) -> None:
     with qtbot.waitSignal(panel.step_param_changed) as blocker:
         max_speed.setValue(300.0)
     assert blocker.args == ["tracking", "max_speed_um_s", 300.0]
+
+
+def test_right_panel_relays_preprocessing_signals(qtbot: QtBot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    section = panel.get_section(PipelineStep.PREPROCESSING)
+    assert section is not None
+
+    with qtbot.waitSignal(panel.step_param_changed) as param_blocker:
+        section.denoise_xy_box.setValue(5.0)
+    assert param_blocker.args == ["preprocessing", "denoise_xy_scale_um", 5.0]
+
+    with qtbot.waitSignal(panel.step_params_reset) as reset_blocker:
+        section.reset_btn.click()
+    assert reset_blocker.args == ["preprocessing"]
+
+    with qtbot.waitSignal(panel.complete_stage_requested) as complete_blocker:
+        section.complete_btn.click()
+    assert complete_blocker.args == [PipelineStep.PREPROCESSING]

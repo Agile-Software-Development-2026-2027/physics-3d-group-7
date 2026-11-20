@@ -1,14 +1,5 @@
 """Preprocessing section accordion of the right panel"""
 
-from typing import TYPE_CHECKING
-
-from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
-from apkit4d.gui.views.widgets.frame_slider import FrameSlider
-from apkit4d.gui.views.widgets.v_separator import VSeparator
-
-if TYPE_CHECKING:
-    from apkit4d.gui.views.panels.right_panel import RightPanel
-
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -22,8 +13,10 @@ from PySide6.QtWidgets import (
 
 from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.views.widgets.accordion import AccordionSection
+from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
+from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.v_separator import VSeparator
 
 
 def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:
@@ -41,19 +34,14 @@ def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = Non
 class PreprocessingSection(AccordionSection):
     """The preprocessing accordion"""
 
+    param_changed = Signal(str, object)
+    reset_requested = Signal()
+    complete_requested = Signal()
     suggest_window_clicked = Signal()
     normalization_toggled = Signal(bool)
 
-    def __init__(self, right_panel: RightPanel):
-        super().__init__(texts.STAGE_TITLE_PREPROCESSING)
-
-        self.right_panel = right_panel
-        self.step = PipelineStep.PREPROCESSING
-        play_btn = self.enable_play_button(
-            callback=lambda s=self.step: self.right_panel._on_play_clicked(s),
-            tooltip=texts.TOOLTIP_PLAY_STAGE,
-        )
-        self.right_panel._plan_buttons[self.step] = play_btn
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(texts.STAGE_TITLE_PREPROCESSING, parent=parent)
 
         # widgets
         self.denoise_xy_scale_um: QDoubleSpinBox
@@ -71,9 +59,47 @@ class PreprocessingSection(AccordionSection):
         self.clahe_enabled: QCheckBox
         self.clahe_clip: QDoubleSpinBox
         self.clahe_kernel_xy_um: QDoubleSpinBox
+        self.reset_btn: QPushButton
         self.complete_btn: QPushButton
 
         self._widgets()
+
+    def get_params(self) -> PreprocParams:
+        """Retrieve the preprocessing parameters."""
+        return self.get_preproc_params()
+
+    def set_params(self, params: PreprocParams) -> None:
+        """Populate preprocessing widgets from `params` with signals blocked."""
+        self.set_preproc_params(params)
+
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable preprocessing controls while preserving dependent states."""
+        for widget in (
+            self.denoise_xy_box,
+            self.denoise_z_box,
+            self.bg_mode,
+            self.normalization_enabled,
+            self.logarithmic_compression_enabled,
+            self.gamma_correction_to_apply,
+            self.reset_btn,
+            self.complete_btn,
+        ):
+            widget.setEnabled(enabled)
+
+        if enabled:
+            self._update_preproc_enabled_states()
+        else:
+            for dependent in (
+                self.bg_percentile,
+                self.bg_sigma_xy_um,
+                self.lowest_instensity,
+                self.highest_intensity,
+                self.suggest_window_btn,
+                self.clahe_enabled,
+                self.clahe_clip,
+                self.clahe_kernel_xy_um,
+            ):
+                dependent.setEnabled(False)
 
     def get_preproc_params(self) -> PreprocParams:
         """Retrieve the preprocessing parameters."""
@@ -157,23 +183,21 @@ class PreprocessingSection(AccordionSection):
             mode = BgMode(mode_str)
         except ValueError:
             mode = BgMode.NONE
-        self.right_panel.step_param_changed.emit(PipelineStep.PREPROCESSING.value, "bg_mode", mode)
+        self.param_changed.emit("bg_mode", mode)
 
     def _on_clahe_toggled(self, checked: bool) -> None:
         self._update_preproc_enabled_states()
-        self.right_panel.step_param_changed.emit(PipelineStep.PREPROCESSING.value, "clahe_enabled", checked)
+        self.param_changed.emit("clahe_enabled", checked)
 
     def _on_normalization_toggled(self, checked: bool) -> None:
         self._update_preproc_enabled_states()
-        self.right_panel.step_param_changed.emit(
-            PipelineStep.PREPROCESSING.value, "normalization_enabled", checked
-        )
+        self.param_changed.emit("normalization_enabled", checked)
         self.normalization_toggled.emit(checked)
 
     def _on_gamma_slider_changed(self, int_val: int) -> None:
         gamma_val = round(int_val / 100.0, 2)
         self.gamma_value_label.setText(f"{gamma_val:.2f}")
-        self.right_panel.step_param_changed.emit(self.step.value, "gamma_correction_to_apply", gamma_val)
+        self.param_changed.emit("gamma_correction_to_apply", gamma_val)
 
     def _widgets(self):
         defaults = PreprocParams()
@@ -186,9 +210,7 @@ class PreprocessingSection(AccordionSection):
         self.denoise_xy_box.setDecimals(2)
         self.denoise_xy_box.setValue(defaults.denoise_xy_scale_um)
         self.denoise_xy_box.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "denoise_xy_scale_um", val
-            )
+            lambda val: self.param_changed.emit("denoise_xy_scale_um", val)
         )
         self.add_widget(
             create_param_row(
@@ -203,9 +225,7 @@ class PreprocessingSection(AccordionSection):
         self.denoise_z_box.setDecimals(2)
         self.denoise_z_box.setValue(defaults.denoise_z_scale_um)
         self.denoise_z_box.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "denoise_z_scale_um", val
-            )
+            lambda val: self.param_changed.emit("denoise_z_scale_um", val)
         )
         self.add_widget(
             create_param_row(
@@ -233,9 +253,7 @@ class PreprocessingSection(AccordionSection):
         self.bg_percentile.setDecimals(1)
         self.bg_percentile.setValue(defaults.bg_percentile)
         self.bg_percentile.setEnabled(defaults.bg_mode == BgMode.PERCENTILE_PER_SLICE)
-        self.bg_percentile.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_percentile", val)
-        )
+        self.bg_percentile.valueChanged.connect(lambda val: self.param_changed.emit("bg_percentile", val))
         self.add_widget(
             create_param_row(
                 texts.LABEL_PREPROC_BG_PERCENTILE,
@@ -251,9 +269,7 @@ class PreprocessingSection(AccordionSection):
         self.bg_sigma_xy_um.setDecimals(1)
         self.bg_sigma_xy_um.setValue(defaults.bg_sigma_xy_um)
         self.bg_sigma_xy_um.setEnabled(defaults.bg_mode == BgMode.WIDE_GAUSSIAN)
-        self.bg_sigma_xy_um.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "bg_sigma_xy_um", val)
-        )
+        self.bg_sigma_xy_um.valueChanged.connect(lambda val: self.param_changed.emit("bg_sigma_xy_um", val))
         self.add_widget(
             create_param_row(
                 texts.LABEL_PREPROC_BG_SIGMA_XY,
@@ -280,9 +296,7 @@ class PreprocessingSection(AccordionSection):
         self.lowest_instensity.setDecimals(1)
         self.lowest_instensity.setValue(defaults.lowest_intensity)
         self.lowest_instensity.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "lowest_intensity", val
-            )
+            lambda val: self.param_changed.emit("lowest_intensity", val)
         )
         self.add_widget(
             create_param_row(
@@ -300,9 +314,7 @@ class PreprocessingSection(AccordionSection):
         self.highest_intensity.setDecimals(1)
         self.highest_intensity.setValue(defaults.highest_intensity)
         self.highest_intensity.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "highest_intensity", val
-            )
+            lambda val: self.param_changed.emit("highest_intensity", val)
         )
         self.add_widget(create_param_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
 
@@ -321,9 +333,7 @@ class PreprocessingSection(AccordionSection):
         self.logarithmic_compression_enabled.setToolTip(texts.PREPROC_LOGARITHMIC_COMPRESSION_TOOLTIP)
         self.logarithmic_compression_enabled.setChecked(defaults.logarithmic_compression_enabled)
         self.logarithmic_compression_enabled.toggled.connect(
-            lambda checked, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "logarithmic_compression_enabled", checked
-            )
+            lambda checked: self.param_changed.emit("logarithmic_compression_enabled", checked)
         )
         self.add_widget(self.logarithmic_compression_enabled)
 
@@ -373,9 +383,7 @@ class PreprocessingSection(AccordionSection):
         self.clahe_clip.setDecimals(3)
         self.clahe_clip.setValue(defaults.clahe_clip)
         self.clahe_clip.setEnabled(defaults.clahe_enabled)
-        self.clahe_clip.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(s.value, "clahe_clip", val)
-        )
+        self.clahe_clip.valueChanged.connect(lambda val: self.param_changed.emit("clahe_clip", val))
         self.add_widget(
             create_param_row(
                 texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip, texts.PREPROC_CLAHE_CLIP_TOOLTIP
@@ -390,9 +398,7 @@ class PreprocessingSection(AccordionSection):
         self.clahe_kernel_xy_um.setValue(defaults.clahe_kernel_xy_um)
         self.clahe_kernel_xy_um.setEnabled(defaults.clahe_enabled)
         self.clahe_kernel_xy_um.valueChanged.connect(
-            lambda val, s=self.step: self.right_panel.step_param_changed.emit(
-                s.value, "clahe_kernel_xy_um", val
-            )
+            lambda val: self.param_changed.emit("clahe_kernel_xy_um", val)
         )
         self.add_widget(
             create_param_row(
@@ -404,32 +410,31 @@ class PreprocessingSection(AccordionSection):
 
         self.add_widget(VSeparator())
 
-        reset_btn = QPushButton(texts.PREPROC_RESET)
-        reset_btn.setObjectName(names.PREPROC_RESET)
-        reset_btn.clicked.connect(lambda: self._on_reset(defaults))
-        self.add_widget(reset_btn)
+        self.reset_btn = QPushButton(texts.PREPROC_RESET)
+        self.reset_btn.setObjectName(names.PREPROC_RESET)
+        self.reset_btn.clicked.connect(lambda: self._on_reset(defaults))
+        self.add_widget(self.reset_btn)
 
         self.complete_btn = QPushButton(texts.PREPROC_COMPLETE)
         self.complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
         self.complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-        self.complete_btn.clicked.connect(
-            lambda _, s=self.step: self.right_panel.complete_stage_requested.emit(s)
-        )
+        self.complete_btn.clicked.connect(self.complete_requested.emit)
         self.add_widget(self.complete_btn)
-        self.right_panel._complete_buttons[self.step] = self.complete_btn
 
     def _on_reset(self, defaults: PreprocParams):
         self.set_preproc_params(defaults)
-        self.right_panel.step_params_reset.emit(self.step.value)
+        self.reset_requested.emit()
 
     def set_intensity_window(self, low: float, high: float):
         self.lowest_instensity.setValue(low)
         self.highest_intensity.setValue(high)
 
     def set_lowest_intensity(self, low: float) -> None:
-        """Update lowest intensity value in the spinbox."""
-        self.lowest_instensity.setValue(low)
+        """Update lowest intensity value in the spinbox without emitting signals."""
+        with QSignalBlocker(self.lowest_instensity):
+            self.lowest_instensity.setValue(low)
 
     def set_highest_intensity(self, high: float) -> None:
-        """Update highest intensity value in the spinbox."""
-        self.highest_intensity.setValue(high)
+        """Update highest intensity value in the spinbox without emitting signals."""
+        with QSignalBlocker(self.highest_intensity):
+            self.highest_intensity.setValue(high)

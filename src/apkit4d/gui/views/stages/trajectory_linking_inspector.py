@@ -75,13 +75,21 @@ class TrajectoryLinkingInspector(QWidget):
             self._max_speed,
         )
 
-        reset_button = QPushButton(texts.INSPECTOR_BUTTON_RESET_TRACKING)
-        reset_button.setObjectName(names.TRACKING_INSPECTOR_RESET_BUTTON)
-        reset_button.clicked.connect(self.reset_requested.emit)
+        self._reset_button = QPushButton(texts.INSPECTOR_BUTTON_RESET_TRACKING)
+        self._reset_button.setObjectName(names.TRACKING_INSPECTOR_RESET_BUTTON)
+        self._reset_button.clicked.connect(self.reset_requested.emit)
 
-        form.addRow(reset_button)
+        form.addRow(self._reset_button)
 
         self._main_layout.addWidget(group)
+
+    def get_params(self) -> TrackingConfig:
+        """Read current tracking widget values into a `TrackingConfig` instance."""
+        return TrackingConfig(
+            min_len=self._min_len.value(),
+            max_gap=self._max_gap.value(),
+            max_speed_um_s=self._max_speed.value(),
+        )
 
     def set_params(self, config: TrackingConfig) -> None:
         """Update tracking parameters without emitting change signals."""
@@ -93,3 +101,8 @@ class TrajectoryLinkingInspector(QWidget):
             self._min_len.setValue(config.min_len)
             self._max_gap.setValue(config.max_gap)
             self._max_speed.setValue(config.max_speed_um_s)
+
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable interactive tracking controls."""
+        for widget in (self._min_len, self._max_gap, self._max_speed, self._reset_button):
+            widget.setEnabled(enabled)

@@ -257,3 +257,45 @@ def test_histogram_controller_drag_with_normalization_disabled(qtbot) -> None:
     assert preproc_section.lowest_instensity.value() == pytest.approx(80.0)
     # But preprocessing was NOT run because normalization_enabled is False
     assert vol_ctrl._start_preprocessing.call_count == 0
+
+
+def test_histogram_drag_updates_model_without_circular_panel_signal(qtbot, monkeypatch) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    view = FakeVolumeView()
+    vol_ctrl = VolumeController(window, view)
+
+    right_panel = RightPanel()
+    qtbot.addWidget(right_panel)
+    preproc_section = right_panel.get_section(PipelineStep.PREPROCESSING)
+    assert isinstance(preproc_section, PreprocessingSection)
+
+    panel_signals: list[tuple[str, str, object]] = []
+    right_panel.step_param_changed.connect(lambda s, p, v: panel_signals.append((s, p, v)))
+
+    model = PipelineModel()
+    histogram = RoiIntensityHistogram()
+    qtbot.addWidget(histogram)
+    _ = HistogramController(histogram, vol_ctrl, model, preproc_section=preproc_section)
+
+    bounds_calls: list[tuple[float, float]] = []
+    orig_set_bounds = histogram.set_intensity_bounds
+
+    def spy_set_bounds(lo: float, hi: float) -> None:
+        bounds_calls.append((lo, hi))
+        orig_set_bounds(lo, hi)
+
+    monkeypatch.setattr(histogram, "set_intensity_bounds", spy_set_bounds)
+
+    histogram.lowest_line.setValue(60.0)
+    histogram.lowest_line.sigDragged.emit(histogram.lowest_line)
+
+    assert preproc_section.lowest_instensity.value() == pytest.approx(60.0)
+    assert model.get_preproc_params().lowest_intensity == pytest.approx(60.0)
+    assert panel_signals == []
+    assert bounds_calls == []
+
+    # Model-driven update sets bounds once (no duplicate VolumeController echo)
+    model.update_step_params(PipelineStep.PREPROCESSING, highest_intensity=900.0)
+    vol_ctrl.apply_preproc_params(model.get_preproc_params())
+    assert bounds_calls == [(60.0, 900.0)]

@@ -11,8 +11,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.output_type import OutputType
+from apkit4d.gui.views.stages import StageInspectorView
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 from tests.apkit4d.gui.helper import find_widget
 
@@ -228,3 +230,47 @@ def test_diameter_z_is_disabled_while_equal_to_xy(inspector):
     )
     diameter_z_equals_xy.setChecked(True)
     assert not inspector._diameter_z.isEnabled()
+
+
+def test_blob_detection_inspector_set_params_blocks_signals_and_roundtrips(inspector):
+    assert isinstance(inspector, StageInspectorView)
+
+    emitted: list[tuple[str, object]] = []
+    for sig_name in (
+        "diameter_xy_changed",
+        "diameter_z_changed",
+        "diameter_z_equal_to_xy_toggled",
+        "lo_g_changed",
+        "seed_separation_changed",
+        "boundary_changed",
+        "min_volume_changed",
+        "max_volume_changed",
+    ):
+        getattr(inspector, sig_name).connect(lambda v, name=sig_name: emitted.append((name, v)))
+
+    inspector._diameter_z_equals_xy.setChecked(True)
+    emitted.clear()
+
+    custom = BlobParams(
+        diameter_xy_um=12.0,
+        diameter_z_um=48.0,
+        threshold=0.35,
+        split=1.5,
+        grow_frac=0.45,
+        min_volume_um3=350.0,
+        max_volume_um3=50000.0,
+    )
+    inspector.set_params(custom)
+
+    assert emitted == []
+    assert inspector.get_params() == custom
+    assert not inspector.z_equals_xy
+    assert inspector._diameter_z.isEnabled()
+
+    inspector.set_enabled_state(False)
+    assert not inspector._diameter_xy.isEnabled()
+    assert not inspector._find_blobs_button.isEnabled()
+
+    inspector.set_enabled_state(True)
+    assert inspector._diameter_xy.isEnabled()
+    assert inspector._find_blobs_button.isEnabled()
