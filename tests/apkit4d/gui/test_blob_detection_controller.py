@@ -530,6 +530,7 @@ def test_stage_3_sequence_detection_populates_precomputed_blobs_for_playback(qtb
             "y_um": [2.0, 5.0, 6.0],
             "z_um": [3.0, 6.0, 7.0],
             "volume_um3": [500.0, 600.0, 700.0],
+            "response": [0.25, 0.4, 0.8],
         }
     )
     monkeypatch.setattr(
@@ -537,6 +538,9 @@ def test_stage_3_sequence_detection_populates_precomputed_blobs_for_playback(qtb
         "detect_sequence",
         lambda *_args, **_kwargs: DetectionData(detections, 0.5, {"info": {"dt_s": 0.5}}),
     )
+
+    announced_responses: list[object] = []
+    controller.seeds_response_changed.connect(announced_responses.append)
 
     pipeline.complete_stage(PipelineStep.ROI)
     pipeline.complete_stage(PipelineStep.PREPROCESSING)
@@ -547,11 +551,14 @@ def test_stage_3_sequence_detection_populates_precomputed_blobs_for_playback(qtb
         timeout=5000,
     )
 
-    # Frame 0 is shown immediately upon completion; scrubbing to frame 1 and 2 updates 3D view
+    # Frame 0 is shown immediately upon completion; scrubbing to frame 1 and 2 updates 3D view & histogram
     assert view.meshes[-1].n_points == 1
+    assert np.allclose(announced_responses[-1], [0.25])
 
     controller.on_volume_prepared(make_prepared(frame=1))
     assert view.meshes[-1].n_points == 0
+    assert len(announced_responses[-1]) == 0
 
     controller.on_volume_prepared(make_prepared(frame=2))
     assert view.meshes[-1].n_points == 2
+    assert np.allclose(announced_responses[-1], [0.4, 0.8])

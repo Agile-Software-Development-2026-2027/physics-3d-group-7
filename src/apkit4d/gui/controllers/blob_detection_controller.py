@@ -230,7 +230,11 @@ class BlobDetectionController(QObject):
         if self._precomputed_by_frame is None:
             return
         frame_df = self._precomputed_by_frame.get(frame, pd.DataFrame())
-        self._show_blobs(BlobDetection(frame, frame_df))
+        if "response" in frame_df.columns and not frame_df.empty:
+            seeds = frame_df["response"].dropna().to_numpy(dtype=np.float32)
+        else:
+            seeds = np.empty(0, dtype=np.float32)
+        self._show_blobs(BlobDetection(frame, frame_df, seeds))
 
     def set_source(self, _path: Path, _source: FrameSource):
         """A new recording was opened: forget the volume of the previous one."""

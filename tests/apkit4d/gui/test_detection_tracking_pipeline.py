@@ -273,6 +273,7 @@ def test_stage_3_completion_displays_blobs_across_frames_in_3d_view(qtbot, qapp,
             "y_um": [1.0, 2.0, 3.0],
             "x_um": [1.0, 2.0, 3.0],
             "volume_um3": [100.0, 200.0, 300.0],
+            "response": [0.25, 0.5, 0.75],
         }
     )
     monkeypatch.setattr(
@@ -291,7 +292,13 @@ def test_stage_3_completion_displays_blobs_across_frames_in_3d_view(qtbot, qapp,
     assert view.show_blobs.called
     assert view.show_blobs.call_args.args[0].n_points == 1
 
+    seed_hist = window.left_panel.histograms_section.seed_response_histogram
+    assert np.allclose(seed_hist.seeds_response, [0.25])
+    assert "1 " in seed_hist.plotItem.titleLabel.text
+
     view.show_blobs.reset_mock()
     controller.playback_controller.go_to_frame(2)
     qtbot.waitUntil(lambda: view.show_blobs.called, timeout=5000)
     assert view.show_blobs.call_args.args[0].n_points == 2
+    assert np.allclose(seed_hist.seeds_response, [0.5, 0.75])
+    assert "2 " in seed_hist.plotItem.titleLabel.text
