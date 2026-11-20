@@ -61,7 +61,7 @@ class VideoExportDialog(QDialog):
 
         layout.addWidget(self._build_preview_group())
         layout.addWidget(self._build_range_group())
-        layout.addWidget(self._build_quality_group())
+        layout.addWidget(self._build_video_settings_group())
         layout.addWidget(self._build_output_group())
         layout.addWidget(self._build_progress_section())
         layout.addLayout(self._build_buttons())
@@ -107,7 +107,7 @@ class VideoExportDialog(QDialog):
 
         return group
 
-    def _build_quality_group(self) -> QGroupBox:
+    def _build_video_settings_group(self) -> QGroupBox:
         group = QGroupBox(texts.EXPORT_LABEL_VIDEO_SETTINGS)
         layout = QVBoxLayout(group)
 
@@ -137,13 +137,13 @@ class VideoExportDialog(QDialog):
         layout.addLayout(fps_row)
 
         resolution_row = QHBoxLayout()
-        resolution_row.addWidget(QLabel(texts.EXPORT_LABEL_WIDTH))
+        resolution_row.addWidget(QLabel("Resolution (px)"))
         self._width_spin = QSpinBox()
         self._width_spin.setObjectName(names.VIDEO_EXPORT_WIDTH)
         self._width_spin.setRange(1, 8192)
         resolution_row.addWidget(self._width_spin)
 
-        resolution_row.addWidget(QLabel(texts.EXPORT_LABEL_HEIGHT))
+        resolution_row.addWidget(QLabel("×"))
         self._height_spin = QSpinBox()
         self._height_spin.setObjectName(names.VIDEO_EXPORT_HEIGHT)
         self._height_spin.setRange(1, 8192)
@@ -156,6 +156,7 @@ class VideoExportDialog(QDialog):
         self._preset_combo = QComboBox()
         self._preset_combo.setObjectName(names.VIDEO_EXPORT_PRESET)
         self._preset_combo.addItems([preset.value for preset in _VideoPreset])
+        self._preset_combo.setToolTip(texts.EXPORT_PRESET_TOOLTIP)
         preset_row.addWidget(self._preset_combo)
         preset_row.addStretch()
         layout.addLayout(preset_row)
