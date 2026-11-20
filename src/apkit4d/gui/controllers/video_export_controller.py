@@ -256,7 +256,7 @@ class VideoExportController(QObject):
             and self._playback_controller.frame == frame
             and self._view is not None
         ):
-            return self._view.screenshot()
+            return self._view.screenshot(window_size=self._resolution)
 
         self.request_preview_frame(frame)  # go to frame
         return None
@@ -273,7 +273,7 @@ class VideoExportController(QObject):
             return
 
         if self._playback_controller.frame == frame:
-            img = self._view.screenshot()
+            img = self._view.screenshot(window_size=self._resolution)
             self.preview_ready.emit(frame, img)
             return
 
@@ -363,7 +363,7 @@ class VideoExportController(QObject):
             if self._view is not None and not (
                 self._is_exporting and frame_idx == self._export_current_frame
             ):
-                img = self._view.screenshot()
+                img = self._view.screenshot(window_size=self._resolution)
                 self.preview_ready.emit(frame_idx, img)
 
         if not self._is_exporting or self._is_cancelled:

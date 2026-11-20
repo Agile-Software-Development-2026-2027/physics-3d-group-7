@@ -171,7 +171,8 @@ class TestVideoExportExecution:
         assert mock_playback.frame == 3
 
     def test_dialog_resolution_controls_update_export_settings(self, mock_playback, qtbot) -> None:
-        controller = VideoExportController(playback=mock_playback, view=MockView())
+        view = MockView()
+        controller = VideoExportController(playback=mock_playback, view=view)
         dialog = VideoExportDialog(controller)
         qtbot.addWidget(dialog)
 
@@ -185,6 +186,7 @@ class TestVideoExportExecution:
         height.setValue(720)
 
         assert controller.resolution == (1280, 720)
+        assert view.screenshot_window_sizes[-1] == (1280, 720)
 
     def test_live_viewport_export_stepping(self, mock_playback, qtbot, tmp_path: Path) -> None:
         view = MockView(shape=(32, 32, 3))

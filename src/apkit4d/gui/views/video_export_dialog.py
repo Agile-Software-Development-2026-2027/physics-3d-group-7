@@ -280,6 +280,8 @@ class VideoExportDialog(QDialog):
 
     def _on_resolution_changed(self, _: int) -> None:
         self._controller.set_resolution(self._width_spin.value(), self._height_spin.value())
+        if self._controller.total_frames > 0:
+            self._controller.request_preview_frame(self._controller.first_frame)
 
     def _on_browse(self) -> None:
         current = self._controller.output_path
