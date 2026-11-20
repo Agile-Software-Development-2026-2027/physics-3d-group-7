@@ -195,6 +195,20 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
+    def screenshot(self) -> np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]:
+        """
+        Captures the current 3D viewport rendered frame as an RGB numpy array.
+
+        Returns:
+            np.ndarray: Sized [Height x Width x 3] with dtype uint8.
+        """
+
+        img = self.plotter.screenshot(return_img=True)
+        arr = np.asarray(img)
+        if arr.ndim == 3 and arr.shape[2] == 4:
+            arr = arr[:, :, :3]  # discard the alpha channel
+        return arr
+
     def show_volume(self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False) -> None:
         """
         This function is used to visualize the 3D data in the viewport.
@@ -410,7 +424,7 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        actor.prop.opacity_unit_distance = self._base_opacity_unit_distance / self._volume_opacity
+        actor.prop.opacity_unit_distance = self._base_opacity_unit_distance / self._volume_opacity  # pyright: ignore[reportAttributeAccessIssue]
 
     def _paint_text(self) -> None:
         """
@@ -1264,12 +1278,12 @@ class Viewport(QWidget):
 
         # if the roi_preview already exists, we update it in-place to avoid creating a new actor
         if self._roi_box_poly is not None and "roi_preview" in self.plotter.actors:
-            self._roi_box_poly.shallow_copy(box_edges)
+            self._roi_box_poly.shallow_copy(box_edges)  # pyright: ignore[reportArgumentType]
             self._roi_box_poly.Modified()
             return
 
         # if the roi_preview does not exist, we create it and add it to the plotter
-        self._roi_box_poly = pv.PolyData(box_edges)
+        self._roi_box_poly = pv.PolyData(box_edges)  # pyright: ignore[reportArgumentType]
         self.plotter.add_mesh(
             self._roi_box_poly,
             color="cyan",
