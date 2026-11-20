@@ -4,7 +4,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QSpinBox
 
+from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
@@ -16,9 +18,11 @@ class MockView:
     def __init__(self, shape: tuple[int, int, int] = (64, 64, 3)) -> None:
         self.shape = shape
         self.screenshot_call_count = 0
+        self.screenshot_window_sizes: list[tuple[int, int] | None] = []
 
-    def screenshot(self) -> np.ndarray:
+    def screenshot(self, window_size: tuple[int, int] | None = None) -> np.ndarray:
         self.screenshot_call_count += 1
+        self.screenshot_window_sizes.append(window_size)
         return np.full(self.shape, fill_value=self.screenshot_call_count * 10, dtype=np.uint8)
 
 
@@ -109,6 +113,10 @@ class TestVideoExportControllerConfig:
         assert controller.fps == 30
 
         with qtbot.waitSignal(controller.config_changed):
+            controller.set_resolution(1280, 720)
+        assert controller.resolution == (1280, 720)
+
+        with qtbot.waitSignal(controller.config_changed):
             controller.set_preset("fast")
         assert controller.preset == "fast"
 
@@ -145,6 +153,22 @@ class TestVideoExportControllerConfig:
 
 
 class TestVideoExportExecution:
+    def test_dialog_resolution_controls_update_export_settings(self, mock_playback, qtbot) -> None:
+        controller = VideoExportController(playback=mock_playback, view=MockView())
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        width = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_WIDTH)
+        height = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_HEIGHT)
+        assert width is not None
+        assert height is not None
+        assert (width.value(), height.value()) == (1920, 1080)
+
+        width.setValue(1280)
+        height.setValue(720)
+
+        assert controller.resolution == (1280, 720)
+
     def test_live_viewport_export_stepping(self, mock_playback, qtbot, tmp_path: Path) -> None:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
@@ -156,6 +180,7 @@ class TestVideoExportExecution:
         mock_playback.go_to_frame(4)
         out = tmp_path / "live_export.mp4"
         controller.set_frame_range(0, 2)
+        controller.set_resolution(1280, 720)
         controller.set_output_path(out)
 
         with qtbot.waitSignal(controller.export_started):
@@ -176,6 +201,7 @@ class TestVideoExportExecution:
         assert out.exists()
         assert out.stat().st_size > 0
         assert view.screenshot_call_count == 3
+        assert view.screenshot_window_sizes == [(1280, 720)] * 3
         assert mock_playback.frame == 4
         assert volume.requested_frames == [0, 1, 2, 4]
 

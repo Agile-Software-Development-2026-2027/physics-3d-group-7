@@ -16,7 +16,7 @@ from apkit4d.gui.controllers.volume_controller import VolumeController
 class VideoExportView(Protocol):
     """What the video export controller needs from the 3D view."""
 
-    def screenshot(self) -> NDArray: ...
+    def screenshot(self, window_size: tuple[int, int] | None = None) -> NDArray: ...
 
 
 class VideoExportController(QObject):
@@ -71,6 +71,7 @@ class VideoExportController(QObject):
 
         # sets the effective speed of the video and estimates the final duration
         self._fps: int = int(playback.speed) if playback is not None else 24
+        self._resolution = (1920, 1080)
 
         self._preset: str = "medium"
         self._output_path: Path | None = None
@@ -125,6 +126,11 @@ class VideoExportController(QObject):
     def fps(self) -> int:
         """Playback speed of the exported video in frames per second."""
         return self._fps
+
+    @property
+    def resolution(self) -> tuple[int, int]:
+        """Width and height, in pixels, of exported frames."""
+        return self._resolution
 
     @property
     def preset(self) -> str:
@@ -185,6 +191,13 @@ class VideoExportController(QObject):
         fps = max(1, int(fps))
         if self._fps != fps:
             self._fps = fps
+            self.config_changed.emit()
+
+    def set_resolution(self, width: int, height: int) -> None:
+        """Set the exported frame dimensions in pixels."""
+        resolution = (max(1, int(width)), max(1, int(height)))
+        if self._resolution != resolution:
+            self._resolution = resolution
             self.config_changed.emit()
 
     def set_preset(self, preset: str) -> None:
@@ -392,7 +405,7 @@ class VideoExportController(QObject):
                 raise RuntimeError("No 3D view available to capture frame.")
 
             assert self._writer is not None, "Writer is created when export starts"
-            self._writer.append_data(self._view.screenshot())  # append the bytes of the image
+            self._writer.append_data(self._view.screenshot(window_size=self._resolution))
 
             done = self._export_current_frame - self._first_frame + 1  # next
             self.progress_changed.emit(done, self.export_frame_count)

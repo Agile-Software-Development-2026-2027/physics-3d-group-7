@@ -137,6 +137,21 @@ class VideoExportDialog(QDialog):
         fps_row.addStretch()
         layout.addLayout(fps_row)
 
+        resolution_row = QHBoxLayout()
+        resolution_row.addWidget(QLabel(texts.EXPORT_LABEL_WIDTH))
+        self._width_spin = QSpinBox()
+        self._width_spin.setObjectName(names.VIDEO_EXPORT_WIDTH)
+        self._width_spin.setRange(1, 8192)
+        resolution_row.addWidget(self._width_spin)
+
+        resolution_row.addWidget(QLabel(texts.EXPORT_LABEL_HEIGHT))
+        self._height_spin = QSpinBox()
+        self._height_spin.setObjectName(names.VIDEO_EXPORT_HEIGHT)
+        self._height_spin.setRange(1, 8192)
+        resolution_row.addWidget(self._height_spin)
+        resolution_row.addStretch()
+        layout.addLayout(resolution_row)
+
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel(texts.EXPORT_LABEL_PRESET))
         self._preset_combo = QComboBox()
@@ -211,6 +226,9 @@ class VideoExportDialog(QDialog):
         self._crf_value_label.setText(str(self._controller.crf))
 
         self._fps_spin.setValue(self._controller.fps)
+        width, height = self._controller.resolution
+        self._width_spin.setValue(width)
+        self._height_spin.setValue(height)
         self._preset_combo.setCurrentText(self._controller.preset)
 
         path = self._controller.output_path
@@ -233,6 +251,8 @@ class VideoExportDialog(QDialog):
         self._last_frame_spin.valueChanged.connect(self._on_last_frame_changed)
         self._crf_slider.valueChanged.connect(self._on_crf_changed)
         self._fps_spin.valueChanged.connect(self._on_fps_changed)
+        self._width_spin.valueChanged.connect(self._on_resolution_changed)
+        self._height_spin.valueChanged.connect(self._on_resolution_changed)
         self._preset_combo.currentTextChanged.connect(self._controller.set_preset)
         self._browse_button.clicked.connect(self._on_browse)
         self._export_button.clicked.connect(self._on_export)
@@ -257,6 +277,9 @@ class VideoExportDialog(QDialog):
 
     def _on_fps_changed(self, value: int) -> None:
         self._controller.set_fps(value)
+
+    def _on_resolution_changed(self, _value: int) -> None:
+        self._controller.set_resolution(self._width_spin.value(), self._height_spin.value())
 
     def _on_browse(self) -> None:
         current = self._controller.output_path
@@ -348,6 +371,8 @@ class VideoExportDialog(QDialog):
         self._last_frame_spin.setEnabled(enabled)
         self._crf_slider.setEnabled(enabled)
         self._fps_spin.setEnabled(enabled)
+        self._width_spin.setEnabled(enabled)
+        self._height_spin.setEnabled(enabled)
         self._preset_combo.setEnabled(enabled)
         self._browse_button.setEnabled(enabled)
         self._export_button.setEnabled(enabled)

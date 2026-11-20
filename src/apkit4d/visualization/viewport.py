@@ -195,15 +195,20 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
-    def screenshot(self) -> np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]:
+    def screenshot(
+        self, window_size: tuple[int, int] | None = None
+    ) -> np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]:
         """
         Captures the current 3D viewport rendered frame as an RGB numpy array.
+
+        Args:
+            window_size: Optional output size as (width, height) in pixels.
 
         Returns:
             np.ndarray: Sized [Height x Width x 3] with dtype uint8.
         """
 
-        img = self.plotter.screenshot(return_img=True)
+        img = self.plotter.screenshot(return_img=True, window_size=window_size)
         arr = np.asarray(img)
         if arr.ndim == 3 and arr.shape[2] == 4:
             arr = arr[:, :, :3]  # discard the alpha channel
