@@ -48,7 +48,7 @@ class PreprocParams:
     bg_sigma_xy_um: float = 60.0
 
     # Intensity window for normalization. Narrower -> more contrast
-    normalization_enabled: bool = False
+    normalization_enabled: bool = True
     lowest_intensity: float = 0.0
     highest_intensity: float = 1000.0
 
