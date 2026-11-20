@@ -136,3 +136,48 @@ def test_batch_config_frozen() -> None:
     cfg = BatchConfig()
     with pytest.raises(ValidationError):
         cfg.workers = 4
+
+
+def test_tracking_config_resolve_for_dt_without_dt_returns_self() -> None:
+    cfg = TrackingConfig(max_dist_um=12.0, gap_dist_um=18.0, max_speed_um_s=100.0)
+    resolved = cfg.resolve_for_dt(None)
+    assert resolved is cfg
+
+
+def test_tracking_config_resolve_for_dt_scales_from_max_speed() -> None:
+    cfg = TrackingConfig(max_speed_um_s=100.0, min_len=4)
+    resolved = cfg.resolve_for_dt(0.1)
+
+    assert resolved.max_dist_um == pytest.approx(10.0)
+    assert resolved.gap_dist_um == pytest.approx(12.5)
+    assert resolved.min_len == 4
+    assert resolved.max_speed_um_s == 100.0
+
+
+def test_tracking_config_resolve_for_dt_explicit_overrides() -> None:
+    cfg = TrackingConfig(max_speed_um_s=100.0)
+
+    overridden_max = cfg.resolve_for_dt(0.1, explicit_max_dist=16.0)
+    assert overridden_max.max_dist_um == pytest.approx(16.0)
+    assert overridden_max.gap_dist_um == pytest.approx(20.0)
+
+    overridden_both = cfg.resolve_for_dt(0.1, explicit_max_dist=16.0, explicit_gap_dist=30.0)
+    assert overridden_both.max_dist_um == pytest.approx(16.0)
+    assert overridden_both.gap_dist_um == pytest.approx(30.0)
+
+    only_gap = cfg.resolve_for_dt(None, explicit_gap_dist=40.0)
+    assert only_gap.max_dist_um == pytest.approx(20.0)
+    assert only_gap.gap_dist_um == pytest.approx(40.0)
+
+
+def test_tracking_config_resolve_for_dt_invalid_inputs() -> None:
+    cfg = TrackingConfig()
+
+    with pytest.raises(ValueError, match="dt_s must be positive"):
+        cfg.resolve_for_dt(0.0)
+
+    with pytest.raises(ValidationError):
+        cfg.resolve_for_dt(0.1, explicit_max_dist=-1.0)
+
+    with pytest.raises(ValidationError):
+        cfg.resolve_for_dt(0.1, explicit_gap_dist=0.0)

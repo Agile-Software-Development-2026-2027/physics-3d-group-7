@@ -111,3 +111,38 @@ class TestParticleLinker:
         strict_res = strict_linker.link(df)
         assert strict_res.metadata["num_tracks_retained"] == 0
         assert strict_res.tracks.empty
+
+    def test_linker_max_speed_scales_frame_to_frame_gate_when_dt_provided(self) -> None:
+        """Verify max_speed_um_s scales max_dist_um when dt_s is provided."""
+        # Particle steps 1.5 um/frame; with dt_s=0.1s, physical speed is 15 um/s.
+        df = pd.DataFrame([{"frame": f, "z_um": 0.0, "y_um": 0.0, "x_um": 1.5 * f} for f in range(5)])
+
+        fast_cfg = TrackingConfig(max_speed_um_s=20.0, min_len=4, mc_resamples=0)
+        fast_res = ParticleLinker(config=fast_cfg).link(df, dt_s=0.1)
+        assert fast_res.metadata["max_dist_um"] == pytest.approx(2.0)
+        assert fast_res.metadata["gap_dist_um"] == pytest.approx(2.5)
+        assert fast_res.metadata["num_tracks_retained"] == 1
+
+        slow_cfg = TrackingConfig(max_speed_um_s=10.0, min_len=4, mc_resamples=0)
+        slow_res = ParticleLinker(config=slow_cfg).link(df, dt_s=0.1)
+        assert slow_res.metadata["max_dist_um"] == pytest.approx(1.0)
+        assert slow_res.metadata["gap_dist_um"] == pytest.approx(1.25)
+        assert slow_res.metadata["num_tracks_retained"] == 0
+
+    def test_linker_max_speed_scales_gap_closing_gate_when_dt_provided(self) -> None:
+        """Verify max_speed_um_s scales gap_dist_um when dt_s is provided."""
+        # Two 3-point segments separated by gap=2 frames (frame 2 -> 4) with a 3.0 um lateral jump.
+        seg_a = [{"frame": f, "z_um": 0.0, "y_um": 0.0, "x_um": 0.5 * f} for f in (0, 1, 2)]
+        seg_b = [{"frame": f, "z_um": 0.0, "y_um": 3.0, "x_um": 0.5 * f} for f in (4, 5, 6)]
+        df = pd.DataFrame(seg_a + seg_b)
+
+        # dt_s=0.1, max_speed=10 -> max_dist=1.0 (links each segment), gap_dist=1.25 -> 2*1.25=2.5 < 3.0
+        tight_cfg = TrackingConfig(max_speed_um_s=10.0, max_gap=2, min_len=5, mc_resamples=0)
+        tight_res = ParticleLinker(config=tight_cfg).link(df, dt_s=0.1)
+        assert tight_res.metadata["num_tracks_retained"] == 0
+
+        # dt_s=0.1, max_speed=20 -> max_dist=2.0, gap_dist=2.5 -> 2*2.5=5.0 >= 3.0 (bridges gap!)
+        wide_cfg = TrackingConfig(max_speed_um_s=20.0, max_gap=2, min_len=5, mc_resamples=0)
+        wide_res = ParticleLinker(config=wide_cfg).link(df, dt_s=0.1)
+        assert wide_res.metadata["num_tracks_retained"] == 1
+        assert wide_res.metadata["gaps_closed"] == 1
