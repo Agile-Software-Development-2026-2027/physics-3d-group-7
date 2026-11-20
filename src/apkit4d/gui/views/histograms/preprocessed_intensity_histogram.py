@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.views.widgets.intensity_histogram import IntensityHistogram
+from apkit4d.gui.views.histograms.intensity_histogram import IntensityHistogram
 
 __all__ = ["PreprocessedIntensityHistogram", "compute_preprocessed_histogram"]
 

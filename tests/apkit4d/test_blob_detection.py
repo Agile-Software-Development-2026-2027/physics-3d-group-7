@@ -3,7 +3,8 @@ import pandas as pd
 import pytest
 from scipy import ndimage
 
-from apkit4d.blob_detection import (
+from apkit4d.core.image import Image
+from apkit4d.detection.blob_detection import (
     DETECTION_COLUMNS,
     BlobParams,
     _ellipsoid,
@@ -15,7 +16,6 @@ from apkit4d.blob_detection import (
     stats_by_label,
     watershed_from_seeds,
 )
-from apkit4d.image import Image
 
 
 def test_sigmas():

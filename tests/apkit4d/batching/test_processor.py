@@ -17,10 +17,10 @@ from apkit4d.batching.processor import (
     run_batch,
     stem_of,
 )
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import BatchConfig
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo, CziSource
-from apkit4d.preprocessing import PreprocParams
 
 
 class TestBatchProcessor:

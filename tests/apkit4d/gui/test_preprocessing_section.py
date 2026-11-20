@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
+from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.volume_controller import VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
-from apkit4d.preprocessing import BgMode, PreprocParams
 
 
 class SignalCatcher:
@@ -119,14 +119,14 @@ def test_preproc_section_changes_are_propagated_through_the_main_controller(qtbo
 def test_suggest_window_button_enabled_only_with_normalization(right_panel: RightPanel) -> None:
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
 
-    assert not section.normalization_enabled.isChecked()
-    assert not section.suggest_window_btn.isEnabled()
-
-    section.normalization_enabled.setChecked(True)
+    assert section.normalization_enabled.isChecked()
     assert section.suggest_window_btn.isEnabled()
 
     section.normalization_enabled.setChecked(False)
     assert not section.suggest_window_btn.isEnabled()
+
+    section.normalization_enabled.setChecked(True)
+    assert section.suggest_window_btn.isEnabled()
 
 
 def test_set_intensity_window_updates_spinboxes_and_emits_params(right_panel: RightPanel) -> None:

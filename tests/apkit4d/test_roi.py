@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from apkit4d.roi import RegionOfInterest
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.data_mapper import create_volume_grid
 
 

@@ -29,7 +29,7 @@ from typing import Self
 import numpy as np
 import pandas as pd
 
-from apkit4d.image import Image
+from apkit4d.core.image import Image
 
 type Bounds6D = tuple[float, float, float, float, float, float]
 type Point3D = tuple[float, float, float] | np.ndarray

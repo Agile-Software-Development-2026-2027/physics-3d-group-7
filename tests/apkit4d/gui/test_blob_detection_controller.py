@@ -7,14 +7,14 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import Qt
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.controllers import blob_detection_controller as module
 from apkit4d.gui.controllers.blob_detection_controller import (
     BlobDetection,
     BlobDetectionController,
 )
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 
 BLOBS = pd.DataFrame(
     {
@@ -378,11 +378,11 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
     params = BlobParams()
     seen = {}
 
-    def fake_find_blobs(image, blob_params, voxel, **kwargs):
-        seen.update(image=image, params=blob_params, voxel=voxel, kwargs=kwargs)
+    def fake_find_blobs(image, p, voxel_dim, **kwargs):
+        seen.update(image=image, params=p, voxel=voxel_dim, kwargs=kwargs)
         return (BLOBS.copy(), None, np.array([]))
 
-    monkeypatch.setattr(module, "find_blobs", fake_find_blobs)
+    monkeypatch.setattr("apkit4d.pipeline.frame_stages.find_blobs", fake_find_blobs)
 
     result = module.detect_blobs(prepared, params)
     assert seen["image"] is prepared.image
@@ -393,6 +393,12 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
     assert seen["kwargs"]["frame"] == 3
     assert result.frame == 3
     assert len(result.blobs) == 1
+
+
+def test_detect_blobs_rejects_unnormalized_prepared_volume():
+    prepared = make_prepared(frame=0, is_image_normalized=False)
+    with pytest.raises(ValueError, match="normalization must be enabled"):
+        module.detect_blobs(prepared, BlobParams())
 
 
 def test_precomputed_blobs_render_across_frames_without_detection(setup, fake_detect):

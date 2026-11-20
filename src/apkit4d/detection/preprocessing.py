@@ -19,7 +19,7 @@ import numpy as np
 from scipy import ndimage
 from skimage.exposure import equalize_adapthist
 
-from apkit4d.image import Image
+from apkit4d.core.image import Image
 
 
 class BgMode(StrEnum):
@@ -48,7 +48,7 @@ class PreprocParams:
     bg_sigma_xy_um: float = 60.0
 
     # Intensity window for normalization. Narrower -> more contrast
-    normalization_enabled: bool = False
+    normalization_enabled: bool = True
     lowest_intensity: float = 0.0
     highest_intensity: float = 1000.0
 
@@ -225,7 +225,7 @@ def preprocess(
 
 
 def suggest_window(
-    volume: Image[np.uint16],
+    volume: Image[np.float32] | Image[np.uint16],
     low_percentile: float = 1.0,
     high_percentile: float = 99.9,
     ignore_zeros: bool = True,

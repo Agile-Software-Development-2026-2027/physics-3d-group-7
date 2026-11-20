@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.trajectory_detection import DetectionData
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus

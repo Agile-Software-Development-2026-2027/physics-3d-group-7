@@ -5,7 +5,7 @@ import pytest
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
-from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import (
+from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import (
     PreprocessedIntensityHistogram,
     compute_preprocessed_histogram,
 )
@@ -69,7 +69,7 @@ def test_preprocessed_histogram_defers_recomputation_when_collapsed(qtbot) -> No
 
     vol = np.linspace(0.0, 1.0, 1000, dtype=np.float32)
     with patch(
-        "apkit4d.gui.views.widgets.preprocessed_intensity_histogram.compute_preprocessed_histogram",
+        "apkit4d.gui.views.histograms.preprocessed_intensity_histogram.compute_preprocessed_histogram",
         wraps=compute_preprocessed_histogram,
     ) as mock_compute:
         widget.set_volume(vol)

@@ -9,7 +9,7 @@ import pandas as pd
 import pyvista as pv
 from numpy.typing import NDArray
 
-from apkit4d.image import Image
+from apkit4d.core.image import Image
 
 TRAJECTORY_REQUIRED_COLUMNS: tuple[str, ...] = ("track_id", "frame", "x_um", "y_um", "z_um")
 _CATEGORICAL_SATURATION = 0.85
@@ -271,7 +271,7 @@ def _resolve_trajectory_rgb(
 
 
 def create_volume_grid(
-    img_array: Image[np.uint16],
+    img_array: Image[np.float32] | Image[np.uint16],
     voxel_size: tuple[float, float, float],
     offset: tuple[float, float, float] = (0, 0, 0),
 ) -> pv.ImageData:

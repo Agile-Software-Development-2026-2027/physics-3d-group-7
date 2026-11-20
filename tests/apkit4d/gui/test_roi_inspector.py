@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton
 
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.views.panels.right_panel import RightPanel
-from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
-from apkit4d.roi import RegionOfInterest
+from apkit4d.gui.views.stages.roi_inspector import RoiInspector
 
 
 @pytest.fixture

@@ -6,11 +6,11 @@ import pytest
 from apkit4d.gui.controllers.histogram_controller import HistogramController
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
+from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
+from apkit4d.gui.views.histograms.roi_intensity_histogram import RoiIntensityHistogram
 from apkit4d.gui.views.main_window import MainWindow
-from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.right_panel import RightPanel
-from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
-from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
 
 
 class FakeVolumeView:

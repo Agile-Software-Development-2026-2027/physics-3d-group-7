@@ -2,7 +2,11 @@
 Data models and configurations for apkit4d tracking and batching pipeline.
 """
 
+from typing import Self
+
 from pydantic import BaseModel, ConfigDict, Field
+
+from apkit4d.tracking.motion import compute_search_gate
 
 
 class TrackingConfig(BaseModel):
@@ -75,6 +79,43 @@ class TrackingConfig(BaseModel):
         gt=0.0,
         description="Maximum expected physical swimming speed in micrometers/second.",
     )
+
+    def resolve_for_dt(
+        self,
+        dt_s: float | None,
+        explicit_max_dist: float | None = None,
+        explicit_gap_dist: float | None = None,
+    ) -> Self:
+        """Resolve search gate radii from frame interval `dt_s` and `max_speed_um_s`.
+
+        `explicit_max_dist` takes precedence over `max_speed_um_s * dt_s`. When
+        `explicit_gap_dist` is omitted and either `explicit_max_dist` or `dt_s` is
+        provided, `gap_dist_um` defaults to `1.25 * resolved_max_dist`.
+        """
+        if explicit_max_dist is not None:
+            resolved_max_dist = float(explicit_max_dist)
+        elif dt_s is not None:
+            resolved_max_dist = compute_search_gate(dt_s, self.max_speed_um_s)
+        else:
+            resolved_max_dist = self.max_dist_um
+
+        if explicit_gap_dist is not None:
+            resolved_gap_dist = float(explicit_gap_dist)
+        elif explicit_max_dist is not None or dt_s is not None:
+            resolved_gap_dist = 1.25 * resolved_max_dist
+        else:
+            resolved_gap_dist = self.gap_dist_um
+
+        if resolved_max_dist == self.max_dist_um and resolved_gap_dist == self.gap_dist_um:
+            return self
+
+        return type(self).model_validate(
+            {
+                **self.model_dump(),
+                "max_dist_um": resolved_max_dist,
+                "gap_dist_um": resolved_gap_dist,
+            }
+        )
 
 
 class BatchConfig(BaseModel):

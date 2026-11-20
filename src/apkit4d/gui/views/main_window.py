@@ -16,12 +16,12 @@ from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
 
 from apkit4d.gui.constants import appearance, application, names, shortcuts, texts
-from apkit4d.gui.fps_counter import FpsCounter
 from apkit4d.gui.views.panels.center_panel import CenterPanel
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.gui.views.panels.right_panel import RightPanel
+from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.widgets.grip_splitter import GripSplitter
-from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
+from apkit4d.visualization.fps_counter import FpsCounter
 
 
 class MainWindow(QMainWindow):
