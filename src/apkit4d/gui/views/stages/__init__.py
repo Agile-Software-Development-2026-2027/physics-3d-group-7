@@ -7,3 +7,7 @@ The content of each stage of the analysis pipeline, shown in the right column.
     trajectory_linking_inspector  4. tracking and linking
     batch_inspector               5. batch and export
 """
+
+from apkit4d.gui.views.stages.base import StageInspectorView
+
+__all__ = ["StageInspectorView"]

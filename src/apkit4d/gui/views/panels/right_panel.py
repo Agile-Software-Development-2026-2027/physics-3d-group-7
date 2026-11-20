@@ -206,7 +206,6 @@ class RightPanel(SidePanel):
         self._stage_sections: dict[str, AccordionSection] = {}
         self._number_fields: dict[PipelineStep, QSpinBox] = {}
         self._play_buttons: dict[PipelineStep, QPushButton] = {}
-        self._plan_buttons: dict[PipelineStep, QPushButton] = {}
         self._complete_buttons: dict[PipelineStep, QPushButton] = {}
 
         # i need to build it here since as a local variable i couldn't access
@@ -392,7 +391,6 @@ class RightPanel(SidePanel):
         self._stage_sections.clear()
         self._number_fields.clear()
         self._play_buttons.clear()
-        self._plan_buttons.clear()
         self._complete_buttons.clear()
         self._roi_inspector = None
         self._tracking_inspector = None
@@ -453,7 +451,20 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    sec = PreprocessingSection(self)
+                    preproc_sec = PreprocessingSection()
+                    preproc_sec.param_changed.connect(
+                        lambda param, value: self.notify_param_changed(
+                            PipelineStep.PREPROCESSING.value, param, value
+                        )
+                    )
+                    preproc_sec.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.PREPROCESSING.value)
+                    )
+                    preproc_sec.complete_requested.connect(
+                        lambda: self.complete_stage_requested.emit(PipelineStep.PREPROCESSING)
+                    )
+                    self._complete_buttons[PipelineStep.PREPROCESSING] = preproc_sec.complete_btn
+                    sec = preproc_sec
                 case PipelineStep.DETECTION:
                     detection_inspector = BlobDetectionInspector()
                     detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)

@@ -8,6 +8,8 @@ from apkit4d.gui.controllers.volume_controller import VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
+from apkit4d.gui.views.stages import StageInspectorView
+from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
 
 
 class SignalCatcher:
@@ -190,3 +192,29 @@ def test_preproc_complete_button_enabled_only_when_roi_completed(right_panel) ->
 
     controller.reset_pipeline()
     assert not section.complete_btn.isEnabled()
+
+
+def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
+    section = PreprocessingSection()
+    qtbot.addWidget(section)
+
+    assert isinstance(section, StageInspectorView)
+
+    with qtbot.waitSignal(section.param_changed) as param_blocker:
+        section.denoise_xy_box.setValue(3.5)
+    assert param_blocker.args == ["denoise_xy_scale_um", 3.5]
+
+    with qtbot.waitSignal(section.reset_requested):
+        section.reset_btn.click()
+
+    with qtbot.waitSignal(section.complete_requested):
+        section.complete_btn.click()
+
+    section.set_enabled_state(False)
+    assert not section.denoise_xy_box.isEnabled()
+    assert not section.complete_btn.isEnabled()
+
+    section.set_enabled_state(True)
+    assert section.denoise_xy_box.isEnabled()
+    assert section.complete_btn.isEnabled()
+    assert not section.bg_percentile.isEnabled()  # BgMode.NONE keeps percentile disabled
