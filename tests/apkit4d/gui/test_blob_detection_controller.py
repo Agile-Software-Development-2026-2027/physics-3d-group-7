@@ -7,14 +7,14 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import Qt
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.controllers import blob_detection_controller as module
 from apkit4d.gui.controllers.blob_detection_controller import (
     BlobDetection,
     BlobDetectionController,
 )
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 
 BLOBS = pd.DataFrame(
     {

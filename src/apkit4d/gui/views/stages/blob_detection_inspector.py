@@ -17,12 +17,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
 from apkit4d.gui.models.output_type import OutputType
-from apkit4d.gui.shared.components.v_separator import VSeparator
 from apkit4d.gui.theme import ThemeColors
+from apkit4d.gui.views.widgets.v_separator import VSeparator
 
 
 class BlobDetectionInspector(QWidget):

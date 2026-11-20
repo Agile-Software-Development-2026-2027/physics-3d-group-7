@@ -9,7 +9,7 @@ import pandas as pd
 import pyvista as pv
 from numpy.typing import NDArray
 
-from apkit4d.image import Image
+from apkit4d.core.image import Image
 
 TRAJECTORY_REQUIRED_COLUMNS: tuple[str, ...] = ("track_id", "frame", "x_um", "y_um", "z_um")
 _CATEGORICAL_SATURATION = 0.85

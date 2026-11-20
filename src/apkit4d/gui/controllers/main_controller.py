@@ -15,8 +15,10 @@ from typing import Protocol, cast
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
-from apkit4d.blob_detection import BlobParams
 from apkit4d.core.models import TrackingConfig
+from apkit4d.core.roi import Bounds6D, RegionOfInterest
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
@@ -41,12 +43,10 @@ from apkit4d.gui.models.pipeline_model import (
     StepStatus,
 )
 from apkit4d.gui.views.main_window import MainWindow
-from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import PrecomputedSession, PrecomputedSource, infer_completed_steps
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.tracking.linker import TrackingResult
 
 

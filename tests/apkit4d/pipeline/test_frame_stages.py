@@ -4,8 +4,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from apkit4d.blob_detection import BlobParams
+from apkit4d.preprocessing import PreprocParams
+from apkit4d.roi import RegionOfInterest
+
 from apkit4d.pipeline.contracts import (
     CroppedFrame,
     FrameDetectionResult,
@@ -19,8 +21,6 @@ from apkit4d.pipeline.frame_stages import (
     detect_blobs_in_frame,
     preprocess_frame,
 )
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import RegionOfInterest
 
 
 class TestCoercionHelpers:

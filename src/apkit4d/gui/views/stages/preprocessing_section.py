@@ -2,9 +2,9 @@
 
 from typing import TYPE_CHECKING
 
-from apkit4d.gui.shared.components.v_separator import VSeparator
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.v_separator import VSeparator
 
 if TYPE_CHECKING:
     from apkit4d.gui.views.panels.right_panel import RightPanel
@@ -20,10 +20,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep
-from apkit4d.gui.shared.components.accordion import AccordionSection
-from apkit4d.preprocessing import BgMode, PreprocParams
+from apkit4d.gui.views.widgets.accordion import AccordionSection
 
 
 def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:

@@ -6,11 +6,11 @@ from typing import Any, cast
 
 import numpy as np
 
-from apkit4d.blob_detection import BlobParams, find_blobs
-from apkit4d.image import Image
+from apkit4d.core.image import Image
+from apkit4d.core.roi import RegionOfInterest, VoxelSize3D
+from apkit4d.detection.blob_detection import BlobParams, find_blobs
+from apkit4d.detection.preprocessing import PreprocParams, preprocess
 from apkit4d.pipeline.contracts import CroppedFrame, FrameDetectionResult, PreprocessedFrame
-from apkit4d.preprocessing import PreprocParams, preprocess
-from apkit4d.roi import RegionOfInterest, VoxelSize3D
 
 logger = logging.getLogger(__name__)
 

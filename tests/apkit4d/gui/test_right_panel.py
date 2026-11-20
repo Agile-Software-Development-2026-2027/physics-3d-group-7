@@ -11,11 +11,11 @@ from pytestqt.qtbot import QtBot
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
-from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.widgets.accordion import AccordionSection
 from tests.apkit4d.gui.helper import find_widget
 
 

@@ -14,7 +14,9 @@ from typing import Any, Final
 import pandas as pd
 import psutil
 
-from apkit4d.blob_detection import BlobParams
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.pipeline.frame_stages import (
     coerce_blob_params,
@@ -24,8 +26,6 @@ from apkit4d.pipeline.frame_stages import (
     detect_blobs_in_frame,
     preprocess_frame,
 )
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import RegionOfInterest
 
 # Estimated memory peak per worker process on a typical 3D volume (in gigabytes)
 RAM_PER_WORKER_GB: Final[float] = 1.2

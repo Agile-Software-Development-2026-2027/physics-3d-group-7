@@ -6,11 +6,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
-from apkit4d.gui.views.widgets.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
-from apkit4d.gui.views.widgets.roi_intensity_histogram import RoiIntensityHistogram
-from apkit4d.gui.views.widgets.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import PreprocessedIntensityHistogram
+from apkit4d.gui.views.histograms.roi_intensity_histogram import RoiIntensityHistogram
+from apkit4d.gui.views.histograms.seed_response_histogram import SeedResponseHistogram
+from apkit4d.gui.views.widgets.accordion import AccordionSection
 
 __all__ = ["CollapsibleHistogram", "HistogramsSection", "ThemeableHistogram"]
 

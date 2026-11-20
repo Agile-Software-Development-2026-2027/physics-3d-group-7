@@ -9,10 +9,10 @@ from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushB
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.shared.components.accordion import AccordionSection
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.left_panel import LeftPanel
+from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.visualization.data_mapper import TrajectoryColorMode

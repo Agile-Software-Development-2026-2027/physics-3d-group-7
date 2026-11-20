@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme.themes import ThemeColors
-from apkit4d.gui.views.widgets.intensity_histogram import IntensityHistogram
+from apkit4d.gui.views.histograms.intensity_histogram import IntensityHistogram
 
 
 def compute_intensity_histogram(

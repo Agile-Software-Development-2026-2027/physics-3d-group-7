@@ -6,11 +6,6 @@ from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.pipeline_model import StepStatus
-from apkit4d.gui.shared.components.accordion import (
-    AccordionDemo,
-    AccordionSection,
-)
-from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme.style import get_scrollbar_stylesheet
 from apkit4d.gui.theme.themes import (
     DARK_COLORS,
@@ -19,6 +14,11 @@ from apkit4d.gui.theme.themes import (
     LIGHT_STATUS_COLORS,
     Theme,
 )
+from apkit4d.gui.views.widgets.accordion import (
+    AccordionDemo,
+    AccordionSection,
+)
+from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 
 
 def test_accordion_section_init(qtbot) -> None:

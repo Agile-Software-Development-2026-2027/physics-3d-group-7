@@ -4,11 +4,11 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from apkit4d.core.roi import RegionOfInterest
+from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.views.main_window import MainWindow
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import RegionOfInterest
 
 
 @dataclass
@@ -120,7 +120,7 @@ def test_volume_controller_preproc_runs_on_roi(qtbot, monkeypatch) -> None:
 
     captured: list[NDArray] = []
 
-    real_preprocess = __import__("apkit4d.preprocessing", fromlist=["preprocess"]).preprocess
+    real_preprocess = __import__("apkit4d.detection.preprocessing", fromlist=["preprocess"]).preprocess
 
     def capturing_preprocess(vol, params, voxel):
         captured.append(vol)
@@ -179,7 +179,7 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
     captured: list[NDArray] = []
-    real_preprocess = __import__("apkit4d.preprocessing", fromlist=["preprocess"]).preprocess
+    real_preprocess = __import__("apkit4d.detection.preprocessing", fromlist=["preprocess"]).preprocess
 
     def capturing_preprocess(vol, params, voxel):
         captured.append(vol)

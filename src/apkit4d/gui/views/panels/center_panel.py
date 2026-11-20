@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.views.widgets.playback_bar import PlaybackBar
+from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 
 
 class CenterPanel(QWidget):

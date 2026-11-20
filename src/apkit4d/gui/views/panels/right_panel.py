@@ -25,8 +25,6 @@ from PySide6.QtWidgets import (
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
-from apkit4d.gui.shared.components.accordion import AccordionSection
-from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme import (
     DEFAULT_THEME,
     THEME_COLORS,
@@ -34,12 +32,14 @@ from apkit4d.gui.theme import (
     Theme,
     ThemeColors,
 )
-from apkit4d.gui.views.panels.preprocessing_section import PreprocessingSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
-from apkit4d.gui.views.widgets.batch_inspector import BatchInspector
-from apkit4d.gui.views.widgets.blob_detection_inspector import BlobDetectionInspector
-from apkit4d.gui.views.widgets.roi_inspector import RoiInspector
-from apkit4d.gui.views.widgets.trajectory_linking_inspector import TrajectoryLinkingInspector
+from apkit4d.gui.views.stages.batch_inspector import BatchInspector
+from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.roi_inspector import RoiInspector
+from apkit4d.gui.views.stages.trajectory_linking_inspector import TrajectoryLinkingInspector
+from apkit4d.gui.views.widgets.accordion import AccordionSection
+from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 
 __all__ = ["BottomStatsSection", "RightPanel"]
 

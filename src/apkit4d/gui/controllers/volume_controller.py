@@ -25,14 +25,14 @@ from attr import dataclass
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
+from apkit4d.core.image import Image
+from apkit4d.core.roi import Bounds6D, RegionOfInterest
+from apkit4d.detection.preprocessing import PreprocParams, preprocess, suggest_window
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
 from apkit4d.gui.views.main_window import MainWindow
-from apkit4d.image import Image
 from apkit4d.pipeline.frame_stages import crop_frame
-from apkit4d.preprocessing import PreprocParams, preprocess, suggest_window
-from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.visualization.data_mapper import create_volume_grid
 
 

@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from apkit4d.image import Image
-from apkit4d.preprocessing import PreprocParams
-from apkit4d.roi import Origin3D, VoxelSize3D
+from apkit4d.core.image import Image
+from apkit4d.core.roi import Origin3D, VoxelSize3D
+from apkit4d.detection.preprocessing import PreprocParams
 
 type ProgressCallback = Callable[[int, int, str], None]
 

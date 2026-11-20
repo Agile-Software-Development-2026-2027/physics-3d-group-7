@@ -18,13 +18,13 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names, texts, view_style
-from apkit4d.gui.shared.components.accordion import AccordionSection
-from apkit4d.gui.shared.components.scroll_area import ModernScrollArea
 from apkit4d.gui.theme.themes import THEME_COLORS, Theme
-from apkit4d.gui.views.panels.histograms_section import HistogramsSection
+from apkit4d.gui.views.histograms.histograms_section import HistogramsSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
+from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 
