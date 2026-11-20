@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
+from apkit4d.gui.views.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziInfo, CziSource
 
 
@@ -34,6 +35,10 @@ class MockVolumeController(QObject):
         super().__init__()
         self._busy = False
         self._current_frame = 0
+        self.requested_frames: list[int] = []
+
+    def show_frame(self, frame: int) -> None:
+        self.requested_frames.append(frame)
 
 
 @pytest.fixture
@@ -148,6 +153,7 @@ class TestVideoExportExecution:
             view=view,
             volume=volume,  # type: ignore
         )
+        mock_playback.go_to_frame(4)
         out = tmp_path / "live_export.mp4"
         controller.set_frame_range(0, 2)
         controller.set_output_path(out)
@@ -155,19 +161,23 @@ class TestVideoExportExecution:
         with qtbot.waitSignal(controller.export_started):
             controller.start_export()
 
-        # Step 0: Frame 0 is captured
-        # Step 1: Playback requested frame 1 -> simulate volume_prepared for frame 1
-        qtbot.waitUntil(lambda: mock_playback.frame == 1, timeout=2000)
+        assert mock_playback.frame == 4
+        assert volume.requested_frames == [0]
+        volume.volume_prepared.emit(MockPreparedVolume(frame=0))
+
+        # The export requests each render directly from the volume controller.
+        qtbot.waitUntil(lambda: volume.requested_frames == [0, 1], timeout=2000)
         volume.volume_prepared.emit(MockPreparedVolume(frame=1))
 
-        # Step 2: Playback requested frame 2 -> simulate volume_prepared for frame 2
-        qtbot.waitUntil(lambda: mock_playback.frame == 2, timeout=2000)
+        qtbot.waitUntil(lambda: volume.requested_frames == [0, 1, 2], timeout=2000)
         with qtbot.waitSignal(controller.export_succeeded, timeout=3000):
             volume.volume_prepared.emit(MockPreparedVolume(frame=2))
 
         assert out.exists()
         assert out.stat().st_size > 0
         assert view.screenshot_call_count == 3
+        assert mock_playback.frame == 4
+        assert volume.requested_frames == [0, 1, 2, 4]
 
     def test_cancel_export(self, mock_playback, qtbot, tmp_path: Path) -> None:
         view = MockView(shape=(32, 32, 3))
@@ -177,6 +187,7 @@ class TestVideoExportExecution:
             view=view,
             volume=volume,  # type: ignore
         )
+        mock_playback.go_to_frame(4)
         out = tmp_path / "cancel_live.mp4"
         controller.set_frame_range(0, 5)
         controller.set_output_path(out)
@@ -189,6 +200,8 @@ class TestVideoExportExecution:
 
         assert not controller.is_exporting
         assert not out.exists()
+        assert mock_playback.frame == 4
+        assert volume.requested_frames == [0, 4]
 
     def test_volume_failure_cancels_export(self, mock_playback, qtbot, tmp_path: Path) -> None:
         view = MockView(shape=(32, 32, 3))
@@ -198,6 +211,7 @@ class TestVideoExportExecution:
             view=view,
             volume=volume,  # type: ignore
         )
+        mock_playback.go_to_frame(4)
         out = tmp_path / "fail_live.mp4"
         controller.set_frame_range(0, 2)
         controller.set_output_path(out)
@@ -209,3 +223,40 @@ class TestVideoExportExecution:
 
         assert not controller.is_exporting
         assert not out.exists()
+        assert mock_playback.frame == 4
+        assert volume.requested_frames == [0, 4]
+
+    def test_preview_does_not_move_playback(self, mock_playback, qtbot) -> None:
+        view = MockView()
+        volume = MockVolumeController()
+        controller = VideoExportController(
+            playback=mock_playback,
+            view=view,
+            volume=volume,  # type: ignore
+        )
+        mock_playback.go_to_frame(4)
+
+        with qtbot.waitSignal(controller.preview_ready):
+            controller.request_preview_frame(2)
+            assert volume.requested_frames == [2]
+            assert mock_playback.frame == 4
+            volume.volume_prepared.emit(MockPreparedVolume(frame=2))
+
+        assert mock_playback.frame == 4
+
+    def test_closing_dialog_restores_viewport_to_playback_position(self, mock_playback, qtbot) -> None:
+        view = MockView()
+        volume = MockVolumeController()
+        controller = VideoExportController(
+            playback=mock_playback,
+            view=view,
+            volume=volume,  # type: ignore
+        )
+        mock_playback.go_to_frame(4)
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        dialog.reject()
+
+        assert mock_playback.frame == 4
+        assert volume.requested_frames == [0, 4]

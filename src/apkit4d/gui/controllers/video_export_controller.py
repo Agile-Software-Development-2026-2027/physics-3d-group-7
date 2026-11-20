@@ -1,9 +1,4 @@
-"""
-Controller for exporting viewport frames to a video with configurable compression.
-
-We extract frames from the 3D viewport by updating the playback position, then
-we encode the frames into a video, while emitting progress signals for the UI.
-"""
+"""Controller for exporting viewport frames to a video with configurable compression."""
 
 from contextlib import suppress
 from pathlib import Path
@@ -11,7 +6,7 @@ from typing import Any, Protocol
 
 import imageio
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Signal
 
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.playback_controller import PlaybackController
@@ -29,7 +24,7 @@ class VideoExportController(QObject):
     Coordinates exporting viewport frames to a compressed video file.
 
     Args:
-        playback: PlaybackController for timeline and frame navigation.
+        playback: PlaybackController whose position is preserved during export.
         view: 3D view from which we capture the screenshots.
         volume: Optional VolumeController to synchronize when frames finish rendering.
         files: Optional FileController to automatically track open recordings.
@@ -85,6 +80,8 @@ class VideoExportController(QObject):
         self._export_current_frame: int = 0
         self._writer: Any = None
         self._pending_preview_frame: int | None = None
+        self._export_restore_frame: int | None = None
+        self._playback_was_playing = False
 
         # TODO: instead of duplicating listening to file changes like the VolumeController
         #       already does, just disable the possibility to open the export dialog at all
@@ -229,7 +226,7 @@ class VideoExportController(QObject):
 
     def get_preview_frame(self, frame: int) -> NDArray | None:
         """
-        Synchronously get the screenshot of the current viewport frame.
+        Return an immediately available screenshot, or request it asynchronously.
 
         Args:
             frame: Frame index to preview.
@@ -239,33 +236,51 @@ class VideoExportController(QObject):
         """
 
         if (
-            self._playback_controller is not None
+            self._volume_controller is None
+            and self._playback_controller is not None
             and self._playback_controller.frame == frame
             and self._view is not None
         ):
             return self._view.screenshot()
 
-        self.request_preview_frame(frame)  # go to frame
+        self.request_preview_frame(frame)
         return None
 
     def request_preview_frame(self, frame: int) -> None:
         """
-        Navigates to `frame` and emit `preview_ready` when rendered.
+        Renders `frame` without moving playback and emits `preview_ready` when ready.
 
         Args:
             frame: 0-based frame index.
         """
 
-        if self._playback_controller is None or self._view is None:
+        if self._view is None:
             return
 
-        if self._playback_controller.frame == frame:
-            img = self._view.screenshot()
-            self.preview_ready.emit(frame, img)
+        if self._volume_controller is None:
+            if self._playback_controller is not None and self._playback_controller.frame == frame:
+                self.preview_ready.emit(frame, self._view.screenshot())
             return
 
         self._pending_preview_frame = frame
-        self._playback_controller.go_to_frame(frame)
+        self._volume_controller.show_frame(frame)
+
+    def restore_playback_position(self) -> None:
+        """Restore the playback position and show that frame without export navigation."""
+        playback = self._playback_controller
+        if playback is None:
+            return
+
+        frame = self._export_restore_frame if self._export_restore_frame is not None else playback.frame
+        if playback.frame != frame:
+            playback.go_to_frame(frame)
+        elif self._volume_controller is not None:
+            self._volume_controller.show_frame(frame)
+
+        if self._export_restore_frame is not None:
+            self._export_restore_frame = None
+            playback.set_playing(self._playback_was_playing)
+            self._playback_was_playing = False
 
     def start_export(self) -> None:
         """Starts exporting the configured frame range to video."""
@@ -279,15 +294,28 @@ class VideoExportController(QObject):
 
         if self._output_path is None:
             self.export_failed.emit("Output path not set.")
-            return  # the ui disables the "Export" button when the path is not selected
+            return
+
+        if self._view is None:
+            self.export_failed.emit("No 3D view available to capture frames.")
+            return
+
+        if self._volume_controller is None:
+            self.export_failed.emit("No volume controller available to render frames.")
+            return
+
+        if self._playback_controller is not None:
+            self._export_restore_frame = self._playback_controller.frame
+            self._playback_was_playing = self._playback_controller.is_playing
+            self._playback_controller.set_playing(False)
 
         self._is_exporting = True
         self._is_cancelled = False
         self.export_started.emit()
         self.progress_changed.emit(0, self.export_frame_count)  # start progress bar at 0
 
-        self._output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            self._output_path.parent.mkdir(parents=True, exist_ok=True)
             self._writer = imageio.get_writer(
                 self._output_path,
                 fps=self._fps,
@@ -322,28 +350,17 @@ class VideoExportController(QObject):
             self._finish_export()
             return
 
-        frame = self._export_current_frame
-
-        if self._playback_controller is not None:
-            if self._playback_controller.frame != frame:
-                self._playback_controller.go_to_frame(frame)  # updates the main view
-                if self._volume_controller is None:
-                    QTimer.singleShot(0, self._capture_and_advance)  # capture directly
-                return
-            else:  # already on the frame
-                if (
-                    self._volume_controller is None
-                    or getattr(self._volume_controller, "_busy", False) is False
-                ):
-                    self._capture_and_advance()
-                    return
-
-        self._capture_and_advance()
+        assert self._volume_controller is not None
+        try:
+            self._volume_controller.show_frame(self._export_current_frame)
+        except Exception as error:
+            self._cleanup_export(remove_file=True)
+            self.export_failed.emit(f"Failed to request frame {self._export_current_frame}: {error}")
 
     def _on_volume_prepared(self, prepared: object) -> None:
-        """The VolumeController updated a frame, we must re-screenshot it"""
+        """Capture a requested preview/export frame once the volume is ready."""
 
-        frame_idx = getattr(prepared, "frame", None)  # extract signal payload
+        frame_idx = getattr(prepared, "frame", None)
 
         if self._pending_preview_frame is not None and frame_idx == self._pending_preview_frame:
             self._pending_preview_frame = None
@@ -358,7 +375,7 @@ class VideoExportController(QObject):
             self._capture_and_advance()
 
     def _on_volume_failed(self) -> None:
-        """The VolumeController failed to load a frame"""
+        """The VolumeController failed to load a frame."""
 
         if self._is_exporting:
             self._cleanup_export(remove_file=True)
@@ -391,7 +408,7 @@ class VideoExportController(QObject):
             self.export_failed.emit(f"Error during video export: {error}")
 
     def _finish_export(self) -> None:
-        """Closes the video writer"""
+        """Closes the video writer."""
 
         path = self._output_path
         self._cleanup_export(remove_file=False)
@@ -399,7 +416,7 @@ class VideoExportController(QObject):
         self.export_succeeded.emit(path)  # we are done
 
     def _cleanup_export(self, remove_file: bool = False) -> None:
-        """Closes writer and reset export state."""
+        """Closes writer and resets export state."""
 
         self._is_exporting = False
         if self._writer is not None:
@@ -407,5 +424,8 @@ class VideoExportController(QObject):
                 self._writer.close()
             self._writer = None
 
-        if remove_file and self._output_path is not None:
-            self._output_path.unlink(missing_ok=True)  # unlink removes the file
+        try:
+            if remove_file and self._output_path is not None:
+                self._output_path.unlink(missing_ok=True)
+        finally:
+            self.restore_playback_position()

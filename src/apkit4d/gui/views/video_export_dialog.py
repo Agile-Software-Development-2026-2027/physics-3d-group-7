@@ -70,6 +70,7 @@ class VideoExportDialog(QDialog):
         self._connect_controller_signals()
         self._connect_widget_signals()
         self._request_initial_preview()
+        self.finished.connect(self._on_dialog_finished)
 
     def _build_preview_group(self) -> QGroupBox:
         """Build the preview area showing viewport frame screenshots."""
@@ -279,6 +280,12 @@ class VideoExportDialog(QDialog):
             self._controller.cancel_export()
         else:
             self.reject()
+
+    def _on_dialog_finished(self, _: int) -> None:
+        if self._controller.is_exporting:
+            self._controller.cancel_export()
+        else:
+            self._controller.restore_playback_position()
 
     def _on_export_started(self) -> None:
         self._progress_bar.setVisible(True)
