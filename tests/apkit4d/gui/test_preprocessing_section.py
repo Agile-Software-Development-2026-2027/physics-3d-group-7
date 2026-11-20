@@ -119,14 +119,14 @@ def test_preproc_section_changes_are_propagated_through_the_main_controller(qtbo
 def test_suggest_window_button_enabled_only_with_normalization(right_panel: RightPanel) -> None:
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
 
-    assert not section.normalization_enabled.isChecked()
-    assert not section.suggest_window_btn.isEnabled()
-
-    section.normalization_enabled.setChecked(True)
+    assert section.normalization_enabled.isChecked()
     assert section.suggest_window_btn.isEnabled()
 
     section.normalization_enabled.setChecked(False)
     assert not section.suggest_window_btn.isEnabled()
+
+    section.normalization_enabled.setChecked(True)
+    assert section.suggest_window_btn.isEnabled()
 
 
 def test_set_intensity_window_updates_spinboxes_and_emits_params(right_panel: RightPanel) -> None:
