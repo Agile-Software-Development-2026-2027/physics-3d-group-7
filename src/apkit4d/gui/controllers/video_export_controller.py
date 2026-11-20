@@ -192,6 +192,7 @@ class VideoExportController(QObject):
 
     def set_preset(self, preset: str) -> None:
         """Sets FFmpeg encoding preset."""
+
         preset = preset.strip().lower()
         if self._preset != preset:
             self._preset = preset

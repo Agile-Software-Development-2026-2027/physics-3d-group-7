@@ -1,5 +1,6 @@
 """Dialog for exporting viewport frames to a compressed video file."""
 
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,7 @@ from numpy.typing import NDArray
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QFileDialog,
     QGroupBox,
@@ -22,6 +24,18 @@ from PySide6.QtWidgets import (
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+
+
+class _VideoPreset(StrEnum):
+    ULTRAFAST = "ultrafast"
+    SUPERFAST = "superfast"
+    VERYFAST = "veryfast"
+    FASTER = "faster"
+    FAST = "fast"
+    MEDIUM = "medium"
+    SLOW = "slow"
+    SLOWER = "slower"
+    VERYSLOW = "veryslow"
 
 
 class VideoExportDialog(QDialog):
@@ -122,6 +136,15 @@ class VideoExportDialog(QDialog):
         fps_row.addStretch()
         layout.addLayout(fps_row)
 
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel(texts.EXPORT_LABEL_PRESET))
+        self._preset_combo = QComboBox()
+        self._preset_combo.setObjectName(names.VIDEO_EXPORT_PRESET)
+        self._preset_combo.addItems([preset.value for preset in _VideoPreset])
+        preset_row.addWidget(self._preset_combo)
+        preset_row.addStretch()
+        layout.addLayout(preset_row)
+
         return group
 
     def _build_output_group(self) -> QGroupBox:
@@ -187,6 +210,7 @@ class VideoExportDialog(QDialog):
         self._crf_value_label.setText(str(self._controller.crf))
 
         self._fps_spin.setValue(self._controller.fps)
+        self._preset_combo.setCurrentText(self._controller.preset)
 
         path = self._controller.output_path
         self._output_path_label.setText(str(path) if path is not None else "")
@@ -208,6 +232,7 @@ class VideoExportDialog(QDialog):
         self._last_frame_spin.valueChanged.connect(self._on_last_frame_changed)
         self._crf_slider.valueChanged.connect(self._on_crf_changed)
         self._fps_spin.valueChanged.connect(self._on_fps_changed)
+        self._preset_combo.currentTextChanged.connect(self._controller.set_preset)
         self._browse_button.clicked.connect(self._on_browse)
         self._export_button.clicked.connect(self._on_export)
         self._cancel_button.clicked.connect(self._on_cancel)
@@ -316,6 +341,7 @@ class VideoExportDialog(QDialog):
         self._last_frame_spin.setEnabled(enabled)
         self._crf_slider.setEnabled(enabled)
         self._fps_spin.setEnabled(enabled)
+        self._preset_combo.setEnabled(enabled)
         self._browse_button.setEnabled(enabled)
         self._export_button.setEnabled(enabled)
 
