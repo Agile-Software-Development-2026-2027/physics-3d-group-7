@@ -430,9 +430,11 @@ class PreprocessingSection(AccordionSection):
         self.highest_intensity.setValue(high)
 
     def set_lowest_intensity(self, low: float) -> None:
-        """Update lowest intensity value in the spinbox."""
-        self.lowest_instensity.setValue(low)
+        """Update lowest intensity value in the spinbox without emitting signals."""
+        with QSignalBlocker(self.lowest_instensity):
+            self.lowest_instensity.setValue(low)
 
     def set_highest_intensity(self, high: float) -> None:
-        """Update highest intensity value in the spinbox."""
-        self.highest_intensity.setValue(high)
+        """Update highest intensity value in the spinbox without emitting signals."""
+        with QSignalBlocker(self.highest_intensity):
+            self.highest_intensity.setValue(high)

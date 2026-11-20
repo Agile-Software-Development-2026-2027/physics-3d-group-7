@@ -218,3 +218,18 @@ def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
     assert section.denoise_xy_box.isEnabled()
     assert section.complete_btn.isEnabled()
     assert not section.bg_percentile.isEnabled()  # BgMode.NONE keeps percentile disabled
+
+
+def test_set_lowest_and_highest_intensity_block_signals(qtbot) -> None:
+    section = PreprocessingSection()
+    qtbot.addWidget(section)
+
+    emitted: list[tuple[str, object]] = []
+    section.param_changed.connect(lambda name, val: emitted.append((name, val)))
+
+    section.set_lowest_intensity(125.0)
+    section.set_highest_intensity(950.0)
+
+    assert section.lowest_instensity.value() == pytest.approx(125.0)
+    assert section.highest_intensity.value() == pytest.approx(950.0)
+    assert emitted == []
