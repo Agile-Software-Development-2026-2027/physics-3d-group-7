@@ -33,6 +33,10 @@ from apkit4d.gui.controllers.trajectory_detection import DetectionData, detect_s
 from apkit4d.gui.controllers.trajectory_linking_controller import (
     TrajectoryLinkingController,
 )
+from apkit4d.gui.controllers.video_export_controller import (
+    VideoExportController,
+    VideoExportView,
+)
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController, VolumeView
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -50,7 +54,7 @@ from apkit4d.roi import Bounds6D, RegionOfInterest
 from apkit4d.tracking.linker import TrackingResult
 
 
-class SceneView(VolumeView, AppearanceView, BlobView, TrajectoryView, Protocol):
+class SceneView(VolumeView, AppearanceView, BlobView, TrajectoryView, VideoExportView, Protocol):
     """What the controllers need from the 3D view: showing the frames and changing how they look."""
 
 
@@ -202,6 +206,13 @@ class MainController(QObject):
             self.file_controller,
             self.pipeline_controller,
             self,
+        )
+        self._video_export_controller = VideoExportController(
+            playback=self._playback_controller,
+            view=view,
+            volume=self._volume_controller,
+            files=self._file_controller,
+            parent=self,
         )
 
         self._has_precomputed_session = False
