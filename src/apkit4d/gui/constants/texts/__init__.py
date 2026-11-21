@@ -9,6 +9,7 @@ so use them as `texts.BUTTON_PLAY`.
 
 from apkit4d.gui.constants.texts.batch import *  # noqa: F403
 from apkit4d.gui.constants.texts.detection import *  # noqa: F403
+from apkit4d.gui.constants.texts.frame_range_selector import *  # noqa: F403
 from apkit4d.gui.constants.texts.histograms import *  # noqa: F403
 from apkit4d.gui.constants.texts.left_panel import *  # noqa: F403
 from apkit4d.gui.constants.texts.main_window import *  # noqa: F403

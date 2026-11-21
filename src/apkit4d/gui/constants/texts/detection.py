@@ -4,8 +4,6 @@ Texts of the blob detection stage (3).
 
 # blob detection inspector
 INSPECTOR_LABEL_FRAME_RANGE: str = "Frame range"
-START_TIME_LABEL: str = "t₀"
-END_TIME_LABEL: str = "t₁"
 INSPECTOR_TOOLTIP_FRAME_RANGE: str = "The frames range used by batch and linking (0-based, inclusive)."
 INSPECTOR_SECTION_DETECTION_PARAMETERS: str = "Detection parameters"
 INSPECTOR_LABEL_DIAMETER_XY: str = "Diameter XY (µm)"

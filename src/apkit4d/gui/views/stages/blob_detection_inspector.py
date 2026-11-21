@@ -197,9 +197,9 @@ class BlobDetectionInspector(QWidget):
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.setSpacing(8)
 
-        frame_layout.addWidget(QLabel(texts.START_TIME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
+        frame_layout.addWidget(QLabel(texts.START_FRAME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
         frame_layout.addWidget(self._frame_start)
-        frame_layout.addWidget(QLabel(texts.END_TIME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
+        frame_layout.addWidget(QLabel(texts.END_FRAME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
         frame_layout.addWidget(self._frame_end)
 
         self._frame_range_label = QLabel(texts.INSPECTOR_LABEL_FRAME_RANGE)
