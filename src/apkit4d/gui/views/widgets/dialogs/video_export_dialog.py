@@ -132,6 +132,7 @@ class VideoExportDialog(QDialog):
         crf_slider_row.addWidget(QLabel(texts.EXPORT_CRF_SMALLER_FILE))
 
         self._crf_value_label = QLabel()
+        self._crf_value_label.setToolTip(texts.EXPORT_CRF_VALUE_TOOLTIP)
         self._crf_value_label.setObjectName(names.VIDEO_EXPORT_CRF_VALUE)
         self._crf_value_label.setFixedWidth(30)
         self._crf_value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
