@@ -14,7 +14,6 @@ from typing import Protocol, cast
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
-from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
@@ -83,19 +82,6 @@ class MainController(QObject):
         self._theme_controller = ThemeController(app, self)
         self._pipeline_model = PipelineModel(self)
         self._pipeline_controller = PipelineController(self._pipeline_model, window.right_panel, self)
-
-        self._tracking_controller = TrajectoryLinkingController(self)
-        self._tracking_controller.result_ready.connect(self._on_tracking_ready)
-        self._tracking_controller.failed.connect(self._on_tracking_failed)
-
-        self._tracking_result: TrackingResult | None = None
-        self._tracking_running_config: TrackingConfig | None = None
-        self._tracking_generation = 0
-        self._tracking_running_generation: int | None = None
-
-        self._pipeline_model.pipeline_reset.connect(self._on_tracking_pipeline_reset)
-
-        self._pipeline_model.step_status_changed.connect(self._on_tracking_step_status_changed)
 
         self._volume_controller = VolumeController(window, view, self) if view is not None else None
         if self._volume_controller is not None:
@@ -184,6 +170,15 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._trajectory_controller.clear_source)
             self._file_controller.closed.connect(self._trajectory_controller.clear_source)
 
+        self._tracking_controller = TrajectoryLinkingController(
+            self,
+            pipeline_model=self._pipeline_model,
+            pipeline_controller=self._pipeline_controller,
+            file_controller=self._file_controller,
+            trajectory_controller=self._trajectory_controller,
+            playback_controller=self._playback_controller,
+        )
+
         self._roi_controller = RoiStageController(
             inspector=window.right_panel.roi_inspector,
             volume_controller=self._volume_controller,
@@ -268,7 +263,7 @@ class MainController(QObject):
     @property
     def tracking_result(self) -> TrackingResult | None:
         """Return the latest accepted tracking result."""
-        return self._tracking_result
+        return self._tracking_controller.result
 
     def _show_video_export_dialog(self) -> None:
         dialog = VideoExportDialog(self._video_export_controller, self._window)
@@ -302,19 +297,14 @@ class MainController(QObject):
         if self._blob_controller is not None:
             self._blob_controller.set_precomputed_blobs(blobs_df)
 
-        self._tracking_result = session.tracking
-        if self._trajectory_controller is not None:
-            if session.tracking is not None:
-                effective_dt = dt_s
-                if effective_dt is None and self._file_controller.source is not None:
-                    effective_dt = self._file_controller.source.info.dt_s
-                self._trajectory_controller.set_trajectories(
-                    session.tracking.tracks,
-                    dt_s=effective_dt,
-                    current_frame=self._playback_controller.frame,
-                )
-            else:
-                self._trajectory_controller.clear_source()
+        effective_dt = dt_s
+        if effective_dt is None and self._file_controller.source is not None:
+            effective_dt = self._file_controller.source.info.dt_s
+        self._tracking_controller.set_precomputed_result(
+            session.tracking,
+            dt_s=effective_dt,
+            current_frame=self._playback_controller.frame,
+        )
 
     def _apply_session_params(self, session: PrecomputedSession) -> None:
         if session.roi is not None:
@@ -332,107 +322,8 @@ class MainController(QObject):
 
     def _clear_precomputed_session(self) -> None:
         self._has_precomputed_session = False
-        self._tracking_result = None
+        self._tracking_controller.clear_result()
         self._pipeline_model.reset_all()
-
-    def _on_tracking_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
-        """Start tracking and invalidate outdated results."""
-        if step != PipelineStep.TRACKING:
-            return
-
-        if status != StepStatus.COMPLETED:
-            self._tracking_result = None
-            if self._trajectory_controller is not None:
-                self._trajectory_controller.clear_source()
-
-        if status == StepStatus.RUNNING:
-            self._start_tracking_if_needed()
-        else:
-            self._tracking_generation += 1
-
-    def _on_tracking_pipeline_reset(self) -> None:
-        """Invalidate results from previous tracking runs."""
-        self._tracking_generation += 1
-        self._tracking_result = None
-        if self._trajectory_controller is not None:
-            self._trajectory_controller.clear_source()
-
-    def _start_tracking_if_needed(self) -> None:
-        """Link only detections stored by the detection stage."""
-        if self._pipeline_model.get_status(PipelineStep.TRACKING) != StepStatus.RUNNING:
-            return
-
-        if self._tracking_controller.is_running:
-            return
-
-        config = TrackingConfig(**self._pipeline_model.get_step_params(PipelineStep.TRACKING))
-
-        batch_results = self._pipeline_model.batch_results
-
-        if batch_results is None:
-            self._tracking_running_config = config
-            self._tracking_running_generation = self._tracking_generation
-
-            self._on_tracking_failed(ValueError("No detections available. Run the Detection stage first."))
-            return
-
-        detections, metadata = batch_results
-        dt_s = metadata.get("info", {}).get("dt_s")
-
-        self._tracking_running_config = config
-        self._tracking_running_generation = self._tracking_generation
-
-        try:
-            self._tracking_controller.run(
-                detections,
-                config,
-                dt_s=dt_s,
-            )
-        except Exception as error:
-            self._on_tracking_failed(error)
-
-    def _tracking_result_is_current(self) -> bool:
-        """Check whether the completed task still matches the pipeline."""
-        if self._tracking_running_generation != self._tracking_generation:
-            return False
-
-        if self._pipeline_model.get_status(PipelineStep.TRACKING) != StepStatus.RUNNING:
-            return False
-
-        current_config = TrackingConfig(**self._pipeline_model.get_step_params(PipelineStep.TRACKING))
-        return current_config == self._tracking_running_config
-
-    def _on_tracking_ready(self, result: TrackingResult) -> None:
-        """Accept the result only when the running configuration is current."""
-        if not self._tracking_result_is_current():
-            self._start_tracking_if_needed()
-            return
-
-        self._tracking_result = result
-        if self._trajectory_controller is not None:
-            dt_s = (
-                self._file_controller.source.info.dt_s if self._file_controller.source is not None else None
-            )
-            self._trajectory_controller.set_trajectories(
-                result.tracks,
-                dt_s=dt_s,
-                current_frame=self._playback_controller.frame,
-            )
-        self._pipeline_controller.complete_stage(PipelineStep.TRACKING)
-
-    def _on_tracking_failed(self, error: Exception) -> None:
-        """Report failures and restore the pipeline to a retryable state."""
-        if not self._tracking_result_is_current():
-            self._start_tracking_if_needed()
-            return
-
-        self._tracking_result = None
-        self._pipeline_model.invalidate_from(PipelineStep.TRACKING)
-
-        reason = str(error) or type(error).__name__
-        self._window.right_panel.set_stats_summary("Trajectory linking failed")
-        self._window.right_panel.set_stats_details(reason)
-        self._pipeline_controller.report_stage_failure("Trajectory linking failed", reason)
 
     def _on_file_loaded(self, _path: Path, source: FrameSource) -> None:
         playback = self._playback_controller

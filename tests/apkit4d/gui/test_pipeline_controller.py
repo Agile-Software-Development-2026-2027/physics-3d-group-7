@@ -292,3 +292,27 @@ def test_tracking_reset_updates_gui_and_model(qtbot) -> None:
     assert min_len.value() == defaults.min_len
     assert max_gap.value() == defaults.max_gap
     assert max_speed.value() == defaults.max_speed_um_s
+
+
+def test_tracking_model_update_syncs_inspector_with_signals_blocked(qtbot) -> None:
+    view = RightPanel()
+    qtbot.addWidget(view)
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    inspector = view._tracking_inspector
+    assert inspector is not None
+    assert controller.model is model
+
+    emitted: list[int] = []
+    inspector.min_len_changed.connect(emitted.append)
+
+    model.update_step_params(PipelineStep.TRACKING, min_len=9, max_gap=5, max_speed_um_s=240.0)
+
+    min_len = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MIN_LEN)
+    max_gap = view.findChild(QSpinBox, names.TRACKING_INSPECTOR_MAX_GAP)
+    max_speed = view.findChild(QDoubleSpinBox, names.TRACKING_INSPECTOR_MAX_SPEED)
+    assert min_len is not None and min_len.value() == 9
+    assert max_gap is not None and max_gap.value() == 5
+    assert max_speed is not None and max_speed.value() == 240.0
+    assert emitted == []

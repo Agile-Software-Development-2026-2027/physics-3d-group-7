@@ -64,6 +64,7 @@ class PipelineController(QObject):
 
         # 1. Connect Model events -> View
         self._model.step_status_changed.connect(self._on_step_status_changed)
+        self._model.step_params_changed.connect(self._on_model_step_params_changed)
         self._model.pipeline_reset.connect(self._on_pipeline_reset)
 
         # 2. Connect View events -> Controller / Model
@@ -189,6 +190,7 @@ class PipelineController(QObject):
         Args:
             target_step: The target PipelineStep or step string.
         """
+        self._failure_stats = None
         self._batch_message = None
         planned_steps = self.plan_up_to(target_step)
         if not planned_steps:
@@ -207,6 +209,7 @@ class PipelineController(QObject):
     def reset_pipeline(self) -> None:
         """Reset all stages to IDLE and clear stats."""
         self._target_step = None
+        self._failure_stats = None
         self._model.reset_all()
 
     def _sync_view(self) -> None:
@@ -224,6 +227,7 @@ class PipelineController(QObject):
     def _on_pipeline_reset(self) -> None:
         """Handle model reset event."""
         self._target_step = None
+        self._failure_stats = None
         self._batch_message = None
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, StepStatus.IDLE)
@@ -247,11 +251,13 @@ class PipelineController(QObject):
             return
 
         self._model.reset_step_params(step)
+        self._update_pipeline_stats()
 
+    def _on_model_step_params_changed(self, step: PipelineStep) -> None:
+        """Keep stage inspector widgets synchronized with programmatic model parameter updates."""
         if step == PipelineStep.TRACKING:
             config = TrackingConfig(**self._model.get_step_params(step))
             self._view.set_tracking_params(config)
-        self._update_pipeline_stats()
 
     def report_stage_failure(self, summary: str, details: str) -> None:
         self._failure_stats = (summary, details)
