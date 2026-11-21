@@ -43,6 +43,7 @@ from apkit4d.gui.models.pipeline_model import (
 )
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import PrecomputedSession, PrecomputedSource, infer_completed_steps
@@ -201,12 +202,13 @@ class MainController(QObject):
             self,
         )
         self._video_export_controller = VideoExportController(
-            playback=self._playback_controller,
+            playback_controller=self._playback_controller,
             view=view,
-            volume=self._volume_controller,
-            files=self._file_controller,
+            volume_controller=self._volume_controller,
+            file_controller=self._file_controller,
             parent=self,
         )
+        window.video_export_requested.connect(self._show_video_export_dialog)
 
         self._has_precomputed_session = False
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
@@ -267,6 +269,10 @@ class MainController(QObject):
     def tracking_result(self) -> TrackingResult | None:
         """Return the latest accepted tracking result."""
         return self._tracking_result
+
+    def _show_video_export_dialog(self) -> None:
+        dialog = VideoExportDialog(self._video_export_controller, self._window)
+        dialog.exec()
 
     @property
     def trajectory_controller(self) -> TrajectoryController | None:

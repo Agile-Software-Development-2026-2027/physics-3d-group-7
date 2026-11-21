@@ -4,10 +4,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QPushButton, QSpinBox
 
+from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
+from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziInfo, CziSource
 
 
@@ -15,9 +18,11 @@ class MockView:
     def __init__(self, shape: tuple[int, int, int] = (64, 64, 3)) -> None:
         self.shape = shape
         self.screenshot_call_count = 0
+        self.screenshot_window_sizes: list[tuple[int, int] | None] = []
 
-    def screenshot(self) -> np.ndarray:
+    def screenshot(self, window_size: tuple[int, int] | None = None) -> np.ndarray:
         self.screenshot_call_count += 1
+        self.screenshot_window_sizes.append(window_size)
         return np.full(self.shape, fill_value=self.screenshot_call_count * 10, dtype=np.uint8)
 
 
@@ -67,7 +72,7 @@ def mock_source(tmp_path: Path):
 
 class TestVideoExportControllerConfig:
     def test_initialization_defaults(self, mock_playback) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         assert controller.total_frames == 10
         assert controller.first_frame == 0
         assert controller.last_frame == 9
@@ -79,7 +84,7 @@ class TestVideoExportControllerConfig:
         assert controller.is_available
 
     def test_set_properties_and_emits_config_changed(self, mock_playback, qtbot, tmp_path: Path) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
 
         with qtbot.waitSignal(controller.config_changed):
             controller.set_first_frame(2)
@@ -104,6 +109,10 @@ class TestVideoExportControllerConfig:
         assert controller.fps == 30
 
         with qtbot.waitSignal(controller.config_changed):
+            controller.set_resolution(1280, 720)
+        assert controller.resolution == (1280, 720)
+
+        with qtbot.waitSignal(controller.config_changed):
             controller.set_preset("fast")
         assert controller.preset == "fast"
 
@@ -113,7 +122,7 @@ class TestVideoExportControllerConfig:
         assert controller.output_path == out_path
 
     def test_set_frame_range(self, mock_playback, qtbot) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         with qtbot.waitSignal(controller.config_changed):
             controller.set_frame_range(1, 5)
         assert controller.first_frame == 1
@@ -121,7 +130,7 @@ class TestVideoExportControllerConfig:
         assert controller.export_frame_count == 5
 
     def test_set_and_clear_source(self, mock_playback, mock_source, tmp_path: Path) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         czi_path = tmp_path / "sample.czi"
 
         controller.set_source(czi_path, mock_source)
@@ -140,17 +149,97 @@ class TestVideoExportControllerConfig:
 
 
 class TestVideoExportExecution:
+    def test_dialog_opens_output_folder_after_success(
+        self, mock_playback, qtbot, tmp_path: Path, monkeypatch
+    ) -> None:
+        controller = VideoExportController(playback_controller=mock_playback, view=MockView())
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+        button = dialog.findChild(QPushButton, names.VIDEO_EXPORT_OPEN_FOLDER_BUTTON)
+        assert button is not None
+        assert button.isHidden()
+
+        output_path = tmp_path / "export.mp4"
+        opened_urls = []
+        monkeypatch.setattr(
+            "apkit4d.gui.views.widgets.dialogs.video_export_dialog.QDesktopServices.openUrl",
+            lambda url: opened_urls.append(url) or True,
+        )
+        controller.export_succeeded.emit(output_path)
+
+        assert not button.isHidden()
+        button.click()
+        assert len(opened_urls) == 1
+        assert opened_urls[0].toLocalFile() == str(tmp_path)
+
+    def test_dialog_uses_one_based_frame_numbers(self, mock_playback, qtbot) -> None:
+        controller = VideoExportController(
+            playback_controller=mock_playback,
+            view=MockView(),
+        )
+        controller.set_frame_range(2, 7)
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        first_frame = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_FIRST_FRAME)
+        last_frame = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_LAST_FRAME)
+        assert first_frame is not None
+        assert last_frame is not None
+        assert (first_frame.value(), last_frame.value()) == (3, 8)
+
+        first_frame.setValue(4)
+        last_frame.setValue(9)
+
+        assert (controller.first_frame, controller.last_frame) == (3, 8)
+        assert mock_playback.frame == 3
+
+    def test_dialog_resolution_controls_update_export_settings(self, mock_playback, qtbot) -> None:
+        view = MockView()
+        controller = VideoExportController(playback_controller=mock_playback, view=view)
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        width = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_WIDTH)
+        height = dialog.findChild(QSpinBox, names.VIDEO_EXPORT_HEIGHT)
+        assert width is not None
+        assert height is not None
+        assert (width.value(), height.value()) == (1920, 1080)
+
+        width.setValue(1280)
+        height.setValue(720)
+
+        assert controller.resolution == (1280, 720)
+        assert view.screenshot_window_sizes[-1] == (1280, 720)
+
+    def test_dialog_exit_restores_playback_frame(self, mock_playback, qtbot) -> None:
+        mock_playback.go_to_frame(6)
+        controller = VideoExportController(
+            playback_controller=mock_playback,
+            view=MockView(),
+        )
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+
+        assert mock_playback.frame != 6
+
+        dialog.reject()
+
+        assert mock_playback.frame == 6
+
     def test_live_viewport_export_stepping(self, mock_playback, qtbot, tmp_path: Path) -> None:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "live_export.mp4"
         controller.set_frame_range(0, 2)
+        controller.set_resolution(1280, 720)
         controller.set_output_path(out)
+        previewed_frames: list[int] = []
+        controller.preview_ready.connect(lambda frame, _: previewed_frames.append(frame))
 
         with qtbot.waitSignal(controller.export_started):
             controller.start_export()
@@ -173,9 +262,9 @@ class TestVideoExportExecution:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "cancel_live.mp4"
         controller.set_frame_range(0, 5)
@@ -194,9 +283,9 @@ class TestVideoExportExecution:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "fail_live.mp4"
         controller.set_frame_range(0, 2)
