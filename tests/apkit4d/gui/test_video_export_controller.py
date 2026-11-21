@@ -10,7 +10,7 @@ from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.video_export_controller import VideoExportController
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
-from apkit4d.gui.views.video_export_dialog import VideoExportDialog
+from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziInfo, CziSource
 
 

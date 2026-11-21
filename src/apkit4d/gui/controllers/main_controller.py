@@ -49,7 +49,7 @@ from apkit4d.gui.models.pipeline_model import (
 )
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
-from apkit4d.gui.views.video_export_dialog import VideoExportDialog
+from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import PrecomputedSession, PrecomputedSource, infer_completed_steps
