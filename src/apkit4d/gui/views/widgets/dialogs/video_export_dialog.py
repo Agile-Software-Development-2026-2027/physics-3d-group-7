@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import override
 
 import numpy as np
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -23,7 +23,11 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.controllers.video_export_controller import ENCODERS, VideoExportController
+from apkit4d.gui.controllers.video_export_controller import (
+    DEFAULT_RESOLUTION,
+    ENCODERS,
+    VideoExportController,
+)
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 
 
@@ -161,6 +165,12 @@ class VideoExportDialog(QDialog):
         self._height_spin.setObjectName(names.VIDEO_EXPORT_HEIGHT)
         self._height_spin.setRange(1, 8192)
         resolution_row.addWidget(self._height_spin)
+
+        self._reset_resolution = QPushButton(texts.EXPORT_RESOLUTION_RESET)
+        self._reset_resolution.setObjectName(names.VIDEO_EXPORT_RESET_RESOLUTION)
+        self._reset_resolution.setAutoDefault(False)
+        self._reset_resolution.clicked.connect(self._on_reset_resolution)
+        resolution_row.addWidget(self._reset_resolution)
         resolution_row.addStretch()
         layout.addLayout(resolution_row)
 
@@ -254,6 +264,7 @@ class VideoExportDialog(QDialog):
         self._height_spin.setValue(height)
         self._encoder_combo.setCurrentText(self._controller._encoder)
         self._preset_combo.setCurrentText(self._controller.preset)
+        self._reset_resolution.setEnabled(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
 
         path = self._controller.output_path
         self._output_path_label.setText(str(path) if path is not None else "")
@@ -285,12 +296,21 @@ class VideoExportDialog(QDialog):
         self._export_button.clicked.connect(self._on_export)
         self._cancel_button.clicked.connect(self._on_cancel)
 
+    def _on_reset_resolution(self):
+        default_width, default_height = DEFAULT_RESOLUTION
+        with QSignalBlocker(self._width_spin):
+            self._width_spin.setValue(default_width)
+        with QSignalBlocker(self._height_spin):
+            self._height_spin.setValue(default_height)
+        self._on_resolution_changed(0)
+
     def _on_encoder_changed(self, encoder: str):
         self._preset_combo.setEnabled(encoder != "AV1")
         self._controller.set_encoder(encoder)
 
     def _request_initial_preview(self) -> None:
         """Request a preview of the first frame on dialog open."""
+
         if self._controller.total_frames > 0:
             self._controller.request_preview_frame(self._controller.first_frame)
 
@@ -311,7 +331,10 @@ class VideoExportDialog(QDialog):
         self._controller.set_fps(value)
 
     def _on_resolution_changed(self, _: int) -> None:
-        self._controller.set_resolution(self._width_spin.value(), self._height_spin.value())
+        width = self._width_spin.value()
+        height = self._height_spin.value()
+        self._controller.set_resolution(width, height)
+        self._reset_resolution.setEnabled(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
         if self._controller.total_frames > 0:
             self._controller.request_preview_frame(self._controller.first_frame)
 

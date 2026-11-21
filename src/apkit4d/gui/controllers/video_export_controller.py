@@ -25,6 +25,8 @@ ENCODERS: Final[dict[str, str]] = {
     "AV1": "libsvtav1",
 }
 
+DEFAULT_RESOLUTION = (1920, 1080)
+
 
 class VideoExportView(Protocol):
     """What the video export controller needs from the 3D view."""
@@ -88,7 +90,7 @@ class VideoExportController(QObject):
         self._fps: int = int(playback_controller.speed) if playback_controller is not None else 24
 
         # the `window_size`` passed to Viewport.plotter.screenshot
-        self._resolution = (1920, 1080)
+        self._resolution = DEFAULT_RESOLUTION
 
         self._encoder: str = "H264"
         self._preset: str = "medium"
