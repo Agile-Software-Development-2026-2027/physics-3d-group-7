@@ -255,7 +255,7 @@ def test_tracking_requires_real_detections(qtbot, qapp, monkeypatch) -> None:
         raise AssertionError("Tracking must not recompute detections")
 
     monkeypatch.setattr(
-        "apkit4d.gui.controllers.main_controller.detect_sequence",
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
         forbidden,
     )
 

@@ -13,7 +13,11 @@ from apkit4d.gui.controllers.blob_detection_controller import (
     BlobDetection,
     BlobDetectionController,
 )
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
+from apkit4d.gui.controllers.trajectory_detection import DetectionData
 from apkit4d.gui.controllers.volume_controller import PreparedVolume
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
+from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 
 BLOBS = pd.DataFrame(
@@ -470,3 +474,91 @@ def test_closing_the_recording_empties_the_histogram(qtbot, setup, close) -> Non
         close(controller)
 
     assert blocker.args == [None]
+
+
+def test_pipeline_model_detection_params_sync_controller_and_inspector(qtbot) -> None:
+    right_panel = RightPanel()
+    qtbot.addWidget(right_panel)
+    inspector = right_panel.detection_inspector
+    assert inspector is not None
+
+    model = PipelineModel()
+    pipeline = PipelineController(model, right_panel)
+    view = FakeView()
+    controller = BlobDetectionController(
+        inspector,
+        view,
+        pipeline_model=model,
+        pipeline_controller=pipeline,
+    )
+
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.42, min_volume_um3=333.0)
+    assert controller.params.threshold == pytest.approx(0.42)
+    assert controller.params.min_volume_um3 == pytest.approx(333.0)
+    assert inspector.lo_g_threshold == pytest.approx(0.42)
+    assert inspector.min_volume == pytest.approx(333.0)
+
+    model.reset_step_params(PipelineStep.DETECTION)
+    assert controller.params == BlobParams()
+    assert inspector.get_params() == BlobParams()
+
+
+def test_stage_3_sequence_detection_populates_precomputed_blobs_for_playback(qtbot, monkeypatch) -> None:
+    right_panel = RightPanel()
+    qtbot.addWidget(right_panel)
+    inspector = right_panel.detection_inspector
+    assert inspector is not None
+
+    model = PipelineModel()
+    pipeline = PipelineController(model, right_panel)
+    file_controller = types.SimpleNamespace(source=SOURCE)
+    view = FakeView()
+    controller = BlobDetectionController(
+        inspector,
+        view,
+        pipeline_model=model,
+        pipeline_controller=pipeline,
+        file_controller=file_controller,  # type: ignore[arg-type]
+    )
+    controller.on_volume_prepared(make_prepared(frame=0))
+    view.meshes.clear()
+
+    detections = pd.DataFrame(
+        {
+            "frame": [0, 2, 2],
+            "x_um": [1.0, 4.0, 5.0],
+            "y_um": [2.0, 5.0, 6.0],
+            "z_um": [3.0, 6.0, 7.0],
+            "volume_um3": [500.0, 600.0, 700.0],
+            "response": [0.25, 0.4, 0.8],
+        }
+    )
+    monkeypatch.setattr(
+        module,
+        "detect_sequence",
+        lambda *_args, **_kwargs: DetectionData(detections, 0.5, {"info": {"dt_s": 0.5}}),
+    )
+
+    announced_responses: list[object] = []
+    controller.seeds_response_changed.connect(announced_responses.append)
+
+    pipeline.complete_stage(PipelineStep.ROI)
+    pipeline.complete_stage(PipelineStep.PREPROCESSING)
+    pipeline.run_up_to(PipelineStep.DETECTION)
+
+    qtbot.waitUntil(
+        lambda: model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED,
+        timeout=5000,
+    )
+
+    # Frame 0 is shown immediately upon completion; scrubbing to frame 1 and 2 updates 3D view & histogram
+    assert view.meshes[-1].n_points == 1
+    assert np.allclose(announced_responses[-1], [0.25])
+
+    controller.on_volume_prepared(make_prepared(frame=1))
+    assert view.meshes[-1].n_points == 0
+    assert len(announced_responses[-1]) == 0
+
+    controller.on_volume_prepared(make_prepared(frame=2))
+    assert view.meshes[-1].n_points == 2
+    assert np.allclose(announced_responses[-1], [0.4, 0.8])
