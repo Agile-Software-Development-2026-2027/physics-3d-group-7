@@ -1,7 +1,8 @@
+import logging
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -9,16 +10,23 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.constants import texts
-from apkit4d.gui.controllers.file_controller import FrameSource
+from apkit4d.gui.controllers.file_controller import FileController, FrameSource
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.task_runner import TaskRunner
-from apkit4d.gui.controllers.volume_controller import PreparedVolume
+from apkit4d.gui.controllers.trajectory_detection import DetectionData, detect_sequence
+from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
+from apkit4d.io.czi import CziSource
 from apkit4d.pipeline.contracts import CroppedFrame, PreprocessedFrame
 from apkit4d.pipeline.frame_stages import detect_blobs_in_frame
 from apkit4d.visualization.data_mapper import create_blob_mesh
+
+logger = logging.getLogger(__name__)
 
 
 class BlobView(Protocol):
@@ -91,23 +99,30 @@ class BlobDetectionController(QObject):
     def __init__(
         self,
         inspector: BlobDetectionInspector,
-        view: BlobView,
+        view: BlobView | None = None,
         parent: QObject | None = None,
+        *,
+        pipeline_model: PipelineModel | None = None,
+        pipeline_controller: PipelineController | None = None,
+        file_controller: FileController | None = None,
+        volume_controller: VolumeController | None = None,
     ):
         super().__init__(parent)
         self._inspector = inspector
         self._view = view
+        self._pipeline_model = pipeline_model
+        self._pipeline_controller = pipeline_controller
+        self._file_controller = file_controller
+        self._volume_controller = volume_controller
 
-        self._params = BlobParams()
+        self._params = (
+            BlobParams.from_dict(pipeline_model.get_step_params(PipelineStep.DETECTION))
+            if pipeline_model is not None
+            else BlobParams()
+        )
 
         # set default inspector parameters
-        self._inspector.diameter_xy = self._params.diameter_xy_um
-        self._inspector.diameter_z = self._params.diameter_z_um
-        self._inspector.lo_g_threshold = self._params.threshold
-        self._inspector.seed_separation = self._params.split
-        self._inspector.boundary = self._params.grow_frac
-        self._inspector.min_volume = self._params.min_volume_um3
-        self._inspector.max_volume = self._params.max_volume_um3
+        self._inspector.set_params(self._params)
         self._inspector.z_equals_xy = False
         self._inspector.update_on_change = False
 
@@ -134,11 +149,37 @@ class BlobDetectionController(QObject):
         self._runner.succeeded.connect(self._on_done)
         self._runner.failed.connect(self._on_failed)
 
+        self._detection_runner = TaskRunner(self)
+        self._detection_runner.succeeded.connect(self._on_detection_ready)
+        self._detection_runner.failed.connect(self._on_detection_failed)
+        self._detection_task: int | None = None
+        self._detection_generation = 0
+        self._detection_running_generation: int | None = None
+        self._detection_running_source: FrameSource | None = None
+        self._detection_running_params: tuple[PreprocParams, BlobParams, RegionOfInterest | None] | None = (
+            None
+        )
+
+        if self._pipeline_model is not None:
+            self._pipeline_model.pipeline_reset.connect(self._on_detection_pipeline_reset)
+            self._pipeline_model.step_status_changed.connect(self._on_detection_step_status_changed)
+            self._pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+
         self._prepared: PreparedVolume | None = None  # the volume on screen
         self._busy = False  # True when a detection is running
         self._stale = False  # True if a new run was requested while one was running
         self._running: PreparedVolume | None = None  # the volume the running detection works on
         self._precomputed_by_frame: dict[int, pd.DataFrame] | None = None
+
+    @property
+    def params(self) -> BlobParams:
+        """Current blob detection parameters."""
+        return self._params
+
+    def set_params(self, params: BlobParams) -> None:
+        """Synchronize controller and inspector widgets from `params` without emitting signals."""
+        self._params = params
+        self._inspector.set_params(params)
 
     @Slot(bool)
     def on_normalization_toggled(self, checked: bool):
@@ -189,7 +230,11 @@ class BlobDetectionController(QObject):
         if self._precomputed_by_frame is None:
             return
         frame_df = self._precomputed_by_frame.get(frame, pd.DataFrame())
-        self._show_blobs(BlobDetection(frame, frame_df))
+        if "response" in frame_df.columns and not frame_df.empty:
+            seeds = frame_df["response"].dropna().to_numpy(dtype=np.float32)
+        else:
+            seeds = np.empty(0, dtype=np.float32)
+        self._show_blobs(BlobDetection(frame, frame_df, seeds))
 
     def set_source(self, _path: Path, _source: FrameSource):
         """A new recording was opened: forget the volume of the previous one."""
@@ -203,9 +248,134 @@ class BlobDetectionController(QObject):
         self._prepared = None
         self._precomputed_by_frame = None
         self._stale = False
+        self._detection_generation += 1
         self._timer.stop()
         self.seeds_response_changed.emit(None)
         self._clear_blobs(texts.INSPECTOR_STATUS_NO_BLOBS)
+
+    def _on_step_params_changed(self, step: PipelineStep) -> None:
+        if step != PipelineStep.DETECTION or self._pipeline_model is None:
+            return
+        model_params = BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION))
+        if model_params != self._params:
+            self.set_params(model_params)
+
+    def _detection_params(self) -> tuple[PreprocParams, BlobParams, RegionOfInterest | None]:
+        """Take a snapshot of the Stage 3 sequence detection parameters."""
+        assert self._pipeline_model is not None
+        roi = self._volume_controller.roi if self._volume_controller is not None else None
+        if self._volume_controller is None:
+            roi_dict = self._pipeline_model.get_step_params(PipelineStep.ROI)
+            roi = RegionOfInterest.from_dict(roi_dict) if roi_dict else None
+
+        return (
+            self._pipeline_model.get_preproc_params(),
+            BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
+            roi,
+        )
+
+    def _on_detection_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
+        if step != PipelineStep.DETECTION:
+            return
+        if status == StepStatus.RUNNING:
+            self._start_detection_if_needed()
+        else:
+            self._detection_generation += 1
+
+    def _on_detection_pipeline_reset(self) -> None:
+        self._detection_generation += 1
+        if self._precomputed_by_frame is not None:
+            self.set_precomputed_blobs(None)
+
+    def _start_detection_if_needed(self) -> None:
+        """Compute detections across the full recording using the open source."""
+        if self._pipeline_model is None or self._pipeline_controller is None:
+            return
+        if (
+            self._pipeline_model.get_status(PipelineStep.DETECTION) != StepStatus.RUNNING
+            or self._detection_task is not None
+        ):
+            return
+
+        if self._pipeline_model.batch_results is not None:
+            detections, _metadata = self._pipeline_model.batch_results
+            if self._precomputed_by_frame is None and not detections.empty:
+                self.set_precomputed_blobs(detections)
+            self._pipeline_controller.complete_stage(PipelineStep.DETECTION)
+            return
+
+        try:
+            source = self._file_controller.source if self._file_controller is not None else None
+            if source is None:
+                raise ValueError("Open a CZI file before running detection.")
+
+            params = self._detection_params()
+            self._detection_running_source = source
+            self._detection_running_params = params
+            self._detection_running_generation = self._detection_generation
+
+            preproc, blob, roi = params
+            self._detection_task = self._detection_runner.run(
+                partial(
+                    detect_sequence,
+                    cast(CziSource, source),
+                    preproc,
+                    blob,
+                    roi,
+                )
+            )
+            logger.debug("Started Stage 3 sequence detection (generation=%d)", self._detection_generation)
+        except Exception as error:
+            self._report_detection_failure(error)
+
+    def _detection_result_is_current(self) -> bool:
+        if self._pipeline_model is None or self._file_controller is None:
+            return False
+        return (
+            self._detection_running_generation == self._detection_generation
+            and self._pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.RUNNING
+            and self._file_controller.source is self._detection_running_source
+            and self._detection_running_params == self._detection_params()
+        )
+
+    def _on_detection_ready(self, task_id: int, result: object) -> None:
+        if task_id != self._detection_task:
+            return
+
+        self._detection_task = None
+        if not self._detection_result_is_current():
+            self._start_detection_if_needed()
+            return
+
+        if not isinstance(result, DetectionData):
+            self._report_detection_failure(TypeError("Detection returned an unexpected result."))
+            return
+
+        assert self._pipeline_model is not None
+        assert self._pipeline_controller is not None
+        self._pipeline_model.set_batch_results(result.detections, result.metadata)
+        self.set_precomputed_blobs(result.detections)
+        self._pipeline_controller.complete_stage(PipelineStep.DETECTION)
+        logger.info("Completed Stage 3 sequence detection (%d detections)", len(result.detections))
+
+    def _on_detection_failed(self, task_id: int, error: object) -> None:
+        if task_id != self._detection_task:
+            return
+
+        self._detection_task = None
+        if not self._detection_result_is_current():
+            self._start_detection_if_needed()
+            return
+
+        self._report_detection_failure(error)
+
+    def _report_detection_failure(self, error: object) -> None:
+        if self._pipeline_model is None or self._pipeline_controller is None:
+            return
+        self._pipeline_model.invalidate_from(PipelineStep.DETECTION)
+        reason = str(error) or type(error).__name__
+        self._pipeline_controller.report_stage_failure("Blob detection failed", reason)
+        logger.warning("Stage 3 sequence detection failed: %s", reason)
 
     @Slot(str, float)
     def _on_blob_param_changed(self, field: str, value: float):
@@ -282,7 +452,8 @@ class BlobDetectionController(QObject):
             return
 
         median_vol = float(np.median(blobs["volume_um3"])) if "volume_um3" in blobs.columns else 0.0
-        self._view.show_blobs(create_blob_mesh(blobs))
+        if self._view is not None:
+            self._view.show_blobs(create_blob_mesh(blobs))
         self._inspector.set_detection_status(
             texts.INSPECTOR_STATUS_BLOBS_FOUND.format(
                 frame=display_frame,
@@ -292,7 +463,8 @@ class BlobDetectionController(QObject):
         )
 
     def _clear_blobs(self, status: str):
-        self._view.show_blobs(pv.PolyData())  # an empty mesh removes the blobs
+        if self._view is not None:
+            self._view.show_blobs(pv.PolyData())  # an empty mesh removes the blobs
         self._inspector.set_detection_status(status)
 
     @Slot(bool)
