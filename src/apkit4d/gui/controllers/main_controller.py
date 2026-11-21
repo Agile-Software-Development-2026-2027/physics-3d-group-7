@@ -206,6 +206,10 @@ class MainController(QObject):
         window.video_export_requested.connect(self._show_video_export_dialog)
 
         self._has_precomputed_session = False
+        self._pipeline_controller.set_stage_runner(
+            PipelineStep.PREPROCESSING,
+            self._commit_preprocessing_stage,
+        )
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
         self._file_controller.loaded.connect(self._on_file_loaded)
         self._file_controller.closed.connect(self._on_file_closed)
@@ -344,6 +348,14 @@ class MainController(QObject):
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error
+
+    def _commit_preprocessing_stage(self) -> None:
+        """Auto-commit the active preprocessing configuration and complete Stage 2."""
+        if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
+            section_params = cast(PreprocessingSection, preproc_sec).get_params()
+            if section_params != self._pipeline_model.get_preproc_params():
+                self._pipeline_model.set_preproc_params(section_params)
+        self._pipeline_controller.complete_stage(PipelineStep.PREPROCESSING)
 
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         if self._volume_controller is not None and step == PipelineStep.PREPROCESSING:

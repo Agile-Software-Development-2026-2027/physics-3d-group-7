@@ -316,3 +316,32 @@ def test_tracking_model_update_syncs_inspector_with_signals_blocked(qtbot) -> No
     assert max_gap is not None and max_gap.value() == 5
     assert max_speed is not None and max_speed.value() == 240.0
     assert emitted == []
+
+
+def test_pipeline_controller_uniform_stage_runners_auto_advance(qtbot) -> None:
+    """Registered runners for ROI and PREPROCESSING advance directly to target stages."""
+    view = RightPanel()
+    qtbot.addWidget(view)
+    model = PipelineModel()
+    controller = PipelineController(model, view)
+
+    executed: list[PipelineStep] = []
+    controller.set_stage_runner(
+        PipelineStep.ROI,
+        lambda: (executed.append(PipelineStep.ROI), controller.complete_stage(PipelineStep.ROI)),
+    )
+    controller.set_stage_runner(
+        PipelineStep.PREPROCESSING,
+        lambda: (
+            executed.append(PipelineStep.PREPROCESSING),
+            controller.complete_stage(PipelineStep.PREPROCESSING),
+        ),
+    )
+    controller.set_stage_runner(PipelineStep.DETECTION, lambda: executed.append(PipelineStep.DETECTION))
+
+    controller.run_up_to(PipelineStep.DETECTION)
+
+    assert executed == [PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION]
+    assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+    assert model.get_status(PipelineStep.DETECTION) == StepStatus.RUNNING

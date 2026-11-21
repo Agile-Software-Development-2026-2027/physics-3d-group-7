@@ -228,3 +228,23 @@ def test_roi_actions_ignored_when_no_source_loaded(qtbot) -> None:
     assert h.roi_view.started == 0
     assert h.roi_view.previews == []
     assert isinstance(h.playback_bar, QWidget)
+
+
+def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
+    """Running Stage 1 without interactive box selection commits full volume or active crop."""
+    h = _make_harness(qtbot)
+    assert h.vol.roi is None
+
+    h.pipeline.run_up_to(PipelineStep.ROI)
+
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.vol.roi is None
+
+    crop = RegionOfInterest(x_min=5.0, x_max=45.0, y_min=5.0, y_max=35.0, z_min=2.0, z_max=18.0)
+    _accept_bounds(h, crop)
+    h.pipeline.reset_pipeline()
+    h.pipeline.run_up_to(PipelineStep.ROI)
+
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_step_params(PipelineStep.ROI) == crop.to_dict()

@@ -164,6 +164,11 @@ class BlobDetectionController(QObject):
             self._pipeline_model.pipeline_reset.connect(self._on_detection_pipeline_reset)
             self._pipeline_model.step_status_changed.connect(self._on_detection_step_status_changed)
             self._pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+        if self._pipeline_controller is not None:
+            self._pipeline_controller.set_stage_runner(
+                PipelineStep.DETECTION,
+                self._start_detection_if_needed,
+            )
 
         self._prepared: PreparedVolume | None = None  # the volume on screen
         self._busy = False  # True when a detection is running
@@ -278,7 +283,8 @@ class BlobDetectionController(QObject):
         if step != PipelineStep.DETECTION:
             return
         if status == StepStatus.RUNNING:
-            self._start_detection_if_needed()
+            if self._pipeline_controller is None:
+                self._start_detection_if_needed()
         else:
             self._detection_generation += 1
 

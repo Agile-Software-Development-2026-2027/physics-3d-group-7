@@ -302,3 +302,39 @@ def test_stage_3_completion_displays_blobs_across_frames_in_3d_view(qtbot, qapp,
     assert view.show_blobs.call_args.args[0].n_points == 2
     assert np.allclose(seed_hist.seeds_response, [0.5, 0.75])
     assert "2 " in seed_hist.plotItem.titleLabel.text
+
+
+def test_one_click_run_up_to_tracking_from_idle_auto_commits_config_stages(qtbot, qapp, monkeypatch):
+    """Clicking Play on Tracking from IDLE must auto-commit ROI & Preprocessing without hanging."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    source = MagicMock(spec=CziSource)
+    controller.file_controller._source = source
+
+    detections = _detections()
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
+        lambda *_args, **_kwargs: DetectionData(detections, 0.5, {"info": {"dt_s": 0.5}}),
+    )
+
+    assert controller.pipeline_model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+    assert controller.pipeline_model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+
+    qtbot.waitUntil(
+        lambda: controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED,
+        timeout=10000,
+    )
+
+    for step in (
+        PipelineStep.ROI,
+        PipelineStep.PREPROCESSING,
+        PipelineStep.DETECTION,
+        PipelineStep.TRACKING,
+    ):
+        assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
+    assert controller.tracking_result is not None
+    assert controller.tracking_result.metadata["num_detections"] == 8

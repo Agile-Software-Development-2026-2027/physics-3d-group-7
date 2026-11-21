@@ -37,7 +37,7 @@ class BatchController(QObject):
         self._runner.succeeded.connect(self._succeeded)
         self._runner.failed.connect(self._failed)
         self.progress_changed.connect(self._progress)
-        pipeline.set_batch_runner(self.run)
+        pipeline.set_stage_runner(PipelineStep.BATCH, self.run)
         files.loaded.connect(self.set_source)
         files.closed.connect(self.clear_source)
         self._set_enabled()

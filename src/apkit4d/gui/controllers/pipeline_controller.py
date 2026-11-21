@@ -60,7 +60,7 @@ class PipelineController(QObject):
         self._target_step: PipelineStep | None = None
         self._failure_stats: tuple[str, str] | None = None
         self._batch_message: tuple[str, str] | None = None
-        self._batch_runner: Callable[[], None] | None = None
+        self._stage_runners: dict[PipelineStep, Callable[[], None]] = {}
 
         # 1. Connect Model events -> View
         self._model.step_status_changed.connect(self._on_step_status_changed)
@@ -221,8 +221,11 @@ class PipelineController(QObject):
     def _on_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Handle status updates emitted by the model."""
         self._view.set_step_status(step, status)
-        if step == PipelineStep.BATCH and status == StepStatus.RUNNING and self._batch_runner is not None:
-            self._batch_runner()
+        if status == StepStatus.RUNNING:
+            self._failure_stats = None
+            runner = self._stage_runners.get(step)
+            if runner is not None:
+                runner()
 
     def _on_pipeline_reset(self) -> None:
         """Handle model reset event."""
@@ -263,9 +266,13 @@ class PipelineController(QObject):
         self._failure_stats = (summary, details)
         self._update_pipeline_stats()
 
+    def set_stage_runner(self, step: PipelineStep, runner: Callable[[], None]) -> None:
+        """Register the runner invoked whenever `step` transitions to RUNNING."""
+        self._stage_runners[step] = runner
+
     def set_batch_runner(self, runner: Callable[[], None]) -> None:
         """Register the export handler invoked only when Batch enters RUNNING."""
-        self._batch_runner = runner
+        self.set_stage_runner(PipelineStep.BATCH, runner)
 
     def report_batch(self, summary: str, details: str, status: StepStatus) -> None:
         """Report export through the authoritative pipeline model and shared status panel."""

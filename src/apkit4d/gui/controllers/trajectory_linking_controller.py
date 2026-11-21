@@ -56,6 +56,11 @@ class TrajectoryLinkingController(QObject):
         if self._pipeline_model is not None:
             self._pipeline_model.pipeline_reset.connect(self._on_pipeline_reset)
             self._pipeline_model.step_status_changed.connect(self._on_step_status_changed)
+        if self._pipeline_controller is not None:
+            self._pipeline_controller.set_stage_runner(
+                PipelineStep.TRACKING,
+                self._start_tracking_if_needed,
+            )
 
     @property
     def is_running(self) -> bool:
@@ -112,11 +117,12 @@ class TrajectoryLinkingController(QObject):
         if step != PipelineStep.TRACKING:
             return
 
-        if status != StepStatus.COMPLETED:
+        if status not in (StepStatus.RUNNING, StepStatus.COMPLETED):
             self.clear_result()
 
         if status == StepStatus.RUNNING:
-            self._start_tracking_if_needed()
+            if self._pipeline_controller is None:
+                self._start_tracking_if_needed()
         else:
             self._tracking_generation += 1
 
@@ -132,6 +138,8 @@ class TrajectoryLinkingController(QObject):
             return
         if self.is_running:
             return
+
+        self.clear_result()
 
         config = TrackingConfig(**self._pipeline_model.get_step_params(PipelineStep.TRACKING))
         batch_results = self._pipeline_model.batch_results
