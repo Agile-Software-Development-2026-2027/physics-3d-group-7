@@ -23,11 +23,11 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.controllers.video_export_controller import VideoExportController
+from apkit4d.gui.controllers.video_export_controller import ENCODERS, VideoExportController
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 
 
-class _VideoPreset(StrEnum):
+class VideoPreset(StrEnum):
     """Values of the `-preset` flag we pass to ffmpeg.
 
     Slower -> better quality.
@@ -143,7 +143,7 @@ class VideoExportDialog(QDialog):
         fps_row.addWidget(QLabel(texts.EXPORT_LABEL_FPS))
         self._fps_spin = QSpinBox()
         self._fps_spin.setObjectName(names.VIDEO_EXPORT_FPS)
-        self._fps_spin.setRange(1, 120)
+        self._fps_spin.setRange(1, 720)
         fps_row.addWidget(self._fps_spin)
         fps_row.addStretch()
         layout.addLayout(fps_row)
@@ -152,7 +152,7 @@ class VideoExportDialog(QDialog):
         resolution_row.addWidget(QLabel("Resolution (px)"))
         self._width_spin = QSpinBox()
         self._width_spin.setObjectName(names.VIDEO_EXPORT_WIDTH)
-        self._width_spin.setRange(1, 8192)
+        self._width_spin.setRange(1, 8192)  # 8k is enough, it has to be
         resolution_row.addWidget(self._width_spin)
 
         resolution_row.addWidget(QLabel("×"))
@@ -163,11 +163,21 @@ class VideoExportDialog(QDialog):
         resolution_row.addStretch()
         layout.addLayout(resolution_row)
 
+        encoder_row = QHBoxLayout()
+        encoder_row.addWidget(QLabel(texts.EXPORT_LABEL_ENCODER))
+        self._encoder_combo = QComboBox()
+        self._encoder_combo.setObjectName(names.VIDEO_EXPORT_ENCODER)
+        self._encoder_combo.addItems([encoder for encoder in ENCODERS])
+        self._encoder_combo.setToolTip(texts.EXPORT_ENCODER_TOOLTIP)
+        encoder_row.addWidget(self._encoder_combo)
+        encoder_row.addStretch()
+        layout.addLayout(encoder_row)
+
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel(texts.EXPORT_LABEL_PRESET))
         self._preset_combo = QComboBox()
         self._preset_combo.setObjectName(names.VIDEO_EXPORT_PRESET)
-        self._preset_combo.addItems([preset.value for preset in _VideoPreset])
+        self._preset_combo.addItems([preset.value for preset in VideoPreset])
         self._preset_combo.setToolTip(texts.EXPORT_PRESET_TOOLTIP)
         preset_row.addWidget(self._preset_combo)
         preset_row.addStretch()
@@ -241,6 +251,7 @@ class VideoExportDialog(QDialog):
         width, height = self._controller.resolution
         self._width_spin.setValue(width)
         self._height_spin.setValue(height)
+        self._encoder_combo.setCurrentText(self._controller._encoder)
         self._preset_combo.setCurrentText(self._controller.preset)
 
         path = self._controller.output_path
@@ -267,10 +278,15 @@ class VideoExportDialog(QDialog):
         self._fps_spin.valueChanged.connect(self._on_fps_changed)
         self._width_spin.valueChanged.connect(self._on_resolution_changed)
         self._height_spin.valueChanged.connect(self._on_resolution_changed)
+        self._encoder_combo.currentTextChanged.connect(self._on_encoder_changed)
         self._preset_combo.currentTextChanged.connect(self._controller.set_preset)
         self._browse_button.clicked.connect(self._on_browse)
         self._export_button.clicked.connect(self._on_export)
         self._cancel_button.clicked.connect(self._on_cancel)
+
+    def _on_encoder_changed(self, encoder: str):
+        self._preset_combo.setEnabled(encoder != "AV1")
+        self._controller.set_encoder(encoder)
 
     def _request_initial_preview(self) -> None:
         """Request a preview of the first frame on dialog open."""
@@ -390,6 +406,7 @@ class VideoExportDialog(QDialog):
         self._fps_spin.setEnabled(enabled)
         self._width_spin.setEnabled(enabled)
         self._height_spin.setEnabled(enabled)
+        self._encoder_combo.setEnabled(enabled)
         self._preset_combo.setEnabled(enabled)
         self._browse_button.setEnabled(enabled)
         self._export_button.setEnabled(enabled)

@@ -7,7 +7,7 @@ we encode the frames into a video, while emitting progress signals for the UI.
 
 from contextlib import suppress
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 import imageio
 from numpy.typing import NDArray
@@ -16,6 +16,14 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.volume_controller import VolumeController
+
+# Maps UI labels to the parameter to be passed to ffmpeg
+# Cfr. ffmpeg-codecs(1), under section "VIDEO ENCODERS"
+ENCODERS: Final[dict[str, str]] = {
+    "H264": "libx264",
+    "H265": "libx265",
+    "AV1": "libsvtav1",
+}
 
 
 class VideoExportView(Protocol):
@@ -82,6 +90,7 @@ class VideoExportController(QObject):
         # the `window_size`` passed to Viewport.plotter.screenshot
         self._resolution = (1920, 1080)
 
+        self._encoder: str = "H264"
         self._preset: str = "medium"
         self._output_path: Path | None = None
 
@@ -233,11 +242,13 @@ class VideoExportController(QObject):
             self.config_changed.emit()
 
     def set_preset(self, preset: str) -> None:
-        """Sets FFmpeg encoding preset."""
-
-        preset = preset.strip().lower()
         if self._preset != preset:
             self._preset = preset
+            self.config_changed.emit()
+
+    def set_encoder(self, encoder: str) -> None:
+        if self._encoder != encoder:
+            self._encoder = encoder
             self.config_changed.emit()
 
     def set_output_path(self, path: Path | str | None) -> None:
@@ -330,14 +341,17 @@ class VideoExportController(QObject):
         self.progress_changed.emit(0, self.export_frame_count)  # start progress bar at 0
 
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
+        ffmpeg_params = ["-crf", str(self._crf)]
+        if self._encoder != "AV1":  # doesn't support "-preset"
+            ffmpeg_params += ["-preset", self._preset]
         try:
             self._writer = imageio.get_writer(
                 self._output_path,
                 fps=self._fps,
-                codec="libx264",
+                codec=ENCODERS[self._encoder],
                 pixelformat="yuv420p",
                 macro_block_size=16,
-                output_params=["-crf", str(self._crf), "-preset", self._preset],
+                output_params=ffmpeg_params,
             )
         except Exception as error:
             self._cleanup_export(remove_file=True)
