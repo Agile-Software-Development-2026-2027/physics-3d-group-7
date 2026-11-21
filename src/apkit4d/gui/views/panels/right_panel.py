@@ -7,7 +7,7 @@ plan up to this, complete this), and a collapsible bottom statistics
 and diagnostics section.
 """
 
-from typing import Any, assert_never
+from typing import Any, assert_never, cast
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
 from PySide6.QtWidgets import (
@@ -139,6 +139,21 @@ class BottomStatsSection(QFrame):
         self._details_label.setText(text)
         if self._is_expanded:
             self._details_frame.setMaximumHeight(self._details_layout.sizeHint().height() + 12)
+
+    def set_progress(self, done: int, total: int) -> None:
+        """Display deterministic or indeterminate progress in the bottom stats bar."""
+        if total > 0:
+            self.progress.setRange(0, total)
+            self.progress.setValue(max(0, min(done, total)))
+        else:
+            self.progress.setRange(0, 0)
+        self.progress.show()
+
+    def hide_progress(self) -> None:
+        """Reset and hide the bottom progress bar."""
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        self.progress.hide()
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         """
@@ -330,11 +345,23 @@ class RightPanel(SidePanel):
         if section is not None:
             section.set_status(status)
 
-        # enabled the button to complete the preprocessing stage after completing the ROI stage
-        if step == PipelineStep.ROI:
-            preproc_complete = self._complete_buttons.get(PipelineStep.PREPROCESSING)
-            if preproc_complete is not None:
-                preproc_complete.setEnabled(status == StepStatus.COMPLETED)
+    def set_stages_enabled(self, enabled: bool) -> None:
+        """Enable or disable interactive controls and play buttons for all pipeline stages."""
+        for step in PipelineStep:
+            if play_btn := self._play_buttons.get(step):
+                play_btn.setEnabled(enabled)
+
+        preproc = cast(PreprocessingSection | None, self.get_section(PipelineStep.PREPROCESSING))
+        batch: BatchInspector | None = getattr(self, "batch_inspector", None)
+        for inspector in (
+            self._roi_inspector,
+            preproc,
+            self.detection_inspector,
+            self._tracking_inspector,
+            batch,
+        ):
+            if inspector is not None:
+                inspector.set_enabled_state(enabled)
 
     def set_tracking_params(self, config: TrackingConfig) -> None:
         """Synchronize tracking inspector with the model."""
@@ -366,6 +393,14 @@ class RightPanel(SidePanel):
     def set_stats_details(self, text: str) -> None:
         """Update detailed text in bottom stats bar."""
         self._bottom_stats.set_details(text)
+
+    def set_stats_progress(self, done: int, total: int) -> None:
+        """Update and show the progress bar in the bottom stats section."""
+        self._bottom_stats.set_progress(done, total)
+
+    def hide_stats_progress(self) -> None:
+        """Reset and hide the progress bar in the bottom stats section."""
+        self._bottom_stats.hide_progress()
 
     def toggle_stats(self, animate: bool = True) -> None:
         """Toggle bottom stats expansion state."""
@@ -460,10 +495,6 @@ class RightPanel(SidePanel):
                     preproc_sec.reset_requested.connect(
                         lambda: self.step_params_reset.emit(PipelineStep.PREPROCESSING.value)
                     )
-                    preproc_sec.complete_requested.connect(
-                        lambda: self.complete_stage_requested.emit(PipelineStep.PREPROCESSING)
-                    )
-                    self._complete_buttons[PipelineStep.PREPROCESSING] = preproc_sec.complete_btn
                     sec = preproc_sec
                 case PipelineStep.DETECTION:
                     detection_inspector = BlobDetectionInspector()

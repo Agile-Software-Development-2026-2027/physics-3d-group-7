@@ -95,6 +95,7 @@ def test_export_runs_only_when_pipeline_reaches_batch(setup_batch, qtbot, tmp_pa
     assert saved["blob"] == metadata["blob"]
     assert saved["info"] == metadata["info"]
     assert saved["channel"] == 1 and saved["t0"] == 1 and saved["t1"] == 2
+    assert window.right_panel.bottom_stats.progress.isHidden()
     source.read.assert_not_called()
 
 

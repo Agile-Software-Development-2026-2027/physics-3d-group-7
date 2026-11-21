@@ -39,6 +39,10 @@ class BatchInspector(QWidget):
         layout.addRow(texts.BATCH_LAST_FRAME, self.last_frame)
         self.setEnabled(False)
 
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable batch export controls."""
+        self.setEnabled(enabled)
+
     def _choose_directory(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, texts.BATCH_OUTPUT, self.output_dir.text())
         if folder:

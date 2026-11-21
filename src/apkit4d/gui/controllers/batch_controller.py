@@ -1,5 +1,6 @@
 """Export completed pipeline data using the existing table writer."""
 
+import time
 from functools import partial
 from pathlib import Path
 
@@ -33,6 +34,7 @@ class BatchController(QObject):
         self._pipeline = pipeline
         self._source: tuple[Path, int] | None = None
         self._task: int | None = None
+        self._batch_started_at: float = 0.0
         self._runner = TaskRunner(self)
         self._runner.succeeded.connect(self._succeeded)
         self._runner.failed.connect(self._failed)
@@ -102,6 +104,7 @@ class BatchController(QObject):
                 last=last,
                 progress=self.progress_changed.emit,
             )
+            self._batch_started_at = time.monotonic()
             self._progress(0, len(detections))
             self._task = self._runner.run(job)
             self._set_enabled()
@@ -109,17 +112,17 @@ class BatchController(QObject):
             self._show_error(error)
 
     def _progress(self, done: int, total: int) -> None:
-        stats = self._window.right_panel.bottom_stats
         if self._pipeline.model.get_status(PipelineStep.BATCH) != StepStatus.RUNNING:
             return
-        stats.progress.setRange(0, max(1, total))
-        stats.progress.setValue(done if total else 1)
-        stats.progress.show()
-        self._pipeline.report_batch(
-            texts.BATCH_PROGRESS.format(done=done, total=total),
-            texts.BATCH_WORKING,
-            StepStatus.RUNNING,
+        elapsed = time.monotonic() - self._batch_started_at if self._batch_started_at else 0.0
+        self._pipeline.report_stage_progress(
+            PipelineStep.BATCH,
+            done=done,
+            total=total,
+            elapsed_seconds=elapsed,
+            item_label="detections",
         )
+        self._window.right_panel.set_stats_progress(done, total)
 
     def _succeeded(self, task: int, result: object) -> None:
         if task != self._task:

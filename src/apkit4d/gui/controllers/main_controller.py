@@ -206,6 +206,7 @@ class MainController(QObject):
         window.video_export_requested.connect(self._show_video_export_dialog)
 
         self._has_precomputed_session = False
+        self._window.right_panel.set_stages_enabled(False)
         self._pipeline_controller.set_stage_runner(
             PipelineStep.PREPROCESSING,
             self._commit_preprocessing_stage,
@@ -288,8 +289,13 @@ class MainController(QObject):
     def apply_precomputed_session(self, session: PrecomputedSession, dt_s: float | None = None) -> None:
         """Hydrate pipeline stages, precomputed blobs, and trajectories from `session`."""
         self._has_precomputed_session = True
+        self._window.right_panel.set_stages_enabled(True)
         self._pipeline_model.reset_all()
         self._apply_session_params(session)
+        if self._blob_controller is not None:
+            self._blob_controller.on_normalization_toggled(
+                self._pipeline_model.get_preproc_params().normalization_enabled
+            )
 
         completed = set(infer_completed_steps(session))
         for step in PIPELINE_STEP_ORDER:
@@ -335,6 +341,16 @@ class MainController(QObject):
         playback.set_frame_count(source.info.n_t)
         playback.go_to_frame(0)
 
+        self._window.right_panel.set_stages_enabled(True)
+        if source.info.n_t <= 0:
+            self._window.right_panel.batch_inspector.set_enabled_state(False)
+            if batch_play := self._window.right_panel.get_play_button(PipelineStep.BATCH):
+                batch_play.setEnabled(False)
+        if self._blob_controller is not None:
+            self._blob_controller.on_normalization_toggled(
+                self._pipeline_model.get_preproc_params().normalization_enabled
+            )
+
         if isinstance(source, PrecomputedSource):
             self.apply_precomputed_session(source.session, dt_s=source.info.dt_s)
         elif self._has_precomputed_session:
@@ -345,6 +361,7 @@ class MainController(QObject):
     def _on_file_closed(self) -> None:
         if self._has_precomputed_session:
             self._clear_precomputed_session()
+        self._window.right_panel.set_stages_enabled(False)
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error

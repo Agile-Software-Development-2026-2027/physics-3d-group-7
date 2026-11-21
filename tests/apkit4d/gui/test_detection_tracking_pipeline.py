@@ -338,3 +338,52 @@ def test_one_click_run_up_to_tracking_from_idle_auto_commits_config_stages(qtbot
         assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
     assert controller.tracking_result is not None
     assert controller.tracking_result.metadata["num_detections"] == 8
+    assert controller._window.right_panel.bottom_stats.progress.isHidden()
+
+
+def test_stage_3_detection_reports_frame_progress_and_hides_bar(qtbot, qapp, monkeypatch):
+    """Detection stage emits frame progress with remaining frames and hides progress once done."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    source = MagicMock(spec=CziSource)
+    source.info = CziInfo("sample.czi", 10, 4, 8, 8, 1, "uint16", 1.0, 1.0, 1.0, 0.5, "test")
+    controller.file_controller._source = source
+
+    observed_summaries: list[str] = []
+    observed_details: list[str] = []
+    observed_values: list[int] = []
+
+    def fake_detect(czi, preproc, blob, roi=None, *, progress_callback=None):
+        assert progress_callback is not None
+        progress_callback(4, 10)
+        return DetectionData(_detections(), 0.5, {"info": {"dt_s": 0.5}})
+
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
+        fake_detect,
+    )
+
+    stats = window.right_panel.bottom_stats
+    original_report = controller.pipeline_controller.report_stage_progress
+
+    def spy_report(*args, **kwargs):
+        original_report(*args, **kwargs)
+        observed_summaries.append(stats.summary_label.text())
+        observed_details.append(stats.details_label.text())
+        observed_values.append(stats.progress.value())
+
+    monkeypatch.setattr(controller.pipeline_controller, "report_stage_progress", spy_report)
+
+    controller.pipeline_controller.run_up_to(PipelineStep.DETECTION)
+
+    qtbot.waitUntil(
+        lambda: controller.pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED,
+        timeout=10000,
+    )
+
+    assert any("4/10 frames" in s for s in observed_summaries)
+    assert any("6 remaining" in d for d in observed_details)
+    assert 4 in observed_values
+    assert stats.progress.isHidden()

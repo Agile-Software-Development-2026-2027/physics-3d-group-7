@@ -1,5 +1,6 @@
 """Prepare real blob detections for trajectory linking."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ def detect_sequence(
     workers: int = 1,
     out_dir: str | Path | None = None,
     sink: DetectionSink | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> DetectionData:
     """Detect blobs across all frames in a sequence.
 
@@ -46,6 +48,7 @@ def detect_sequence(
         workers: Number of worker processes to request for frame processing.
         out_dir: Optional directory for streaming detections to disk instead of RAM.
         sink: Optional custom ``DetectionSink`` overriding default sink selection.
+        progress_callback: Optional callback invoked with ``(completed_frames, total_frames)``.
 
     Returns:
         DetectionData containing the detections DataFrame, frame interval
@@ -60,6 +63,7 @@ def detect_sequence(
         czi,
         out_dir=out_dir,
         roi=roi,
+        progress_callback=progress_callback,
         sink=sink,
     )
     if result.detections is not None:

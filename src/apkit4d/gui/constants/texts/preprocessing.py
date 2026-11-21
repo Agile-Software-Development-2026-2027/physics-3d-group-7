@@ -35,4 +35,3 @@ PREPROC_CLAHE_CLIP_TOOLTIP: str = "Controls noise amplification"
 PREPROC_CLAHE_KERNEL_TOOLTIP: str = "Size of the local neighborhood (tile) used by CLAHE"
 PREPROC_RESET: str = "Reset All to Defaults"
 PREPROC_SUGGEST_WINDOW_TOOLTIP: str = "Computed the intensity window from the current volume"
-PREPROC_COMPLETE: str = "Done"  # 🤷‍♂️

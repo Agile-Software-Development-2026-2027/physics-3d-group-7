@@ -40,6 +40,8 @@ class RoiInspector(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._volume_bounds: Bounds6D | None = None
+        self._editing_mode: bool = False
+        self._has_undo: bool = False
 
         self._main_layout = QVBoxLayout(self)
         self._main_layout.setContentsMargins(0, 0, 0, 0)
@@ -232,8 +234,10 @@ class RoiInspector(QWidget):
 
     def set_editing_mode(self, editing: bool) -> None:
         """Enable or disable the Accept and Cancel buttons based on whether a preview is active."""
-        self._accept_btn.setEnabled(editing)
-        self._cancel_btn.setEnabled(editing)
+        self._editing_mode = editing
+        can_edit = self.isEnabled() and editing
+        self._accept_btn.setEnabled(can_edit)
+        self._cancel_btn.setEnabled(can_edit)
         if editing:
             self._status_label.setText(texts.INSPECTOR_STATUS_ROI_SELECTING)
 
@@ -254,4 +258,26 @@ class RoiInspector(QWidget):
 
     def set_undo_enabled(self, enabled: bool) -> None:
         """Enable or disable the Undo button depending on whether ROI history is available."""
-        self._undo_btn.setEnabled(enabled)
+        self._has_undo = enabled
+        self._undo_btn.setEnabled(self.isEnabled() and enabled)
+
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable interactive ROI controls while preserving preview/undo gating."""
+        self.setEnabled(enabled)
+        for widget in (
+            self._x_min,
+            self._x_max,
+            self._y_min,
+            self._y_max,
+            self._z_min,
+            self._z_max,
+            self._select_btn,
+            self._reset_btn,
+            self.min_frame,
+            self.max_frame,
+            self.save_button,
+        ):
+            widget.setEnabled(enabled)
+        self._accept_btn.setEnabled(enabled and self._editing_mode)
+        self._cancel_btn.setEnabled(enabled and self._editing_mode)
+        self._undo_btn.setEnabled(enabled and self._has_undo)

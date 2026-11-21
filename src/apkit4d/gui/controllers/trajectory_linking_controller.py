@@ -1,11 +1,12 @@
 """Controller for asynchronous trajectory linking and Stage 4 pipeline orchestration."""
 
 import logging
+import time
 from functools import partial
 from typing import cast
 
 import pandas as pd
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.controllers.file_controller import FileController
@@ -52,6 +53,10 @@ class TrajectoryLinkingController(QObject):
         self._tracking_running_config: TrackingConfig | None = None
         self._tracking_generation = 0
         self._tracking_running_generation: int | None = None
+        self._tracking_started_at: float = 0.0
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setInterval(500)
+        self._progress_timer.timeout.connect(self._on_progress_tick)
 
         if self._pipeline_model is not None:
             self._pipeline_model.pipeline_reset.connect(self._on_pipeline_reset)
@@ -124,11 +129,24 @@ class TrajectoryLinkingController(QObject):
             if self._pipeline_controller is None:
                 self._start_tracking_if_needed()
         else:
+            self._progress_timer.stop()
             self._tracking_generation += 1
 
     def _on_pipeline_reset(self) -> None:
+        self._progress_timer.stop()
         self._tracking_generation += 1
         self.clear_result()
+
+    def _on_progress_tick(self) -> None:
+        if self._pipeline_controller is None or not self._tracking_result_is_current():
+            self._progress_timer.stop()
+            return
+        self._pipeline_controller.report_stage_progress(
+            PipelineStep.TRACKING,
+            done=0,
+            total=0,
+            elapsed_seconds=time.monotonic() - self._tracking_started_at,
+        )
 
     def _start_tracking_if_needed(self) -> None:
         """Link detections produced by Stage 3 using current Stage 4 configuration."""
@@ -156,11 +174,21 @@ class TrajectoryLinkingController(QObject):
 
         self._tracking_running_config = config
         self._tracking_running_generation = self._tracking_generation
+        self._tracking_started_at = time.monotonic()
 
         try:
             self.run(detections, config, dt_s=dt_s)
+            if self._pipeline_controller is not None:
+                self._pipeline_controller.report_stage_progress(
+                    PipelineStep.TRACKING,
+                    done=0,
+                    total=0,
+                    elapsed_seconds=0.0,
+                )
+            self._progress_timer.start()
             logger.debug("Started Stage 4 trajectory linking (generation=%d)", self._tracking_generation)
         except Exception as error:
+            self._progress_timer.stop()
             self._handle_pipeline_failure(error)
 
     def _tracking_result_is_current(self) -> bool:
@@ -180,6 +208,7 @@ class TrajectoryLinkingController(QObject):
             return
 
         self._task_id = None
+        self._progress_timer.stop()
         if self._pipeline_model is not None and not self._tracking_result_is_current():
             self._start_tracking_if_needed()
             return
@@ -213,6 +242,7 @@ class TrajectoryLinkingController(QObject):
             return
 
         self._task_id = None
+        self._progress_timer.stop()
         if self._pipeline_model is not None:
             if not self._tracking_result_is_current():
                 self._start_tracking_if_needed()
