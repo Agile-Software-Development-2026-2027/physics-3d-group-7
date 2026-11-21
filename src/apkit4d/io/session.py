@@ -115,3 +115,13 @@ class PrecomputedFrameSource:
     def close(self) -> None:
         """Close the underlying frame source."""
         self._base.close()
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate everything else, like `path` and `channel` of a CziSource, to the underlying source.
+
+        Detection reads them when it runs again on a recording opened with saved results.
+        """
+        base = self.__dict__.get("_base")
+        if base is None:  # not initialized yet, e.g. while copying
+            raise AttributeError(name)
+        return getattr(base, name)
