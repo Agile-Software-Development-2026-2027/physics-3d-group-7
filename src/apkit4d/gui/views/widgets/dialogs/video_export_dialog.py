@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import override
 
 import numpy as np
-from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtGui import QCloseEvent, QImage, QPixmap
+from PySide6.QtCore import QSignalBlocker, Qt, QUrl
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -65,6 +65,7 @@ class VideoExportDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._completed_output_path: Path | None = None
         self.setObjectName(names.VIDEO_EXPORT_DIALOG)
         self.setWindowTitle(texts.EXPORT_DIALOG_TITLE)
         self.setMinimumWidth(500)
@@ -238,6 +239,11 @@ class VideoExportDialog(QDialog):
         self._export_button.setObjectName(names.VIDEO_EXPORT_EXPORT_BUTTON)
         layout.addWidget(self._export_button)
 
+        self._open_output_folder_button = QPushButton(texts.EXPORT_BUTTON_OPEN_FOLDER)
+        self._open_output_folder_button.setObjectName(names.VIDEO_EXPORT_OPEN_FOLDER_BUTTON)
+        self._open_output_folder_button.setVisible(False)
+        layout.addWidget(self._open_output_folder_button)
+
         self._cancel_button = QPushButton(texts.EXPORT_BUTTON_CANCEL)
         self._cancel_button.setObjectName(names.VIDEO_EXPORT_CANCEL_BUTTON)
         layout.addWidget(self._cancel_button)
@@ -294,6 +300,7 @@ class VideoExportDialog(QDialog):
         self._preset_combo.currentTextChanged.connect(self._controller.set_preset)
         self._browse_button.clicked.connect(self._on_browse)
         self._export_button.clicked.connect(self._on_export)
+        self._open_output_folder_button.clicked.connect(self._on_open_output_folder)
         self._cancel_button.clicked.connect(self._on_cancel)
 
     def _on_reset_resolution(self):
@@ -367,6 +374,8 @@ class VideoExportDialog(QDialog):
         super().closeEvent(event)
 
     def _on_export_started(self) -> None:
+        self._completed_output_path = None
+        self._open_output_folder_button.setVisible(False)
         self._progress_bar.setVisible(True)
         self._progress_bar.setValue(0)
         self._status_label.setText(
@@ -380,19 +389,33 @@ class VideoExportDialog(QDialog):
         self._status_label.setText(texts.EXPORT_STATUS_EXPORTING.format(done=done, total=total))
 
     def _on_export_succeeded(self, path: Path) -> None:
+        self._completed_output_path = path
+        self._open_output_folder_button.setVisible(True)
         self._set_controls_enabled(True)
         self._progress_bar.setVisible(False)
         self._status_label.setText(texts.EXPORT_STATUS_DONE.format(path=path.name))
 
     def _on_export_failed(self, reason: str) -> None:
+        self._completed_output_path = None
+        self._open_output_folder_button.setVisible(False)
         self._set_controls_enabled(True)
         self._progress_bar.setVisible(False)
         self._status_label.setText(texts.EXPORT_STATUS_FAILED.format(reason=reason))
 
     def _on_export_cancelled(self) -> None:
+        self._completed_output_path = None
+        self._open_output_folder_button.setVisible(False)
         self._set_controls_enabled(True)
         self._progress_bar.setVisible(False)
         self._status_label.setText(texts.EXPORT_STATUS_CANCELLED)
+
+    def _on_open_output_folder(self) -> None:
+        if self._completed_output_path is None:
+            return
+
+        folder = self._completed_output_path.parent
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+            self._status_label.setText(texts.EXPORT_STATUS_OPEN_FOLDER_FAILED.format(path=folder))
 
     def _on_preview_ready(self, _frame: int, arr: object) -> None:
         """Displays a frame preview from the controller."""
@@ -434,6 +457,12 @@ class VideoExportDialog(QDialog):
         self._preset_combo.setEnabled(enabled)
         self._browse_button.setEnabled(enabled)
         self._export_button.setEnabled(enabled)
+        self._reset_resolution.setEnabled(
+            False
+            if not enabled
+            else self._width_spin.value() != DEFAULT_RESOLUTION[0]
+            or self._height_spin.value() != DEFAULT_RESOLUTION[1]
+        )
 
     def _update_export_button_state(self) -> None:
         """Enable the Export button only when export is possible."""

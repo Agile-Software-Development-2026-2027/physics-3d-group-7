@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QSpinBox
+from PySide6.QtWidgets import QPushButton, QSpinBox
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.playback_controller import PlaybackController
@@ -149,6 +149,29 @@ class TestVideoExportControllerConfig:
 
 
 class TestVideoExportExecution:
+    def test_dialog_opens_output_folder_after_success(
+        self, mock_playback, qtbot, tmp_path: Path, monkeypatch
+    ) -> None:
+        controller = VideoExportController(playback_controller=mock_playback, view=MockView())
+        dialog = VideoExportDialog(controller)
+        qtbot.addWidget(dialog)
+        button = dialog.findChild(QPushButton, names.VIDEO_EXPORT_OPEN_FOLDER_BUTTON)
+        assert button is not None
+        assert button.isHidden()
+
+        output_path = tmp_path / "export.mp4"
+        opened_urls = []
+        monkeypatch.setattr(
+            "apkit4d.gui.views.widgets.dialogs.video_export_dialog.QDesktopServices.openUrl",
+            lambda url: opened_urls.append(url) or True,
+        )
+        controller.export_succeeded.emit(output_path)
+
+        assert not button.isHidden()
+        button.click()
+        assert len(opened_urls) == 1
+        assert opened_urls[0].toLocalFile() == str(tmp_path)
+
     def test_dialog_uses_one_based_frame_numbers(self, mock_playback, qtbot) -> None:
         controller = VideoExportController(
             playback_controller=mock_playback,
