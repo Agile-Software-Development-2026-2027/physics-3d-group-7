@@ -13,11 +13,10 @@ from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.trajectory_detection import detect_sequence
 from apkit4d.io.czi import CziInfo, CziSource
 from apkit4d.pipeline.contracts import SequenceDetectionResult
-from apkit4d.pipeline.sinks import InMemoryDetectionSink
 
 
 def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Use InMemoryDetectionSink without writing temporary files to disk."""
+    """Delegate with sink=None and out_dir=None so process_sequence runs in RAM."""
     czi_path = tmp_path / "sample.czi"
 
     expected = pd.DataFrame(
@@ -29,11 +28,12 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
         }
     )
 
-    def fake_process_sequence(self, czi, *, roi, sink):
+    def fake_process_sequence(self, czi, *, out_dir, roi, sink):
         assert czi == czi_path
         assert self.config.workers == 1
+        assert out_dir is None
         assert roi is None
-        assert isinstance(sink, InMemoryDetectionSink)
+        assert sink is None
 
         return SequenceDetectionResult(
             detections=expected,
@@ -60,7 +60,7 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
 def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Return an empty table when no blobs are found."""
 
-    def fake_process_sequence(self, czi, *, roi, sink):
+    def fake_process_sequence(self, czi, *, out_dir, roi, sink):
         return SequenceDetectionResult(
             detections=None,
             table_path=None,
@@ -116,3 +116,40 @@ def test_detect_sequence_reuses_open_czi_source_without_disk_io(tmp_path: Path) 
     assert not result.detections.empty
     assert result.dt_s == 0.5
     source.close.assert_not_called()
+
+
+def test_detect_sequence_falls_back_to_disk_sink_when_out_dir_provided(tmp_path: Path) -> None:
+    """When out_dir is supplied, stream to disk and read detections back into DetectionData."""
+    out_dir = tmp_path / "disk_fallback"
+    source = MagicMock(spec=CziSource)
+    source.path = tmp_path / "sample.czi"
+    source.channel = 0
+    source.info = CziInfo(
+        path=str(source.path),
+        n_t=2,
+        n_z=10,
+        n_y=20,
+        n_x=20,
+        n_c=1,
+        dtype="uint16",
+        px_size_x=1.0,
+        px_size_z=1.0,
+        px_size_y=1.0,
+        dt_s=0.5,
+        dt_source="test",
+    )
+    vol = np.zeros((10, 20, 20), dtype=np.uint16)
+    vol[3:7, 8:13, 8:13] = 25000
+    source.read.return_value = vol
+
+    result = detect_sequence(
+        source,
+        PreprocParams(),
+        BlobParams(threshold=0.05, min_volume_um3=1.0),
+        out_dir=out_dir,
+    )
+
+    assert (out_dir / "sample_blobs.parquet").is_file()
+    assert (out_dir / "sample_blobs_params.json").is_file()
+    assert not result.detections.empty
+    assert result.dt_s == 0.5

@@ -23,7 +23,13 @@ DEFAULT_DETECTION_COLUMNS: tuple[str, ...] = ("frame", "t_s", *DETECTION_COLUMNS
 
 
 def json_serializable(obj: Any) -> Any:
-    """Fallback serializer for objects that are not natively JSON-serializable."""
+    """Fallback ``default=`` serializer for ``json.dumps`` on metadata dictionaries.
+
+    Core pipeline config dataclasses already serialize natively (primitives and
+    ``StrEnum``), so this acts as a defensive coercion hook when caller-supplied
+    metadata contains non-``StrEnum`` enums, ``pathlib.Path`` instances, or NumPy
+    scalars/arrays which, as you can imagine, are not JSON serializable by default.
+    """
     if isinstance(obj, Enum):
         return obj.value
     if isinstance(obj, Path):

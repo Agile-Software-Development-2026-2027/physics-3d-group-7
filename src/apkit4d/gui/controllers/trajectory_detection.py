@@ -12,7 +12,8 @@ from apkit4d.core.roi import RegionOfInterest
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
-from apkit4d.pipeline.sinks import InMemoryDetectionSink
+from apkit4d.io.table import read_table
+from apkit4d.pipeline.contracts import DetectionSink
 
 
 @dataclass(frozen=True)
@@ -29,8 +30,27 @@ def detect_sequence(
     roi: RegionOfInterest | None = None,
     *,
     workers: int = 1,
+    out_dir: str | Path | None = None,
+    sink: DetectionSink | None = None,
 ) -> DetectionData:
-    """Detect all frames in memory, reusing an open CziSource when given."""
+    """Detect blobs across all frames in a sequence.
+
+    Defaults to in-memory collection without disk writes; streams to disk when
+    ``out_dir`` or a disk-backed ``sink`` is provided.
+
+    Args:
+        czi: Path to a CZI file or an already-open ``CziSource`` instance.
+        preproc_params: Volume preprocessing parameters.
+        blob_params: LoG blob detection parameters.
+        roi: Optional region of interest restricting detection bounds.
+        workers: Number of worker processes to request for frame processing.
+        out_dir: Optional directory for streaming detections to disk instead of RAM.
+        sink: Optional custom ``DetectionSink`` overriding default sink selection.
+
+    Returns:
+        DetectionData containing the detections DataFrame, frame interval
+        ``dt_s``, and sequence metadata dictionary.
+    """
     processor = BatchProcessor(
         config=BatchConfig(workers=workers),
         preproc_params=preproc_params,
@@ -38,14 +58,16 @@ def detect_sequence(
     )
     result = processor.process_sequence(
         czi,
+        out_dir=out_dir,
         roi=roi,
-        sink=InMemoryDetectionSink(),
+        sink=sink,
     )
-    detections = (
-        result.detections
-        if result.detections is not None
-        else pd.DataFrame(columns=["frame", "z_um", "y_um", "x_um"])
-    )
+    if result.detections is not None:
+        detections = result.detections
+    elif result.table_path is not None and result.num_blobs > 0:
+        detections = read_table(result.table_path)
+    else:
+        detections = pd.DataFrame(columns=["frame", "z_um", "y_um", "x_um"])
 
     return DetectionData(
         detections=detections,
