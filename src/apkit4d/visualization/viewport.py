@@ -7,11 +7,15 @@ import numpy as np
 import pyvista as pv
 from matplotlib import colormaps
 from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QMouseEvent
+from PySide6.QtGui import QCloseEvent, QMouseEvent
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
-from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
+from vtkmodules.vtkInteractionWidgets import (
+    vtkBoxRepresentation,
+    vtkBoxWidget2,
+    vtkOrientationMarkerWidget,
+)
 
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.fps_counter import FpsCounter
@@ -86,6 +90,8 @@ class Viewport(QWidget):
         # until the mouse moves the view
         self.plotter = QtInteractor(self, auto_update=False)
         self.main_layout.addWidget(self.plotter.interactor)
+        self._export_plotter: pv.Plotter | None = None
+        self._export_axes_widget: vtkOrientationMarkerWidget | None = None
 
         # store it for later when we have to restore it on show_volume(...., reset_camera=True)
         self._initial_camera_position = self.plotter.camera_position
@@ -212,30 +218,70 @@ class Viewport(QWidget):
             np.ndarray: Sized [Height x Width x 3] with dtype uint8.
         """
 
-        if sys.platform == "darwin" and window_size is not None and self.plotter.devicePixelRatioF() > 1.0:
-            img = self.plotter.screenshot(return_img=True)
-            arr = np.asarray(img)
-            if arr.ndim == 3 and arr.shape[2] == 4:
-                arr = arr[:, :, :3]
-            arr = np.ascontiguousarray(arr)
-
-            height, width = arr.shape[:2]
-            qimg = QImage(arr.data, width, height, 3 * width, QImage.Format.Format_RGB888)
-            scaled = qimg.scaled(
-                window_size[0],
-                window_size[1],
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            ).convertToFormat(QImage.Format.Format_RGB888)
-            pixels = np.frombuffer(scaled.constBits(), dtype=np.uint8)
-            rows = pixels.reshape((scaled.height(), scaled.bytesPerLine()))
-            return rows[:, : scaled.width() * 3].reshape((scaled.height(), scaled.width(), 3)).copy()
+        if sys.platform == "darwin" and window_size is not None:
+            return self._screenshot_offscreen(window_size)
 
         img = self.plotter.screenshot(return_img=True, window_size=window_size)
         arr = np.asarray(img)
         if arr.ndim == 3 and arr.shape[2] == 4:
             arr = arr[:, :, :3]  # discard the alpha channel
         return arr
+
+    def _screenshot_offscreen(self, window_size: tuple[int, int]) -> np.ndarray:
+        """Render the scene at a fixed size without resizing the live Qt viewport."""
+        if self._export_plotter is None:
+            self._export_plotter = pv.Plotter(off_screen=True, window_size=list(window_size))
+            source_axes = getattr(self.plotter.renderer, "axes_widget", None)
+            source_axes_actor = getattr(self.plotter.renderer, "axes_actor", None)
+            if source_axes is not None and source_axes_actor is not None:
+                self._export_axes_widget = vtkOrientationMarkerWidget()
+                self._export_axes_widget.SetOrientationMarker(source_axes_actor)
+                render_window = self._export_plotter.render_window
+                if render_window is None:
+                    raise RuntimeError("Offscreen render window is unavailable.")
+                self._export_axes_widget.SetInteractor(render_window.GetInteractor())
+                self._export_axes_widget.SetEnabled(source_axes.GetEnabled())
+                self._export_axes_widget.SetCurrentRenderer(self._export_plotter.renderer)
+                self._export_axes_widget.SetViewport(source_axes.GetViewport())
+                if source_axes.GetEnabled():
+                    self._export_axes_widget.SetInteractive(False)
+
+        export_plotter = self._export_plotter
+        render_window = export_plotter.render_window
+        if render_window is None:
+            raise RuntimeError("Offscreen render window is unavailable.")
+
+        export_renderer = export_plotter.renderer
+        source_renderer = self.plotter.renderer
+        render_window.SetSize(*window_size)
+
+        export_renderer.RemoveAllViewProps()
+        source_props = source_renderer.GetViewProps()
+        source_props.InitTraversal()
+        while prop := source_props.GetNextProp():
+            export_renderer.AddViewProp(prop)
+
+        export_renderer.RemoveAllLights()
+        source_lights = source_renderer.GetLights()
+        source_lights.InitTraversal()
+        while light := source_lights.GetNextItem():
+            export_renderer.AddLight(light)
+
+        export_renderer.SetBackground(source_renderer.GetBackground())
+        export_renderer.SetBackground2(source_renderer.GetBackground2())
+        export_renderer.SetGradientBackground(source_renderer.GetGradientBackground())
+        export_renderer.GetActiveCamera().DeepCopy(source_renderer.GetActiveCamera())
+
+        return np.asarray(export_plotter.screenshot(return_img=True))
+
+    @override
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self._export_axes_widget is not None:
+            self._export_axes_widget.SetEnabled(False)
+        if self._export_plotter is not None:
+            self._export_plotter.close()
+            self._export_plotter = None
+        super().closeEvent(event)
 
     def show_volume(self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False) -> None:
         """
