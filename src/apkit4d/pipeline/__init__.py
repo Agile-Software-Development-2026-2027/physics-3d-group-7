@@ -21,15 +21,23 @@ from apkit4d.pipeline.frame_stages import (
     detect_blobs_in_frame,
     preprocess_frame,
 )
+from apkit4d.pipeline.sinks import (
+    InMemoryDetectionSink,
+    StreamingDiskDetectionSink,
+    TeeDetectionSink,
+)
 
 __all__ = [
     "CancelToken",
     "CroppedFrame",
     "DetectionSink",
     "FrameDetectionResult",
+    "InMemoryDetectionSink",
     "PreprocessedFrame",
     "ProgressCallback",
     "SequenceDetectionResult",
+    "StreamingDiskDetectionSink",
+    "TeeDetectionSink",
     "coerce_blob_params",
     "coerce_preproc_params",
     "coerce_roi",
