@@ -86,6 +86,9 @@ class Viewport(QWidget):
         self.plotter = QtInteractor(self, auto_update=False)
         self.main_layout.addWidget(self.plotter.interactor)
 
+        # store it for later when we have to restore it on show_volume(...., reset_camera=True)
+        self._initial_camera_position = self.plotter.camera_position
+
         # when we drag the 3D view a lot of events fire and they slow down the main thread.
         # with this we ignore events that happen too cloose to each other
         self._last_drag_render_time: float = 0.0
@@ -195,15 +198,20 @@ class Viewport(QWidget):
 
         # TODO: the next step is also deactivating the default panning and maybe implement a custom one
 
-    def screenshot(self) -> np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]:
+    def screenshot(
+        self, window_size: tuple[int, int] | None = None
+    ) -> np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]:
         """
         Captures the current 3D viewport rendered frame as an RGB numpy array.
+
+        Args:
+            window_size: Optional output size as (width, height) in pixels.
 
         Returns:
             np.ndarray: Sized [Height x Width x 3] with dtype uint8.
         """
 
-        img = self.plotter.screenshot(return_img=True)
+        img = self.plotter.screenshot(return_img=True, window_size=window_size)
         arr = np.asarray(img)
         if arr.ndim == 3 and arr.shape[2] == 4:
             arr = arr[:, :, :3]  # discard the alpha channel
@@ -216,6 +224,9 @@ class Viewport(QWidget):
         Parameters:
             grid (pv.ImageData): PyVista ImageData object that we mapped in the data_mapper.py file.
                                  it contains the 3D data that we want to visualize.
+
+            reset_camera (bool): restores camera position, zoom, rotation, distance to their initial
+                                 values.
 
             force_update (bool): force a full copy of the PyVista grid. It is slow. Use it when the
                                  intensity between two frame is widely different. Otherwise the view
@@ -259,6 +270,7 @@ class Viewport(QWidget):
             self.plotter.update_scalar_bar_range((vmin, vmax))
 
             if reset_camera:
+                self.plotter.camera_position = self._initial_camera_position
                 self.plotter.renderer.reset_camera(render=False)
             self._request_render()
             return

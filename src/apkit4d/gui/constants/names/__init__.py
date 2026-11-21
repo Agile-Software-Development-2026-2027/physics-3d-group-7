@@ -17,4 +17,5 @@ from apkit4d.gui.constants.names.preprocessing import *  # noqa: F403
 from apkit4d.gui.constants.names.right_panel import *  # noqa: F403
 from apkit4d.gui.constants.names.roi import *  # noqa: F403
 from apkit4d.gui.constants.names.tracking import *  # noqa: F403
+from apkit4d.gui.constants.names.video_export import *  # noqa: F403
 from apkit4d.gui.constants.names.widgets import *  # noqa: F403
