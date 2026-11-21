@@ -208,6 +208,26 @@ class TestBatchProcessor:
                 assert result.num_frames == 2
                 assert result.num_blobs == 2
 
+    def test_process_sequence_in_memory_without_disk_writes(
+        self, mock_source: MagicMock, tmp_path: Path
+    ) -> None:
+        """Verify process_sequence defaults to InMemoryDetectionSink when out_dir is omitted."""
+        config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
+        processor = BatchProcessor(
+            config=config,
+            preproc_params=PreprocParams(),
+            blob_params=BlobParams(threshold=0.05, min_volume_um3=1.0),
+        )
+
+        result = processor.process_sequence(mock_source, t0=0, t1=1)
+
+        assert result.table_path is None
+        assert result.params_path is None
+        assert result.detections is not None
+        assert result.num_frames == 2
+        assert result.num_blobs == len(result.detections)
+        assert list(tmp_path.iterdir()) == [tmp_path / "Experiment 583 Lightfield.czi"]
+
     def test_apkit4d_batch_alias_matches(self) -> None:
         """Verify apkit4d.batch single-file alias re-exports batching symbols."""
         assert batch_alias.BatchProcessor is BatchProcessor

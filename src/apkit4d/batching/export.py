@@ -7,8 +7,9 @@ from typing import Any
 
 import pandas as pd
 
-from apkit4d.batching.processor import BatchResult, _json_serializable, stem_of
+from apkit4d.batching.processor import BatchResult, stem_of
 from apkit4d.io.table import FORMATS, TableWriter, table_path
+from apkit4d.pipeline.sinks import json_serializable
 
 
 def save_batch_results(
@@ -47,5 +48,5 @@ def save_batch_results(
         raise
     saved = {**metadata, "t0": first, "t1": last, "n_blobs": count, "format": fmt, "formato": fmt}
     params = out_dir / f"{stem}_blobs_params.json"
-    params.write_text(json.dumps(saved, indent=2, default=_json_serializable), encoding="utf-8")
+    params.write_text(json.dumps(saved, indent=2, default=json_serializable), encoding="utf-8")
     return BatchResult(path, params, count, last - first + 1, saved)

@@ -9,17 +9,17 @@ RefactorNote:
     including frozen result dataclasses, configurable execution parameters, and English metadata.
 """
 
-import json
+import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from apkit4d.batching.worker import (
     _detect_frames_worker,
@@ -30,23 +30,22 @@ from apkit4d.core.models import BatchConfig
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
-from apkit4d.io.table import TableWriter, table_path
+from apkit4d.io.table import table_path
+from apkit4d.pipeline.contracts import DetectionSink, SequenceDetectionResult
+from apkit4d.pipeline.sinks import InMemoryDetectionSink, StreamingDiskDetectionSink
+
+logger = logging.getLogger(__name__)
 
 
-def _json_serializable(obj: Any) -> Any:
-    """Fallback serializer for objects that are not natively JSON-serializable.
-
-    TODO: We should probably consider removing this function from here and moving it somewhere else.
-    """
-    if isinstance(obj, Enum):
-        return obj.value
-    if isinstance(obj, Path):
-        return str(obj)
-    if isinstance(obj, (np.integer, np.floating)):
-        return obj.item()
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+def _prepare_frame_detections(detections: pd.DataFrame, frame_idx: int, dt_s: float | None) -> pd.DataFrame:
+    """Attach the acquisition timestamp column to non-empty per-frame detections."""
+    if len(detections) == 0:
+        return detections
+    prepared = detections.copy()
+    if "t_s" not in prepared.columns:
+        timestamp = frame_idx * dt_s if dt_s is not None else np.nan
+        prepared.insert(1, "t_s", timestamp)
+    return prepared
 
 
 def stem_of(czi_path: str | Path) -> str:
@@ -108,7 +107,18 @@ class BatchProcessor:
         self.preproc_params = preproc_params or PreprocParams()
         self.blob_params = blob_params or BlobParams()
 
-    def process(
+    def _resolve_source(
+        self,
+        czi: str | Path | CziSource,
+        channel: int,
+    ) -> tuple[CziSource, Path, int, bool]:
+        """Resolve an input path or open CziSource into (source, file_path, channel, should_close)."""
+        if isinstance(czi, (str, Path)):
+            file_path = Path(czi)
+            return CziSource(file_path, channel=channel), file_path, channel, True
+        return czi, Path(czi.path), czi.channel, False
+
+    def process_sequence(
         self,
         czi: str | Path | CziSource,
         channel: int = 0,
@@ -117,34 +127,30 @@ class BatchProcessor:
         out_dir: str | Path | None = None,
         roi: Any | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
-    ) -> BatchResult:
-        """Execute batch blob detection across specified frames.
+        sink: DetectionSink | None = None,
+    ) -> SequenceDetectionResult:
+        """Execute blob detection across frames and route outputs to a DetectionSink.
+
+        When ``sink`` is None:
+        - If ``out_dir`` is provided, streams results to disk via ``StreamingDiskDetectionSink``.
+        - If ``out_dir`` is None, collects detections in RAM via ``InMemoryDetectionSink``.
 
         Args:
             czi: Path to CZI file or open CziSource instance.
             channel: Acquisition channel to process (default 0).
-            t0: First frame index to process (inclusive, 0-based).
-            t1: Last frame index to process (inclusive, 0-based).
-            out_dir: Output directory where results are written. Defaults to 'data/processed'.
+            t0: Optional First frame index to process (inclusive, 0-based).
+            t1: Optional Last frame index to process (inclusive, 0-based).
+            out_dir: Optional Output directory where results are written. Defaults to 'data/processed'.
             roi: Optional Region of Interest specification.
             progress_callback: Optional callable invoked with (completed_frames, total_frames).
+            sink: Optional DetectionSink to use for output.
 
         Returns:
-            BatchResult containing paths, counts, and metadata.
+            SequenceDetectionResult containing paths, counts, and metadata.
 
-        RefactorNote:
-            Equivalent of `run` from legacy `batch.py` (lines 76-143).
         """
-        should_close_source = False
-        source: CziSource
-        if isinstance(czi, (str, Path)):
-            file_path = Path(czi)
-            source = CziSource(file_path, channel=channel)
-            should_close_source = True
-        else:
-            source = czi
-            file_path = Path(source.path)
-            channel = source.channel
+        source, file_path, resolved_channel, should_close_source = self._resolve_source(czi, channel)
+        active_sink: DetectionSink | None = sink
 
         try:
             info = source.info
@@ -167,21 +173,36 @@ class BatchProcessor:
             )
             actual_workers = min(capped_workers, max(1, len(chunks)))
 
-            destination_dir = Path(out_dir or Path("data/processed"))
-            destination_dir.mkdir(parents=True, exist_ok=True)
-            stem = stem_of(file_path)
             fmt = self.config.output_format
-            output_table_path = table_path(destination_dir, stem, "blobs", fmt)
+            if active_sink is None:
+                if out_dir is not None:
+                    destination_dir = Path(out_dir)
+                    destination_dir.mkdir(parents=True, exist_ok=True)
+                    stem = stem_of(file_path)
+                    output_table_path = table_path(destination_dir, stem, "blobs", fmt)
+                    params_file = destination_dir / f"{stem}_blobs_params.json"
+                    active_sink = StreamingDiskDetectionSink(
+                        output_table_path,
+                        params_file,
+                        num_frames=len(frames),
+                    )
+                else:
+                    active_sink = InMemoryDetectionSink(num_frames=len(frames))
 
-            writer = TableWriter(output_table_path)
             time_start = time.time()
             completed_frames = 0
 
             pp_dict = self.preproc_params.to_dict()
             bp_dict = self.blob_params.to_dict()
 
+            logger.info(
+                "Starting sequence detection (%d frames, workers=%d, sink=%s)",
+                len(frames),
+                actual_workers,
+                type(active_sink).__name__,
+            )
+
             if actual_workers <= 1 or len(chunks) <= 1:
-                # Synchronous in-process execution avoids process spawning overhead
                 for chunk in chunks:
                     for frame_idx in chunk:
                         detections = detect_frame(
@@ -191,82 +212,115 @@ class BatchProcessor:
                             bp=self.blob_params,
                             roi=roi,
                         )
-                        if len(detections) > 0:
-                            detections = detections.copy()
-                            timestamp = frame_idx * info.dt_s if info.dt_s is not None else np.nan
-                            detections.insert(1, "t_s", timestamp)
-                            writer.append(detections)
+                        prepared = _prepare_frame_detections(detections, frame_idx, info.dt_s)
+                        active_sink.on_frame_detections(frame_idx, prepared)
                     completed_frames += len(chunk)
                     if progress_callback is not None:
                         progress_callback(completed_frames, len(frames))
             else:
-                # Parallel execution using ProcessPoolExecutor
                 with ProcessPoolExecutor(max_workers=actual_workers) as executor:
-                    futures = [
+                    future_to_chunk = {
                         executor.submit(
                             _detect_frames_worker,
                             file_path,
-                            channel,
+                            resolved_channel,
                             pp_dict,
                             bp_dict,
                             chunk,
                             roi,
-                        )
+                        ): chunk
                         for chunk in chunks
-                    ]
+                    }
 
-                    for future in as_completed(futures):
+                    for future in as_completed(future_to_chunk):
+                        chunk = future_to_chunk[future]
                         chunk_results = future.result()
-                        for detections in chunk_results:
-                            if len(detections) > 0:
-                                detections = detections.copy()
-                                frame_number = detections.iloc[0]["frame"]
-                                timestamp = frame_number * info.dt_s if info.dt_s is not None else np.nan
-                                detections.insert(1, "t_s", timestamp)
-                                writer.append(detections)
+                        for fallback_frame, detections in zip(chunk, chunk_results, strict=True):
+                            frame_number = (
+                                int(detections.iloc[0]["frame"]) if len(detections) > 0 else fallback_frame
+                            )
+                            prepared = _prepare_frame_detections(detections, frame_number, info.dt_s)
+                            active_sink.on_frame_detections(frame_number, prepared)
                         completed_frames += len(chunk_results)
                         if progress_callback is not None:
                             progress_callback(completed_frames, len(frames))
 
-            writer.close()
-            total_blobs = writer.n_rows
             elapsed_seconds = time.time() - time_start
-
             info_dict = asdict(info) if is_dataclass(info) else info.__dict__
 
-            metadata = {
+            metadata: dict[str, Any] = {
                 "czi": str(file_path),
-                "channel": channel,
+                "channel": resolved_channel,
                 "t0": start_frame,
                 "t1": end_frame,
                 "created": datetime.now().isoformat(timespec="seconds"),
                 "info": info_dict,
                 "preproc": pp_dict,
                 "blob": bp_dict,
-                "n_blobs": int(total_blobs),
+                "n_blobs": 0,
                 "format": fmt,
                 "formato": fmt,
                 "sorted_by_frame": False,
                 "ordinato_per_frame": False,
-                "blobs_per_frame_mean": float(total_blobs / max(1, len(frames))),
+                "blobs_per_frame_mean": 0.0,
                 "elapsed_seconds": round(elapsed_seconds, 2),
                 "workers_used": actual_workers,
                 "worker_capping_reason": reason,
             }
-
-            params_file = destination_dir / f"{stem}_blobs_params.json"
-            params_file.write_text(json.dumps(metadata, indent=2, default=_json_serializable))
-
-            return BatchResult(
-                table_path=output_table_path,
-                params_path=params_file,
-                num_blobs=total_blobs,
-                num_frames=len(frames),
-                metadata=metadata,
-            )
+            return active_sink.finalize(metadata)
         finally:
+            if active_sink is not None:
+                close_fn = getattr(active_sink, "close", None)
+                if callable(close_fn):
+                    close_fn()
             if should_close_source:
                 source.close()
+
+    def process(
+        self,
+        czi: str | Path | CziSource,
+        channel: int = 0,
+        t0: int | None = None,
+        t1: int | None = None,
+        out_dir: str | Path | None = None,
+        roi: Any | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> BatchResult:
+        """Execute batch blob detection and stream outputs to disk.
+
+        Args:
+            czi: Path to CZI file or open CziSource instance.
+            channel: Acquisition channel to process (default 0).
+            t0: First frame index to process (inclusive, 0-based).
+            t1: Last frame index to process (inclusive, 0-based).
+            out_dir: Output directory where results are written. Defaults to 'data/processed'.
+            roi: Optional Region of Interest specification.
+            progress_callback: Optional callable invoked with (completed_frames, total_frames).
+
+        Returns:
+            BatchResult containing paths, counts, and metadata.
+
+        RefactorNote:
+            Equivalent of `run` from legacy `batch.py` (lines 76-143).
+        """
+        seq_result = self.process_sequence(
+            czi=czi,
+            channel=channel,
+            t0=t0,
+            t1=t1,
+            out_dir=out_dir or Path("data/processed"),
+            roi=roi,
+            progress_callback=progress_callback,
+        )
+        assert seq_result.table_path is not None
+        assert seq_result.params_path is not None
+        return BatchResult(
+            table_path=seq_result.table_path,
+            params_path=seq_result.params_path,
+            num_blobs=seq_result.num_blobs,
+            num_frames=seq_result.num_frames,
+            metadata=seq_result.metadata,
+        )
 
     def run(
         self,

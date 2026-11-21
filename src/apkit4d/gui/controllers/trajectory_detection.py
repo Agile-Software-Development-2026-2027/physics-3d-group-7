@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 
 import pandas as pd
@@ -13,7 +12,7 @@ from apkit4d.core.roi import RegionOfInterest
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
-from apkit4d.io.table import read_table
+from apkit4d.pipeline.sinks import InMemoryDetectionSink
 
 
 @dataclass(frozen=True)
@@ -28,25 +27,25 @@ def detect_sequence(
     preproc_params: PreprocParams,
     blob_params: BlobParams,
     roi: RegionOfInterest | None = None,
+    *,
+    workers: int = 1,
 ) -> DetectionData:
-    """Detect all frames, reusing an open CziSource when given."""
+    """Detect all frames in memory, reusing an open CziSource when given."""
     processor = BatchProcessor(
-        config=BatchConfig(workers=1),
+        config=BatchConfig(workers=workers),
         preproc_params=preproc_params,
         blob_params=blob_params,
     )
-
-    with TemporaryDirectory() as output_dir:
-        result = processor.process(
-            czi,
-            out_dir=output_dir,
-            roi=roi,
-        )
-
-        if result.num_blobs:
-            detections = read_table(result.table_path)
-        else:
-            detections = pd.DataFrame(columns=["frame", "z_um", "y_um", "x_um"])
+    result = processor.process_sequence(
+        czi,
+        roi=roi,
+        sink=InMemoryDetectionSink(),
+    )
+    detections = (
+        result.detections
+        if result.detections is not None
+        else pd.DataFrame(columns=["frame", "z_um", "y_um", "x_um"])
+    )
 
     return DetectionData(
         detections=detections,

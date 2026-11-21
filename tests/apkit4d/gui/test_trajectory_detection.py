@@ -1,18 +1,23 @@
 """Tests for trajectory detection data preparation."""
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from apkit4d.batching.processor import BatchProcessor, BatchResult
+from apkit4d.batching.processor import BatchProcessor
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.trajectory_detection import detect_sequence
+from apkit4d.io.czi import CziInfo, CziSource
+from apkit4d.pipeline.contracts import SequenceDetectionResult
+from apkit4d.pipeline.sinks import InMemoryDetectionSink
 
 
 def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Read detected blobs and timing information."""
+    """Use InMemoryDetectionSink without writing temporary files to disk."""
     czi_path = tmp_path / "sample.czi"
 
     expected = pd.DataFrame(
@@ -24,23 +29,22 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
         }
     )
 
-    def fake_process(self, czi, *, out_dir, roi):
+    def fake_process_sequence(self, czi, *, roi, sink):
         assert czi == czi_path
         assert self.config.workers == 1
         assert roi is None
+        assert isinstance(sink, InMemoryDetectionSink)
 
-        table_path = Path(out_dir) / "blobs.csv"
-        expected.to_csv(table_path, index=False)
-
-        return BatchResult(
-            table_path=table_path,
-            params_path=Path(out_dir) / "params.json",
+        return SequenceDetectionResult(
+            detections=expected,
+            table_path=None,
+            params_path=None,
             num_blobs=2,
             num_frames=2,
             metadata={"info": {"dt_s": 0.5}},
         )
 
-    monkeypatch.setattr(BatchProcessor, "process", fake_process)
+    monkeypatch.setattr(BatchProcessor, "process_sequence", fake_process_sequence)
 
     result = detect_sequence(
         czi_path,
@@ -56,16 +60,17 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
 def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Return an empty table when no blobs are found."""
 
-    def fake_process(self, czi, *, out_dir, roi):
-        return BatchResult(
-            table_path=Path(out_dir) / "missing.csv",
-            params_path=Path(out_dir) / "params.json",
+    def fake_process_sequence(self, czi, *, roi, sink):
+        return SequenceDetectionResult(
+            detections=None,
+            table_path=None,
+            params_path=None,
             num_blobs=0,
             num_frames=3,
             metadata={"info": {"dt_s": None}},
         )
 
-    monkeypatch.setattr(BatchProcessor, "process", fake_process)
+    monkeypatch.setattr(BatchProcessor, "process_sequence", fake_process_sequence)
 
     result = detect_sequence(
         tmp_path / "sample.czi",
@@ -78,46 +83,36 @@ def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: p
     assert result.dt_s is None
 
 
-def test_detect_sequence_reuses_open_czi_source(monkeypatch, tmp_path) -> None:
-    """Processing an open source must not reopen the CZI."""
-    from unittest.mock import MagicMock
-
-    from apkit4d.io.czi import CziSource
-
+def test_detect_sequence_reuses_open_czi_source_without_disk_io(tmp_path: Path) -> None:
+    """Execute detect_sequence end-to-end in RAM with an open CziSource and zero disk writes."""
     source = MagicMock(spec=CziSource)
-    source.path = tmp_path / "sample.czi"
-    source.channel = 1
-
-    expected = pd.DataFrame(
-        {
-            "frame": [0],
-            "z_um": [0.0],
-            "y_um": [0.0],
-            "x_um": [0.0],
-        }
+    source.path = tmp_path / "nonexistent.czi"
+    source.channel = 0
+    source.info = CziInfo(
+        path=str(source.path),
+        n_t=2,
+        n_z=10,
+        n_y=20,
+        n_x=20,
+        n_c=1,
+        dtype="uint16",
+        px_size_x=1.0,
+        px_size_z=1.0,
+        px_size_y=1.0,
+        dt_s=0.5,
+        dt_source="test",
     )
-
-    def fake_process(self, czi, *, out_dir, roi):
-        assert czi is source
-        assert roi is None
-
-        path = Path(out_dir) / "blobs.csv"
-        expected.to_csv(path, index=False)
-
-        return BatchResult(
-            table_path=path,
-            params_path=Path(out_dir) / "params.json",
-            num_blobs=1,
-            num_frames=1,
-            metadata={"info": {"dt_s": 0.5}},
-        )
-
-    monkeypatch.setattr(BatchProcessor, "process", fake_process)
+    vol = np.zeros((10, 20, 20), dtype=np.uint16)
+    vol[3:7, 8:13, 8:13] = 25000
+    source.read.return_value = vol
 
     result = detect_sequence(
         source,
         PreprocParams(),
-        BlobParams(),
+        BlobParams(threshold=0.05, min_volume_um3=1.0),
     )
 
-    pd.testing.assert_frame_equal(result.detections, expected)
+    assert list(tmp_path.iterdir()) == []
+    assert not result.detections.empty
+    assert result.dt_s == 0.5
+    source.close.assert_not_called()
