@@ -86,6 +86,9 @@ class Viewport(QWidget):
         self.plotter = QtInteractor(self, auto_update=False)
         self.main_layout.addWidget(self.plotter.interactor)
 
+        # store it for later when we have to restore it on show_volume(...., reset_camera=True)
+        self._initial_camera_position = self.plotter.camera_position
+
         # when we drag the 3D view a lot of events fire and they slow down the main thread.
         # with this we ignore events that happen too cloose to each other
         self._last_drag_render_time: float = 0.0
@@ -222,6 +225,9 @@ class Viewport(QWidget):
             grid (pv.ImageData): PyVista ImageData object that we mapped in the data_mapper.py file.
                                  it contains the 3D data that we want to visualize.
 
+            reset_camera (bool): restores camera position, zoom, rotation, distance to their initial
+                                 values.
+
             force_update (bool): force a full copy of the PyVista grid. It is slow. Use it when the
                                  intensity between two frame is widely different. Otherwise the view
                                  will not update correctly.
@@ -264,6 +270,7 @@ class Viewport(QWidget):
             self.plotter.update_scalar_bar_range((vmin, vmax))
 
             if reset_camera:
+                self.plotter.camera_position = self._initial_camera_position
                 self.plotter.renderer.reset_camera(render=False)
             self._request_render()
             return
