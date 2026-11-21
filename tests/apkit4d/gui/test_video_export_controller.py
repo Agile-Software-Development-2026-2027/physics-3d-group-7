@@ -72,7 +72,7 @@ def mock_source(tmp_path: Path):
 
 class TestVideoExportControllerConfig:
     def test_initialization_defaults(self, mock_playback) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         assert controller.total_frames == 10
         assert controller.first_frame == 0
         assert controller.last_frame == 9
@@ -84,7 +84,7 @@ class TestVideoExportControllerConfig:
         assert controller.is_available
 
     def test_set_properties_and_emits_config_changed(self, mock_playback, qtbot, tmp_path: Path) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
 
         with qtbot.waitSignal(controller.config_changed):
             controller.set_first_frame(2)
@@ -122,7 +122,7 @@ class TestVideoExportControllerConfig:
         assert controller.output_path == out_path
 
     def test_set_frame_range(self, mock_playback, qtbot) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         with qtbot.waitSignal(controller.config_changed):
             controller.set_frame_range(1, 5)
         assert controller.first_frame == 1
@@ -130,7 +130,7 @@ class TestVideoExportControllerConfig:
         assert controller.export_frame_count == 5
 
     def test_set_and_clear_source(self, mock_playback, mock_source, tmp_path: Path) -> None:
-        controller = VideoExportController(playback=mock_playback)
+        controller = VideoExportController(playback_controller=mock_playback)
         czi_path = tmp_path / "sample.czi"
 
         controller.set_source(czi_path, mock_source)
@@ -151,7 +151,7 @@ class TestVideoExportControllerConfig:
 class TestVideoExportExecution:
     def test_dialog_uses_one_based_frame_numbers(self, mock_playback, qtbot) -> None:
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=MockView(),
         )
         controller.set_frame_range(2, 7)
@@ -172,7 +172,7 @@ class TestVideoExportExecution:
 
     def test_dialog_resolution_controls_update_export_settings(self, mock_playback, qtbot) -> None:
         view = MockView()
-        controller = VideoExportController(playback=mock_playback, view=view)
+        controller = VideoExportController(playback_controller=mock_playback, view=view)
         dialog = VideoExportDialog(controller)
         qtbot.addWidget(dialog)
 
@@ -192,9 +192,9 @@ class TestVideoExportExecution:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "live_export.mp4"
         controller.set_frame_range(0, 2)
@@ -224,9 +224,9 @@ class TestVideoExportExecution:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "cancel_live.mp4"
         controller.set_frame_range(0, 5)
@@ -245,9 +245,9 @@ class TestVideoExportExecution:
         view = MockView(shape=(32, 32, 3))
         volume = MockVolumeController()
         controller = VideoExportController(
-            playback=mock_playback,
+            playback_controller=mock_playback,
             view=view,
-            volume=volume,  # type: ignore
+            volume_controller=volume,  # type: ignore
         )
         out = tmp_path / "fail_live.mp4"
         controller.set_frame_range(0, 2)

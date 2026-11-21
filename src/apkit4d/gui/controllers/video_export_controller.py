@@ -7,7 +7,7 @@ we encode the frames into a video, while emitting progress signals for the UI.
 
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 import imageio
 from numpy.typing import NDArray
@@ -27,6 +27,9 @@ class VideoExportView(Protocol):
 class VideoExportController(QObject):
     """
     Coordinates exporting viewport frames to a compressed video file.
+
+    The export steps through the underlying playback. That is because we need to
+    physically take a screenshot of all the frames in the playback.
 
     Args:
         playback: PlaybackController for timeline and frame navigation.
@@ -55,27 +58,28 @@ class VideoExportController(QObject):
 
     def __init__(
         self,
-        playback: PlaybackController | None = None,
+        playback_controller: PlaybackController | None = None,
         view: VideoExportView | None = None,
-        volume: VolumeController | None = None,
-        files: FileController | None = None,
+        volume_controller: VolumeController | None = None,
+        file_controller: FileController | None = None,
         *,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._playback_controller = playback
+        self._playback_controller = playback_controller
         self._view = view
-        self._volume_controller = volume
-        self._file_controller = files
+        self._volume_controller = volume_controller
 
-        self._source_loaded: bool = playback is not None and playback.frame_count > 0
-        self._total_frames: int = playback.frame_count if playback is not None else 0
+        self._source_loaded: bool = playback_controller is not None and playback_controller.frame_count > 0
+        self._total_frames: int = playback_controller.frame_count if playback_controller is not None else 0
         self._first_frame: int = 0
         self._last_frame: int = max(0, self._total_frames - 1)
         self._crf: int = 23
 
         # sets the effective speed of the video and estimates the final duration
-        self._fps: int = int(playback.speed) if playback is not None else 24
+        self._fps: int = int(playback_controller.speed) if playback_controller is not None else 24
+
+        # the `window_size`` passed to Viewport.plotter.screenshot
         self._resolution = (1920, 1080)
 
         self._preset: str = "medium"
@@ -84,19 +88,16 @@ class VideoExportController(QObject):
         self._is_exporting: bool = False
         self._is_cancelled: bool = False
         self._export_current_frame: int = 0
-        self._writer: Any = None
+        self._writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None = None
         self._pending_preview_frame: int | None = None
 
-        # TODO: instead of duplicating listening to file changes like the VolumeController
-        #       already does, just disable the possibility to open the export dialog at all
-        #       when there is no file to export.
-        if files is not None:
-            files.loaded.connect(self.set_source)
-            files.closed.connect(self.clear_source)
+        if file_controller is not None:
+            file_controller.loaded.connect(self.set_source)
+            file_controller.closed.connect(self.clear_source)
 
-        if volume is not None:
-            volume.volume_prepared.connect(self._on_volume_prepared)
-            volume.failed.connect(self._on_volume_failed)
+        if volume_controller is not None:
+            volume_controller.volume_prepared.connect(self._on_volume_prepared)
+            volume_controller.failed.connect(self._on_volume_failed)
 
     @property
     def total_frames(self) -> int:
@@ -219,7 +220,7 @@ class VideoExportController(QObject):
             self.config_changed.emit()
 
     def set_source(self, path: Path, source: FrameSource) -> None:
-        """Update controller configuration when a recording is loaded."""
+        """Updates controller configuration when a recording is loaded."""
 
         n_t = getattr(source.info, "n_t", 0)
         self._source_loaded = n_t > 0
@@ -232,7 +233,8 @@ class VideoExportController(QObject):
         self.config_changed.emit()
 
     def clear_source(self) -> None:
-        """Reset controller configuration when a recording is closed."""
+        """Resets controller configuration when a recording is closed."""
+
         self._source_loaded = False
         self._total_frames = 0
         self._first_frame = 0
@@ -390,12 +392,11 @@ class VideoExportController(QObject):
                 raise RuntimeError("No 3D view available to capture frame.")
 
             assert self._writer is not None, "Writer is created when export starts"
-            frame = self._export_current_frame
             image = self._view.screenshot(window_size=self._resolution)
             self._writer.append_data(image)
-            self.preview_ready.emit(frame, image)
+            self.preview_ready.emit(self._export_current_frame, image)
 
-            done = self._export_current_frame - self._first_frame + 1  # next
+            done = self._export_current_frame - self._first_frame + 1  # increase frame
             self.progress_changed.emit(done, self.export_frame_count)
 
             self._export_current_frame += 1

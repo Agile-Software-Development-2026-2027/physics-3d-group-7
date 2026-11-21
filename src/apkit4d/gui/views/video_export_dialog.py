@@ -4,13 +4,13 @@ from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -27,6 +27,13 @@ from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 
 
 class _VideoPreset(StrEnum):
+    """Values of the `-preset` flag we pass to ffmpeg.
+
+    Slower -> better quality.
+
+    Cfr. <https://trac.ffmpeg.org/wiki/Encode/H.264>
+    """
+
     ULTRAFAST = "ultrafast"
     SUPERFAST = "superfast"
     VERYFAST = "veryfast"
@@ -79,6 +86,9 @@ class VideoExportDialog(QDialog):
         self._preview_label = QLabel()
         self._preview_label.setObjectName(names.VIDEO_EXPORT_PREVIEW)
         self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setFrameShape(QFrame.Shape.Box)  # draw the outline of the preview
+        self._preview_label.setFrameShadow(QFrame.Shadow.Plain)
+        self._preview_label.setLineWidth(1)
         layout.addWidget(self._preview_label, alignment=Qt.AlignmentFlag.AlignCenter)
         return group
 
@@ -212,8 +222,8 @@ class VideoExportDialog(QDialog):
 
     def _sync_from_controller(self) -> None:
         """Pull the current controller state into every widget."""
-        total = self._controller.total_frames
-        max_frame = max(1, total)
+
+        max_frame = max(1, self._controller.total_frames)
 
         self._first_frame_spin.setRange(1, max_frame)
         self._first_frame_spin.setValue(self._controller.first_frame + 1)
@@ -235,7 +245,8 @@ class VideoExportDialog(QDialog):
         self._update_export_button_state()
 
     def _connect_controller_signals(self) -> None:
-        """Connect controller signals to dialog slots."""
+        """Connects controller signals (controller -> dialog)"""
+
         self._controller.export_started.connect(self._on_export_started)
         self._controller.progress_changed.connect(self._on_progress_changed)
         self._controller.export_succeeded.connect(self._on_export_succeeded)
@@ -246,6 +257,7 @@ class VideoExportDialog(QDialog):
 
     def _connect_widget_signals(self) -> None:
         """Connect widget signals to controller setters."""
+
         self._first_frame_spin.valueChanged.connect(self._on_first_frame_changed)
         self._last_frame_spin.valueChanged.connect(self._on_last_frame_changed)
         self._crf_slider.valueChanged.connect(self._on_crf_changed)
@@ -304,7 +316,7 @@ class VideoExportDialog(QDialog):
         if self._controller.is_exporting:
             self._controller.cancel_export()
         else:
-            self.reject()
+            self.reject()  # closes the dialog. Dialog not destroyed, remains in memory
 
     def _on_export_started(self) -> None:
         self._progress_bar.setVisible(True)
@@ -334,26 +346,14 @@ class VideoExportDialog(QDialog):
         self._progress_bar.setVisible(False)
         self._status_label.setText(texts.EXPORT_STATUS_CANCELLED)
 
-    def _on_preview_ready(self, _frame: int, data: object) -> None:
-        """Display a frame preview from the controller."""
-        if not isinstance(data, np.ndarray):
+    def _on_preview_ready(self, _frame: int, arr: object) -> None:
+        """Displays a frame preview from the controller."""
+
+        if not isinstance(arr, np.ndarray):
             return
-        self._set_preview_image(data)
 
-    def _on_config_changed(self) -> None:
-        """Re-sync spin-box ranges when the controller state changes externally."""
-        total = self._controller.total_frames
-        max_frame = max(1, total)
-        self._first_frame_spin.setRange(1, max_frame)
-        self._last_frame_spin.setRange(1, max_frame)
-        self._first_frame_spin.setValue(self._controller.first_frame + 1)
-        self._last_frame_spin.setValue(self._controller.last_frame + 1)
-        self._update_export_button_state()
-
-    def _set_preview_image(self, arr: NDArray) -> None:
-        """Convert an RGB NumPy array to QPixmap and display it."""
         h, w = arr.shape[:2]
-        bytes_per_line = 3 * w
+        bytes_per_line = 3 * w  # three channels RGB
         qimg = QImage(arr.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(qimg).scaled(
             480,
@@ -363,8 +363,19 @@ class VideoExportDialog(QDialog):
         )
         self._preview_label.setPixmap(pixmap)
 
+    def _on_config_changed(self) -> None:
+        """Updates the allowed ranges fo the spin boxes after the controller changed"""
+
+        max_frame = max(1, self._controller.total_frames)
+        self._first_frame_spin.setRange(1, max_frame)
+        self._last_frame_spin.setRange(1, max_frame)
+        self._first_frame_spin.setValue(self._controller.first_frame + 1)
+        self._last_frame_spin.setValue(self._controller.last_frame + 1)
+        self._update_export_button_state()
+
     def _set_controls_enabled(self, enabled: bool) -> None:
-        """Enable or disable all input controls."""
+        """Enables or disables all input controls."""
+
         self._first_frame_spin.setEnabled(enabled)
         self._last_frame_spin.setEnabled(enabled)
         self._crf_slider.setEnabled(enabled)

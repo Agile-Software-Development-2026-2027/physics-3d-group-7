@@ -209,10 +209,10 @@ class MainController(QObject):
             self,
         )
         self._video_export_controller = VideoExportController(
-            playback=self._playback_controller,
+            playback_controller=self._playback_controller,
             view=view,
-            volume=self._volume_controller,
-            files=self._file_controller,
+            volume_controller=self._volume_controller,
+            file_controller=self._file_controller,
             parent=self,
         )
         window.video_export_requested.connect(self._show_video_export_dialog)
