@@ -2,10 +2,11 @@
 
 from enum import StrEnum
 from pathlib import Path
+from typing import override
 
 import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QCloseEvent, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -63,6 +64,7 @@ class VideoExportDialog(QDialog):
         self.setObjectName(names.VIDEO_EXPORT_DIALOG)
         self.setWindowTitle(texts.EXPORT_DIALOG_TITLE)
         self.setMinimumWidth(500)
+        self._controller.store_playback_state()
 
         layout = QVBoxLayout(self)
 
@@ -76,6 +78,7 @@ class VideoExportDialog(QDialog):
         self._sync_from_controller()
         self._connect_controller_signals()
         self._connect_widget_signals()
+        self.finished.connect(lambda _: self._controller.restore_playback())
         self._request_initial_preview()
 
     def _build_preview_group(self) -> QGroupBox:
@@ -317,6 +320,11 @@ class VideoExportDialog(QDialog):
             self._controller.cancel_export()
         else:
             self.reject()  # closes the dialog. Dialog not destroyed, remains in memory
+
+    @override
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._controller.restore_playback()
+        super().closeEvent(event)
 
     def _on_export_started(self) -> None:
         self._progress_bar.setVisible(True)

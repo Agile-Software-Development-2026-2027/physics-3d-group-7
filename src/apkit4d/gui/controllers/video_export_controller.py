@@ -89,7 +89,14 @@ class VideoExportController(QObject):
         self._is_cancelled: bool = False
         self._export_current_frame: int = 0
         self._writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None = None
+
         self._pending_preview_frame: int | None = None
+
+        # since we manipulated the underlying playback, we also store its state
+        # to restore it later
+        self._original_playback_frame: int | None = None
+        self._original_playback_playing: bool | None = None
+        self.store_playback_state()
 
         if file_controller is not None:
             file_controller.loaded.connect(self.set_source)
@@ -155,6 +162,27 @@ class VideoExportController(QObject):
     def is_available(self) -> bool:
         """Whether a recording is open and ready to be exported."""
         return self.total_frames > 0
+
+    def store_playback_state(self) -> None:
+        if self._playback_controller is not None:
+            self._original_playback_frame = self._playback_controller.frame
+            self._original_playback_playing = self._playback_controller.is_playing
+            self._playback_controller.set_playing(False)
+
+    def restore_playback(self) -> None:
+        """Restore the playback position and state from before the dialog was opened."""
+
+        if self._playback_controller is None:
+            return
+
+        if self._original_playback_frame is not None:
+            self._playback_controller.go_to_frame(self._original_playback_frame)
+        if self._original_playback_playing is not None:
+            self._playback_controller.set_playing(self._original_playback_playing)
+
+        self._original_playback_frame = None
+        self._pending_preview_frame = None
+        self._original_playback_playing = False
 
     def set_first_frame(self, frame: int) -> None:
         """Sets the start frame of the export range (0-based)."""
