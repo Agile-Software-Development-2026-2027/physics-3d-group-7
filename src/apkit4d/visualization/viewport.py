@@ -1,3 +1,4 @@
+import sys
 import time
 from enum import Enum, auto
 from typing import override
@@ -6,7 +7,7 @@ import numpy as np
 import pyvista as pv
 from matplotlib import colormaps
 from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QImage, QMouseEvent
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
@@ -210,6 +211,25 @@ class Viewport(QWidget):
         Returns:
             np.ndarray: Sized [Height x Width x 3] with dtype uint8.
         """
+
+        if sys.platform == "darwin" and window_size is not None and self.plotter.devicePixelRatioF() > 1.0:
+            img = self.plotter.screenshot(return_img=True)
+            arr = np.asarray(img)
+            if arr.ndim == 3 and arr.shape[2] == 4:
+                arr = arr[:, :, :3]
+            arr = np.ascontiguousarray(arr)
+
+            height, width = arr.shape[:2]
+            qimg = QImage(arr.data, width, height, 3 * width, QImage.Format.Format_RGB888)
+            scaled = qimg.scaled(
+                window_size[0],
+                window_size[1],
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ).convertToFormat(QImage.Format.Format_RGB888)
+            pixels = np.frombuffer(scaled.constBits(), dtype=np.uint8)
+            rows = pixels.reshape((scaled.height(), scaled.bytesPerLine()))
+            return rows[:, : scaled.width() * 3].reshape((scaled.height(), scaled.width(), 3)).copy()
 
         img = self.plotter.screenshot(return_img=True, window_size=window_size)
         arr = np.asarray(img)
