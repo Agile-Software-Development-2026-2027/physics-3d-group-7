@@ -170,7 +170,7 @@ class TestVideoExportExecution:
         assert not button.isHidden()
         button.click()
         assert len(opened_urls) == 1
-        assert opened_urls[0].toLocalFile() == str(tmp_path)
+        assert Path(opened_urls[0].toLocalFile()) == tmp_path
 
     def test_dialog_uses_one_based_frame_numbers(self, mock_playback, qtbot) -> None:
         controller = VideoExportController(
