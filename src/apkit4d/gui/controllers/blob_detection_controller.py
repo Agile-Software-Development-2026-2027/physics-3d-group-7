@@ -10,9 +10,8 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
-from apkit4d.core.models import DetectionConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -58,7 +57,7 @@ def detect_blobs(prepared: PreparedVolume, params: DetectionConfig) -> BlobDetec
     preproc = PreprocessedFrame(
         cropped=cropped,
         image=prepared.image,
-        params=PreprocParams(normalization_enabled=prepared.is_image_normalized),
+        params=PreprocessingConfig(normalization_enabled=prepared.is_image_normalized),
     )
     result = detect_blobs_in_frame(
         preproc,
@@ -157,7 +156,7 @@ class BlobDetectionController(QObject):
         self._detection_running_generation: int | None = None
         self._detection_running_source: FrameSource | None = None
         self._detection_running_params: (
-            tuple[PreprocParams, DetectionConfig, RegionOfInterest | None] | None
+            tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None] | None
         ) = None
 
         if self._pipeline_model is not None:
@@ -260,7 +259,7 @@ class BlobDetectionController(QObject):
         if model_params != self._params:
             self.set_params(model_params)
 
-    def _detection_params(self) -> tuple[PreprocParams, DetectionConfig, RegionOfInterest | None]:
+    def _detection_params(self) -> tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None]:
         """Take a snapshot of the Stage 3 sequence detection parameters."""
         assert self._pipeline_model is not None
         roi = self._volume_controller.roi if self._volume_controller is not None else None

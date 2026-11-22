@@ -2,6 +2,7 @@
 Data models and configurations for apkit4d tracking and batching pipeline.
 """
 
+from enum import StrEnum
 from typing import ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -237,4 +238,92 @@ class DetectionConfig(BaseModel):
         default=1e6,
         ge=0.0,
         description="Min volume of a blob. Blobs with volume under this constraint are filtered out.",
+    )
+
+
+class BgMode(StrEnum):
+    """Background removal strategy to use during preprocessing.
+
+    RefactorNote:
+        BgMode was updated to inherit from enum.StrEnum, this allows native string representation,
+        JSON serialization while mantaining backward compatibility with enum comparison.
+    """
+
+    NONE = "None"
+    PERCENTILE_PER_SLICE = "Percentile per slice"
+    WIDE_GAUSSIAN = "Wide Gaussian"
+
+
+class PreprocessingConfig(BaseModel):
+    """Configuration for preprocessing a volume raw volume after ROI selection.
+
+    Attributes:
+        denoise_xy_scale_um: Scale of the Gaussian smoothing denoise along the X, Y axes.
+        denoise_z_scale_um: Scale of the Gaussian smoothing denoise along the Z axis (anisotropic).
+        bg_mode: Background removal strategy.
+        bg_percentile: The percentile for BgMode.PERCENTILE_PER_SLICE.
+        bg_sigma_xy_um: Sigma scale for the Gaussing smoothing applied when bg_mode is BgMode.WIDE_GAUSSIAN.
+        normalization_enabled: Whether normalization of the volume from [lo, hi] to [0, 1] is enabled.
+        lowest_intensity: Intensity lower bound for window normalization.
+        lowest_intensity: Intensity upper bound for window normalization.
+        logarithmic_compression_enabled: Whether logarithmic compression is enabled. Logarithmic
+                                         compression dims bright peaks and highlights dim details.
+        gamma_correction_to_apply: If γ = 1 nothing changes, if γ < 1.0 brightens mid-tones,
+                                   if γ > 1.0 darkens mid-tones.
+        clahe_enabled: Whether Contrast Limited Adaptive Histogram Equalization is enabled.
+        clahe_clip: Controls noise amplification with CLAHE.
+        clahe_kernel_xy_um: Size micrometers of the local neighborhood (tile) used in CLAHE.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    denoise_xy_scale_um: float = Field(
+        default=0.0, ge=0.0, description="Scale of the Gaussian smoothing denoise along the X, Y axes."
+    )
+    denoise_z_scale_um: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Scale of the Gaussian smoothing denoise along the Z axis (anisotropic).",
+    )
+
+    bg_mode: BgMode = Field(default=BgMode.NONE, description="Background removal strategy.")
+    bg_percentile: float = Field(
+        default=50.0, ge=0.0, le=100.0, description="The percentile for BgMode.PERCENTILE_PER_SLICE."
+    )
+    bg_sigma_xy_um: float = Field(
+        default=60.0,
+        ge=1.0,
+        description="Sigma scale for the Gaussing smoothing applied when bg_mode is BgMode.WIDE_GAUSSIAN.",
+    )
+
+    normalization_enabled: bool = Field(
+        default=True, description="Whether normalization of the volume from [lo, hi] to [0, 1] is enabled."
+    )
+    lowest_intensity: float = Field(
+        default=0.0, ge=0.0, description="Intensity lower bound for window normalization."
+    )
+    highest_intensity: float = Field(
+        default=1000.0, ge=0.0, description="Intensity upper bound for window normalization."
+    )
+
+    logarithmic_compression_enabled: bool = Field(
+        default=False,
+        description="Whether logarithmic compression is enabled. "
+        "Logarithmic compression dims bright peaks and highlights dim details.",
+    )
+
+    gamma_correction_to_apply: float = Field(
+        default=1.0,
+        ge=0.1,
+        description="If γ = 1 nothing changes, if γ < 1.0 brightens mid-tones, if γ > 1.0 darkens mid-tones.",
+    )
+
+    clahe_enabled: bool = Field(
+        default=False, description="Whether Contrast Limited Adaptive Histogram Equalization is enabled."
+    )
+    clahe_clip: float = Field(
+        default=0.01, ge=0.001, le=1.0, description="Controls noise amplification with CLAHE."
+    )
+    clahe_kernel_xy_um: float = Field(
+        default=150.0, ge=0.0, description="Size micrometers of the local neighborhood (tile) used in CLAHE."
     )

@@ -17,8 +17,7 @@ from apkit4d.batching.processor import (
     run_batch,
     stem_of,
 )
-from apkit4d.core.models import BatchConfig, DetectionConfig
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
 from apkit4d.io.czi import CziInfo, CziSource
 
 
@@ -79,7 +78,7 @@ class TestBatchProcessor:
         out_dir = tmp_path / "processed"
         config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
         bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0)
-        pp = PreprocParams()
+        pp = PreprocessingConfig()
 
         progress_calls = []
 
@@ -214,7 +213,7 @@ class TestBatchProcessor:
         config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
         processor = BatchProcessor(
             config=config,
-            preproc_params=PreprocParams(),
+            preproc_params=PreprocessingConfig(),
             blob_params=DetectionConfig(threshold=0.05, min_volume_um3=1.0),
         )
 

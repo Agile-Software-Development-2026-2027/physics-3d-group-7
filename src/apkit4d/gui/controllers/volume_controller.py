@@ -26,8 +26,9 @@ from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal
 
 from apkit4d.core.image import Image
+from apkit4d.core.models import PreprocessingConfig
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
-from apkit4d.detection.preprocessing import PreprocParams, preprocess, suggest_window
+from apkit4d.detection.preprocessing import preprocess, suggest_window
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
@@ -132,7 +133,7 @@ class VolumeController(QObject):
         self._current_roi_origin: tuple[float, float, float] | None = None
         self._current_roi_offset: tuple[int, int, int] = (0, 0, 0)
 
-        self._preproc_params = PreprocParams()
+        self._preproc_params = PreprocessingConfig()
         self._preproc_busy = False
         self._preproc_pending = False
         self._preproc_runner = TaskRunner(self)
@@ -152,11 +153,11 @@ class VolumeController(QObject):
         return self._current_roi_volume
 
     @property
-    def preproc_params(self) -> PreprocParams:
+    def preproc_params(self) -> PreprocessingConfig:
         """The currently applied preprocessing parameters, or None if showing raw volume."""
         return self._preproc_params
 
-    def apply_preproc_params(self, params: PreprocParams) -> None:
+    def apply_preproc_params(self, params: PreprocessingConfig) -> None:
         """
         Apply preprocessing parameters to the current ROI-cropped volume and update the 3D view.
 
@@ -194,7 +195,7 @@ class VolumeController(QObject):
         self._params_changed = True  # needed to force PyVista grid copy on task finished
         self._start_preprocessing(self._current_roi_volume, params)
 
-    def _start_preprocessing(self, roi_volume: NDArray, params: PreprocParams) -> None:
+    def _start_preprocessing(self, roi_volume: NDArray, params: PreprocessingConfig) -> None:
         self._preproc_busy = True
         self._preproc_runner.run(partial(preprocess, roi_volume, params, self._voxel))
 

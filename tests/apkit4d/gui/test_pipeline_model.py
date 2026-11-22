@@ -6,8 +6,7 @@ from copy import replace
 
 import pytest
 
-from apkit4d.core.models import DetectionConfig, TrackingConfig
-from apkit4d.detection.preprocessing import BgMode, PreprocParams
+from apkit4d.core.models import BgMode, DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -191,10 +190,10 @@ def test_pipeline_model_reset_all(qtbot) -> None:
 
 def test_pipeline_model_preproc_params(qtbot) -> None:
     model = PipelineModel()
-    defaults = PreprocParams()
+    defaults = PreprocessingConfig()
     assert model.get_preproc_params() == defaults
 
-    custom = PreprocParams(
+    custom = PreprocessingConfig(
         denoise_xy_scale_um=3.5,
         bg_mode=BgMode.PERCENTILE_PER_SLICE,
         bg_percentile=60.0,

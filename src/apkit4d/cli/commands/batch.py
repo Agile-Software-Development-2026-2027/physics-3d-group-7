@@ -5,8 +5,7 @@ from typing import Any
 import click
 
 from apkit4d.batching.processor import run_batch
-from apkit4d.core.models import BatchConfig, DetectionConfig
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
 
 
 def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
@@ -143,7 +142,7 @@ def batch(
     preproc_entry = entry.get("preproc")
     if preproc_entry is not None and preproc_entry.get("bg_mode", "") == "nessuno":
         preproc_entry["bg_mode"] = "None"
-    preproc_params = PreprocParams.from_dict(preproc_entry)
+    preproc_params = PreprocessingConfig(**({} if preproc_entry is None else preproc_entry))
     blob_entry = entry.get("blob")
     blob_params = DetectionConfig(**({} if blob_entry is None else blob_entry))
 

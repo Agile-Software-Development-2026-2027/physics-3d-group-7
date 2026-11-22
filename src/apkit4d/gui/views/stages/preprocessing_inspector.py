@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.detection.preprocessing import BgMode, PreprocParams
+from apkit4d.core.models import BgMode, PreprocessingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
@@ -64,11 +64,11 @@ class PreprocessingInspector(AccordionSection):
 
         self._widgets()
 
-    def get_params(self) -> PreprocParams:
+    def get_params(self) -> PreprocessingConfig:
         """Retrieve the preprocessing parameters."""
         return self.get_preproc_params()
 
-    def set_params(self, params: PreprocParams) -> None:
+    def set_params(self, params: PreprocessingConfig) -> None:
         """Populate preprocessing widgets from `params` with signals blocked."""
         self.set_preproc_params(params)
 
@@ -101,7 +101,7 @@ class PreprocessingInspector(AccordionSection):
             ):
                 dependent.setEnabled(False)
 
-    def get_preproc_params(self) -> PreprocParams:
+    def get_preproc_params(self) -> PreprocessingConfig:
         """Retrieve the preprocessing parameters."""
 
         try:
@@ -109,7 +109,7 @@ class PreprocessingInspector(AccordionSection):
         except ValueError:
             bg_mode = BgMode.NONE
 
-        return PreprocParams(
+        return PreprocessingConfig(
             denoise_xy_scale_um=self.denoise_xy_box.value(),
             denoise_z_scale_um=self.denoise_z_box.value(),
             bg_mode=bg_mode,
@@ -125,7 +125,7 @@ class PreprocessingInspector(AccordionSection):
             clahe_kernel_xy_um=self.clahe_kernel_xy_um.value(),
         )
 
-    def set_preproc_params(self, params: PreprocParams) -> None:
+    def set_preproc_params(self, params: PreprocessingConfig) -> None:
         """Update preprocessing widget values from `params` without triggering change signals."""
 
         with QSignalBlocker(self.denoise_xy_box):
@@ -200,7 +200,7 @@ class PreprocessingInspector(AccordionSection):
         self.param_changed.emit("gamma_correction_to_apply", gamma_val)
 
     def _widgets(self):
-        defaults = PreprocParams()
+        defaults = PreprocessingConfig()
 
         # 1. Denoising
         self.denoise_xy_box = QDoubleSpinBox()
@@ -421,7 +421,7 @@ class PreprocessingInspector(AccordionSection):
         self.complete_btn.clicked.connect(self.complete_requested.emit)
         self.add_widget(self.complete_btn)
 
-    def _on_reset(self, defaults: PreprocParams):
+    def _on_reset(self, defaults: PreprocessingConfig):
         self.set_preproc_params(defaults)
         self.reset_requested.emit()
 

@@ -10,8 +10,8 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from apkit4d.core.image import Image
+from apkit4d.core.models import PreprocessingConfig
 from apkit4d.core.roi import Origin3D, VoxelSize3D
-from apkit4d.detection.preprocessing import PreprocParams
 
 type ProgressCallback = Callable[[int, int, str], None]
 
@@ -44,7 +44,7 @@ class PreprocessedFrame:
 
     cropped: CroppedFrame
     image: Image[np.float32]
-    params: PreprocParams
+    params: PreprocessingConfig
 
     @property
     def is_normalized(self) -> bool:

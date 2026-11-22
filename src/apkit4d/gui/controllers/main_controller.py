@@ -321,7 +321,7 @@ class MainController(QObject):
             self._pipeline_model.update_step_params(PipelineStep.ROI, **session.roi.to_dict())
         if session.preproc_params is not None:
             self._pipeline_model.update_step_params(
-                PipelineStep.PREPROCESSING, **session.preproc_params.to_dict()
+                PipelineStep.PREPROCESSING, **session.preproc_params.model_dump()
             )
         if session.blob_params is not None:
             self._pipeline_model.update_step_params(

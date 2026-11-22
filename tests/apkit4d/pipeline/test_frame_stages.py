@@ -5,9 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from apkit4d.core.models import DetectionConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.pipeline.contracts import (
     CroppedFrame,
     FrameDetectionResult,
@@ -38,8 +37,8 @@ class TestCoercionHelpers:
         assert coerce_roi(duck) == roi
 
     def test_coerce_preproc_params_variants(self) -> None:
-        assert coerce_preproc_params(None) == PreprocParams()
-        custom = PreprocParams(normalization_enabled=True, lowest_intensity=10.0)
+        assert coerce_preproc_params(None) == PreprocessingConfig()
+        custom = PreprocessingConfig(normalization_enabled=True, lowest_intensity=10.0)
         assert coerce_preproc_params(custom) is custom
         assert coerce_preproc_params({"normalization_enabled": True, "lowest_intensity": 10.0}) == custom
 
@@ -81,7 +80,9 @@ class TestFrameStages:
         roi = RegionOfInterest(x_min=4.0, x_max=16.0, y_min=4.0, y_max=16.0, z_min=2.0, z_max=8.0)
 
         cropped = crop_frame(vol, frame=2, voxel_um=(1.0, 1.0, 1.0), roi=roi)
-        pp_norm = PreprocParams(normalization_enabled=True, lowest_intensity=0.0, highest_intensity=20000.0)
+        pp_norm = PreprocessingConfig(
+            normalization_enabled=True, lowest_intensity=0.0, highest_intensity=20000.0
+        )
         preproc = preprocess_frame(cropped, pp_norm)
 
         assert isinstance(preproc, PreprocessedFrame)
@@ -113,7 +114,7 @@ class TestFrameStages:
     def test_detect_blobs_in_frame_require_normalized_raises(self) -> None:
         vol = np.zeros((6, 8, 8), dtype=np.uint16)
         cropped = crop_frame(vol, frame=0, voxel_um=(1.0, 1.0, 1.0))
-        preproc = preprocess_frame(cropped, PreprocParams(normalization_enabled=False))
+        preproc = preprocess_frame(cropped, PreprocessingConfig(normalization_enabled=False))
 
         assert preproc.is_normalized is False
         with pytest.raises(ValueError, match="normalization must be enabled"):
@@ -122,7 +123,7 @@ class TestFrameStages:
     def test_detect_blobs_in_frame_without_time_or_dt(self) -> None:
         vol = np.zeros((6, 8, 8), dtype=np.uint16)
         cropped = crop_frame(vol, frame=1, voxel_um=(1.0, 1.0, 1.0))
-        preproc = preprocess_frame(cropped, PreprocParams(normalization_enabled=True))
+        preproc = preprocess_frame(cropped, PreprocessingConfig(normalization_enabled=True))
 
         res_no_time = detect_blobs_in_frame(preproc, DetectionConfig(), include_time=False)
         assert "t_s" not in res_no_time.detections.columns

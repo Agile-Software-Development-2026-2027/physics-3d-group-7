@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from apkit4d.detection.preprocessing import BgMode, PreprocParams
+from apkit4d.core.models import BgMode, PreprocessingConfig
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.volume_controller import VolumeController
@@ -40,7 +40,7 @@ def right_panel(qtbot):
 def test_preproc_defaults_match_preproc_params_dataclass_default(right_panel):
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
     params = section.get_preproc_params()
-    assert params == PreprocParams()
+    assert params == PreprocessingConfig()
 
 
 def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
@@ -83,7 +83,7 @@ def test_set_params_without_emitting_signals(right_panel: RightPanel, qtbot):
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
     catcher = SignalCatcher(right_panel)
 
-    new_params = PreprocParams(
+    new_params = PreprocessingConfig(
         denoise_xy_scale_um=1.1,
         denoise_z_scale_um=2.2,
         bg_mode=BgMode.WIDE_GAUSSIAN,

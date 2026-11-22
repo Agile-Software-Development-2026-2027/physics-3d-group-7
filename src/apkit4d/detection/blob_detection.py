@@ -2,7 +2,7 @@
 
 Summary
 
-1. Anisothropic Gaussian smoothing at the scale of the single blob
+1. Anisotropic Gaussian smoothing at the scale of the single blob
 2. Scale-normalized -LoG response along each axis: maximum closer to the center
    of an object, almost 0 in the flat background
 3. The seeds are the local maxima above the `threshold`. They have a

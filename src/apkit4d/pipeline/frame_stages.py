@@ -7,10 +7,10 @@ from typing import Any, cast
 import numpy as np
 
 from apkit4d.core.image import Image
-from apkit4d.core.models import DetectionConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest, VoxelSize3D
 from apkit4d.detection.blob_detection import find_blobs
-from apkit4d.detection.preprocessing import PreprocParams, preprocess
+from apkit4d.detection.preprocessing import preprocess
 from apkit4d.pipeline.contracts import CroppedFrame, FrameDetectionResult, PreprocessedFrame
 
 logger = logging.getLogger(__name__)
@@ -34,15 +34,15 @@ def coerce_roi(roi: RegionOfInterest | Mapping[str, Any] | Any | None) -> Region
     )
 
 
-def coerce_preproc_params(params: PreprocParams | Mapping[str, Any] | None) -> PreprocParams:
+def coerce_preproc_params(params: PreprocessingConfig | Mapping[str, Any] | None) -> PreprocessingConfig:
     """Convert None or a mapping into a PreprocParams instance."""
     if params is None:
-        return PreprocParams()
-    if isinstance(params, PreprocParams):
+        return PreprocessingConfig()
+    if isinstance(params, PreprocessingConfig):
         return params
     if isinstance(params, Mapping):
         # May want to add a check for keys that are not in PreprocParams to avoid silent errors
-        return PreprocParams.from_dict(dict(params))
+        return PreprocessingConfig(**dict(params))
 
 
 def coerce_blob_params(params: DetectionConfig | Mapping[str, Any] | None) -> DetectionConfig:
@@ -89,7 +89,7 @@ def crop_frame(
     )
 
 
-def preprocess_frame(cropped: CroppedFrame, params: PreprocParams) -> PreprocessedFrame:
+def preprocess_frame(cropped: CroppedFrame, params: PreprocessingConfig) -> PreprocessedFrame:
     """Stage 2: Run 3D denoising, background subtraction, normalization, gamma, and CLAHE."""
     processed = preprocess(cropped.raw_roi_volume, params, cropped.voxel_um)
     return PreprocessedFrame(cropped=cropped, image=processed, params=params)
