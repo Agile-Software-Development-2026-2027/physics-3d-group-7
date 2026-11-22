@@ -38,6 +38,9 @@ FULL_QUALITY_DELAY = 0.2
 # it is about 2 times faster when zoomed in and the blobs keep their shape, only a bit softer
 MOVING_IMAGE_SAMPLE_DISTANCE = 2.0
 
+# the minimum time that must pass between two drag event to be processed
+DRAG_RENDER_TIME_DEBOUNCE_SECONDS = 0.030
+
 # how the view looks until the user changes it from the left panel
 DEFAULT_COLORMAP = "inferno"
 DEFAULT_VOLUME_OPACITY = 1.0
@@ -1769,8 +1772,8 @@ class Viewport(QWidget):
         if watched is self.plotter and isinstance(event, QMouseEvent):
             etype = event.type()
             if etype == QEvent.Type.MouseMove and event.buttons() != Qt.MouseButton.NoButton:
-                now = time.perf_counter()  # thousandth of a second
-                if now - self._last_drag_render_time < 0.030:
+                now = time.perf_counter()
+                if now - self._last_drag_render_time < DRAG_RENDER_TIME_DEBOUNCE_SECONDS:
                     # the event happened too close to the last one, save it for later
                     self._deferred_move_event = (
                         event.button(),
