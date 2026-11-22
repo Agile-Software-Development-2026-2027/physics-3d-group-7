@@ -12,6 +12,7 @@ from apkit4d.core.models import BatchConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.gui.constants import texts
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import read_table
 from apkit4d.pipeline.contracts import DetectionSink
@@ -54,6 +55,9 @@ def detect_sequence(
         DetectionData containing the detections DataFrame, frame interval
         ``dt_s``, and sequence metadata dictionary.
     """
+    if not preproc_params.normalization_enabled:
+        raise ValueError(texts.DETECTION_REQUIRES_NORMALIZATION)
+
     processor = BatchProcessor(
         config=BatchConfig(workers=workers),
         preproc_params=preproc_params,

@@ -47,3 +47,6 @@ INSPECTOR_STATUS_BLOBS_FOUND = "frame {frame}: {count} blobs (median volume {vol
 INSPECTOR_STATUS_DETECTION_FAILED = "detection failed: {reason}"
 INSPECTOR_BUTTON_DISABLED_INFO = "\u24d8 Normalize the volume to enable this button."
 INSPECTOR_CHECKBOX_DISABLED_INFO = "\u24d8 Normalize the volume to enable this checkbox."
+DETECTION_REQUIRES_NORMALIZATION = (
+    "Enable intensity normalization in Preprocessing before running blob detection."
+)

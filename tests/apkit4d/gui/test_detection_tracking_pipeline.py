@@ -8,11 +8,13 @@ import numpy as np
 import pandas as pd
 
 from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.trajectory_detection import DetectionData
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.czi import CziInfo, CziSource
+from apkit4d.tracking.linker import ParticleLinker
 
 
 def _controller(qtbot, qapp):
@@ -387,3 +389,111 @@ def test_stage_3_detection_reports_frame_progress_and_hides_bar(qtbot, qapp, mon
     assert any("6 remaining" in d for d in observed_details)
     assert 4 in observed_values
     assert stats.progress.isHidden()
+
+
+def test_normalization_off_blocks_detection_and_queued_tracking(qtbot, qapp, monkeypatch):
+    """Disabling normalization blocks pipeline detection, queued tracking, and stage play buttons."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    source = MagicMock(spec=CziSource)
+    source.channel = 0
+    source.info = CziInfo("sample.czi", 4, 4, 8, 8, 1, "uint16", 1.0, 1.0, 1.0, 0.5, "test")
+    controller.file_controller._source = source
+    controller.file_controller.loaded.emit(Path("sample.czi"), source)
+
+    def forbidden_detect(*_args, **_kwargs):
+        raise AssertionError("Detection must not run while normalization is disabled")
+
+    def forbidden_link(*_args, **_kwargs):
+        raise AssertionError("Tracking must not run while normalization is disabled")
+
+    monkeypatch.setattr("apkit4d.gui.controllers.blob_detection_controller.detect_sequence", forbidden_detect)
+    monkeypatch.setattr(ParticleLinker, "link", forbidden_link)
+
+    controller.pipeline_model.update_step_params(PipelineStep.PREPROCESSING, normalization_enabled=False)
+
+    panel = window.right_panel
+    for step in (PipelineStep.DETECTION, PipelineStep.TRACKING, PipelineStep.BATCH):
+        btn = panel.get_play_button(step)
+        assert btn is not None and not btn.isEnabled()
+        assert btn.toolTip() == texts.DETECTION_REQUIRES_NORMALIZATION
+
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+
+    assert controller.pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.IDLE
+    assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
+    assert panel.bottom_stats.summary_label.text() == texts.STATS_DETECTION_BLOCKED_SUMMARY
+    assert texts.DETECTION_REQUIRES_NORMALIZATION in panel.bottom_stats.details_label.text()
+
+    # Defense-in-depth: even if DETECTION & TRACKING are queued manually via the model, abort cleanly
+    controller.pipeline_controller.complete_stage(PipelineStep.ROI)
+    controller.pipeline_controller.complete_stage(PipelineStep.PREPROCESSING)
+    controller.pipeline_model.plan_execution(PipelineStep.DETECTION, PipelineStep.TRACKING)
+    controller.pipeline_model.set_step_status(PipelineStep.DETECTION, StepStatus.RUNNING)
+
+    assert controller.pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.IDLE
+    assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
+    assert controller.pipeline_model.batch_results is None
+
+    # Re-enabling normalization restores play buttons and allows detection -> tracking
+    detections = _detections()
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
+        lambda *_args, **_kwargs: DetectionData(detections, 0.5, {"info": {"dt_s": 0.5}}),
+    )
+    monkeypatch.undo()
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
+        lambda *_args, **_kwargs: DetectionData(detections, 0.5, {"info": {"dt_s": 0.5}}),
+    )
+
+    controller.pipeline_model.update_step_params(PipelineStep.PREPROCESSING, normalization_enabled=True)
+    for step in (PipelineStep.DETECTION, PipelineStep.TRACKING, PipelineStep.BATCH):
+        btn = panel.get_play_button(step)
+        assert btn is not None and btn.isEnabled()
+        assert btn.toolTip() == texts.TOOLTIP_PLAY_STAGE
+
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+    qtbot.waitUntil(
+        lambda: controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED,
+        timeout=10000,
+    )
+    assert controller.tracking_result is not None
+
+
+def test_turning_normalization_off_after_detection_invalidates_stale_tracking(qtbot, qapp, monkeypatch):
+    """Turning normalization off after Stage 3 prevents queued tracking on invalidated data."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp)
+
+    source = MagicMock(spec=CziSource)
+    source.channel = 0
+    source.info = CziInfo("sample.czi", 4, 4, 8, 8, 1, "uint16", 1.0, 1.0, 1.0, 0.5, "test")
+    controller.file_controller._source = source
+    controller.file_controller.loaded.emit(Path("sample.czi"), source)
+
+    monkeypatch.setattr(
+        "apkit4d.gui.controllers.blob_detection_controller.detect_sequence",
+        lambda *_args, **_kwargs: DetectionData(_detections(), 0.5, {"info": {"dt_s": 0.5}}),
+    )
+    controller.pipeline_controller.run_up_to(PipelineStep.DETECTION)
+    qtbot.waitUntil(
+        lambda: controller.pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED,
+        timeout=10000,
+    )
+    assert controller.pipeline_model.batch_results is not None
+
+    monkeypatch.setattr(
+        ParticleLinker,
+        "link",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Tracking must not execute")),
+    )
+    controller.pipeline_model.update_step_params(PipelineStep.PREPROCESSING, normalization_enabled=False)
+    controller.pipeline_controller.run_up_to(PipelineStep.TRACKING)
+
+    assert controller.pipeline_model.batch_results is None
+    assert controller.pipeline_model.get_status(PipelineStep.DETECTION) == StepStatus.IDLE
+    assert controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE

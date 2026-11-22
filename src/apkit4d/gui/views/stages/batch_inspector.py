@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names, texts
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 from apkit4d.io.table import FORMATS
 
 
@@ -49,6 +50,7 @@ class BatchInspector(QWidget):
         layout.addRow(self.reset_btn)
 
         self.setEnabled(False)
+        self._wheel_guard = install_wheel_guard(self)
 
     def set_enabled_state(self, enabled: bool) -> None:
         """Enable or disable batch export controls."""

@@ -14,6 +14,7 @@ from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.v_separator import VSeparator
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class BlobDetectionInspector(QWidget):
@@ -59,6 +60,7 @@ class BlobDetectionInspector(QWidget):
 
         self._build_detection_parameters_section()
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
+        self._wheel_guard = install_wheel_guard(self)
 
     @property
     def diameter_xy(self):

@@ -308,6 +308,10 @@ class BlobDetectionController(QObject):
         ):
             return
 
+        if not self._pipeline_model.get_preproc_params().normalization_enabled:
+            self._report_detection_failure(ValueError(texts.DETECTION_REQUIRES_NORMALIZATION))
+            return
+
         if self._pipeline_model.batch_results is not None:
             detections, _metadata = self._pipeline_model.batch_results
             if self._precomputed_by_frame is None and not detections.empty:

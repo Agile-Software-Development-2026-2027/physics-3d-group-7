@@ -17,6 +17,7 @@ from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.gui.views.widgets.v_separator import VSeparator
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:
@@ -61,6 +62,7 @@ class PreprocessingSection(AccordionSection):
         self.reset_btn: QPushButton
 
         self._widgets()
+        self._wheel_guard = install_wheel_guard(self)
 
     def get_params(self) -> PreprocParams:
         """Retrieve the preprocessing parameters."""

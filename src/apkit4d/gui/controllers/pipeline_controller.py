@@ -89,6 +89,44 @@ class PipelineController(QObject):
         # Synchronize initial state
         self._sync_view()
 
+    def refresh_stage_gates(self) -> None:
+        """Re-evaluate stage play button enabled states against model prerequisites."""
+        self._sync_detection_gate()
+
+    def _will_execute_detection(self, target_step: PipelineStep) -> bool:
+        det_idx = PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION)
+        target_idx = PIPELINE_STEP_ORDER.index(target_step)
+        if target_idx < det_idx:
+            return False
+        if any(self._model.is_step_dirty(step) for step in PIPELINE_STEP_ORDER[: det_idx + 1]):
+            return True
+        return self._model.get_status(PipelineStep.DETECTION) != StepStatus.COMPLETED
+
+    def _sync_detection_gate(self) -> None:
+        normalized = self._model.get_preproc_params().normalization_enabled
+        has_clean_detection = (
+            self._model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED
+            and not self._model.is_step_dirty(PipelineStep.PREPROCESSING)
+            and not self._model.is_step_dirty(PipelineStep.ROI)
+        )
+        blocked = (not normalized) and (not has_clean_detection)
+
+        for step in (PipelineStep.DETECTION, PipelineStep.TRACKING, PipelineStep.BATCH):
+            play_btn = self._view.get_play_button(step)
+            if play_btn is None:
+                continue
+            if blocked:
+                play_btn.setEnabled(False)
+                play_btn.setToolTip(texts.DETECTION_REQUIRES_NORMALIZATION)
+            else:
+                play_btn.setToolTip(texts.TOOLTIP_PLAY_STAGE)
+                can_enable = (
+                    self._view.batch_inspector.isEnabled()
+                    if step == PipelineStep.BATCH
+                    else self._view.stages_enabled
+                )
+                play_btn.setEnabled(can_enable)
+
     @property
     def model(self) -> PipelineModel:
         """The underlying pipeline model."""
@@ -202,6 +240,25 @@ class PipelineController(QObject):
         Args:
             target_step: The target PipelineStep or step string.
         """
+        if isinstance(target_step, str):
+            try:
+                target_step = PipelineStep(target_step)
+            except ValueError:
+                return
+
+        if not self._model.get_preproc_params().normalization_enabled and self._will_execute_detection(
+            target_step
+        ):
+            if self._model.is_step_dirty(PipelineStep.PREPROCESSING):
+                self._model.invalidate_from(PipelineStep.DETECTION)
+            self._target_step = None
+            self._sync_detection_gate()
+            self.report_stage_failure(
+                texts.STATS_DETECTION_BLOCKED_SUMMARY,
+                texts.DETECTION_REQUIRES_NORMALIZATION,
+            )
+            return
+
         self._failure_stats = None
         self._batch_message = None
         self._progress_stats = None
@@ -230,11 +287,13 @@ class PipelineController(QObject):
         """Synchronize the view with current model statuses and statistics."""
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, self._model.get_status(step))
+        self._sync_detection_gate()
         self._update_pipeline_stats()
 
     def _on_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Handle status updates emitted by the model."""
         self._view.set_step_status(step, status)
+        self._sync_detection_gate()
         if status == StepStatus.RUNNING:
             self._failure_stats = None
             self._progress_stats = None
@@ -250,6 +309,7 @@ class PipelineController(QObject):
         self._progress_stats = None
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, StepStatus.IDLE)
+        self._sync_detection_gate()
         self._update_pipeline_stats()
 
     def _on_view_param_changed(self, step_name: str, param_name: str, value: Any) -> None:
@@ -274,7 +334,9 @@ class PipelineController(QObject):
 
     def _on_model_step_params_changed(self, step: PipelineStep) -> None:
         """Keep stage inspector widgets synchronized with programmatic model parameter updates."""
-        if step == PipelineStep.DETECTION:
+        if step == PipelineStep.PREPROCESSING:
+            self._sync_detection_gate()
+        elif step == PipelineStep.DETECTION:
             blob_params = BlobParams.from_dict(self._model.get_step_params(step))
             self._view.set_detection_params(blob_params)
         elif step == PipelineStep.TRACKING:

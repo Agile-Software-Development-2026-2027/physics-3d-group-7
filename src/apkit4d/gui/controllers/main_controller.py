@@ -296,6 +296,7 @@ class MainController(QObject):
             self._blob_controller.on_normalization_toggled(
                 self._pipeline_model.get_preproc_params().normalization_enabled
             )
+        self._pipeline_controller.refresh_stage_gates()
 
         completed = set(infer_completed_steps(session))
         for step in PIPELINE_STEP_ORDER:
@@ -350,6 +351,7 @@ class MainController(QObject):
             self._blob_controller.on_normalization_toggled(
                 self._pipeline_model.get_preproc_params().normalization_enabled
             )
+        self._pipeline_controller.refresh_stage_gates()
 
         if isinstance(source, PrecomputedSource):
             self.apply_precomputed_session(source.session, dt_s=source.info.dt_s)

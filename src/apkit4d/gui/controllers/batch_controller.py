@@ -70,6 +70,7 @@ class BatchController(QObject):
         button = self._window.right_panel.get_play_button(PipelineStep.BATCH)
         if button is not None:
             button.setEnabled(enabled)
+        self._pipeline.refresh_stage_gates()
 
     def run(self) -> None:
         if (

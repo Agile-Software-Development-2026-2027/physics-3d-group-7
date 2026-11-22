@@ -49,3 +49,4 @@ STATS_COMPLETED_PROGRESS_DETAILS: str = (
 )
 STATS_COMPLETED_SUMMARY: str = "Pipeline: Completed"
 STATS_COMPLETED_DETAILS: str = "All 5 pipeline stages are complete."
+STATS_DETECTION_BLOCKED_SUMMARY: str = "Blob detection blocked"

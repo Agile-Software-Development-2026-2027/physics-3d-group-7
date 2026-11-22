@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.v_separator import VSeparator
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class RoiInspector(QWidget):
@@ -49,6 +50,7 @@ class RoiInspector(QWidget):
 
         self._build_roi_section()
         self.set_editing_mode(False)
+        self._wheel_guard = install_wheel_guard(self)
 
     # helper to create the 6 spinboxes for X/Y/Z min/max coordinates in micrometers
     def _create_spinbox(self, object_name: str) -> QDoubleSpinBox:

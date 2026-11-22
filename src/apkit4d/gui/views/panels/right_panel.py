@@ -218,6 +218,7 @@ class RightPanel(SidePanel):
     def __init__(self) -> None:
         super().__init__(names.RIGHT_PANEL)
         self._theme: Theme = DEFAULT_THEME
+        self._stages_enabled: bool = True
         self._sections: list[AccordionSection] = []
         self._stage_sections: dict[str, AccordionSection] = {}
         self._number_fields: dict[PipelineStep, QSpinBox] = {}
@@ -346,8 +347,14 @@ class RightPanel(SidePanel):
         if section is not None:
             section.set_status(status)
 
+    @property
+    def stages_enabled(self) -> bool:
+        """Whether stage controls are enabled for an active source."""
+        return self._stages_enabled
+
     def set_stages_enabled(self, enabled: bool) -> None:
         """Enable or disable interactive controls and play buttons for all pipeline stages."""
+        self._stages_enabled = enabled
         for step in PipelineStep:
             if play_btn := self._play_buttons.get(step):
                 play_btn.setEnabled(enabled)
