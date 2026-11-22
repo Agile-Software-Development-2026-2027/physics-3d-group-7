@@ -11,6 +11,7 @@ from apkit4d.visualization.viewport import (
     RoiMode,
     Viewport,
 )
+from apkit4d.visualization.vis_sub_roi import DEFAULT_OUTSIDE_OPACITY, VisSubRoiState
 
 
 def make_grid(n: int = 5) -> pv.ImageData:
@@ -1136,3 +1137,112 @@ class TestViewportFpsTicker:
             window.InvokeEvent("EndEvent")
 
         assert viewport.render_fps == pytest.approx(20.0)
+
+
+class TestViewportVolumeSubRoi:
+    def test_initial_state_defaults_to_disabled_and_one_percent_opacity(self, viewport):
+        state = viewport.vis_sub_roi_state
+        assert state.enabled is False
+        assert state.bounds is None
+        assert state.outside_opacity == pytest.approx(DEFAULT_OUTSIDE_OPACITY)
+
+    def test_show_volume_registers_fragment_shader_replacement(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        shader_prop = viewport.plotter.actors["volume"].GetShaderProperty()
+        assert shader_prop is not None
+        assert shader_prop.GetNumberOfShaderReplacements() >= 1
+
+    def test_disable_preserves_bounds_and_outside_opacity(self, viewport):
+        grid = pv.ImageData(dimensions=(10, 10, 10), spacing=(1.0, 1.0, 1.0), origin=(5.0, 2.0, 1.0))
+        grid.point_data["values"] = np.ones(grid.n_points, dtype=np.float32)
+        viewport.show_volume(grid, reset_camera=False)
+
+        viewport.set_vis_sub_roi_outside_opacity(0.05)
+        viewport.set_vis_sub_roi_bounds((6.0, 12.0, 3.0, 9.0, 2.0, 8.0))
+        viewport.set_vis_sub_roi_enabled(True)
+        assert viewport.vis_sub_roi_state.enabled is True
+
+        viewport.set_vis_sub_roi_enabled(False)
+        assert viewport.vis_sub_roi_state.enabled is False
+        assert viewport.vis_sub_roi_state.bounds == pytest.approx((6.0, 12.0, 3.0, 9.0, 2.0, 8.0))
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.05)
+
+    def test_clear_vis_sub_roi_clears_bounds_but_preserves_outside_opacity(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        viewport.set_vis_sub_roi_outside_opacity(0.15)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        viewport.clear_vis_sub_roi()
+        assert viewport.vis_sub_roi_state.enabled is False
+        assert viewport.vis_sub_roi_state.bounds is None
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.15)
+
+    def test_viewport_clear_resets_vis_sub_roi_including_opacity(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        viewport.set_vis_sub_roi_outside_opacity(0.25)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        viewport.clear()
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )
+
+    def test_preserves_colormap_opacity_and_in_place_frame_updates(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.full(first.n_points, 1.0)
+        viewport.show_volume(first, reset_camera=False)
+        viewport.set_colormap("viridis")
+        viewport.set_volume_opacity(2.0)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        cached_grid = viewport._volume_grid
+        prop = viewport.plotter.actors["volume"].prop
+        expected_unit_dist = prop.opacity_unit_distance
+
+        second = make_grid(5)
+        second.point_data["values"] = np.full(second.n_points, 3.0)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+
+        assert viewport._volume_grid is cached_grid
+        np.testing.assert_allclose(viewport._volume_grid.point_data["values"], 3.0)
+        assert prop.opacity_unit_distance == pytest.approx(expected_unit_dist)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+    def test_gpu_shader_renders_attenuated_outside_at_one_percent_without_mutating_data(self, viewport):
+        viewport.resize(400, 400)
+        viewport.plotter.render_window.SetMultiSamples(0)
+        viewport.plotter.render_window.SetSize(400, 400)
+        viewport.set_background("black")
+
+        n = 32
+        grid = pv.ImageData(dimensions=(n, n, n), spacing=(1.0, 1.0, 1.0), origin=(10.0, 20.0, 0.0))
+        src_values = np.ones(grid.n_points, dtype=np.float32)
+        grid.point_data["values"] = src_values.copy()
+
+        viewport.show_volume(grid, reset_camera=False)
+        viewport.plotter.camera.parallel_projection = True
+        viewport.plotter.camera_position = [(25.5, 35.5, 90.0), (25.5, 35.5, 15.5), (0.0, 1.0, 0.0)]
+        viewport.plotter.camera.parallel_scale = 20.0
+
+        viewport.set_vis_sub_roi_bounds((20.0, 31.0, 30.0, 41.0, 0.0, 31.0))
+        viewport.set_vis_sub_roi_outside_opacity(0.01)
+        viewport.set_vis_sub_roi_enabled(True)
+        viewport.plotter.render()
+        img_sub = viewport.screenshot()
+
+        viewport.set_vis_sub_roi_enabled(False)
+        viewport.plotter.render()
+        img_full = viewport.screenshot()
+
+        assert viewport._volume_grid is not None
+        np.testing.assert_allclose(viewport._volume_grid.point_data["values"], src_values)
+
+        outside_sub = float(img_sub[200, 100].mean())
+        outside_full = float(img_full[200, 100].mean())
+        if outside_full > 1.0:
+            assert outside_sub < outside_full
