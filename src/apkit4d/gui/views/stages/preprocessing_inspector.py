@@ -16,20 +16,9 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.labeled_row import labeled_row
 from apkit4d.gui.views.widgets.v_separator import VSeparator
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
-
-
-def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:
-    row = QWidget()
-    if tooltip:
-        row.setToolTip(tooltip)
-    layout = QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(10)
-    layout.addWidget(QLabel(label_text), stretch=1)
-    layout.addWidget(widget, stretch=1)
-    return row
 
 
 class PreprocessingInspector(AccordionSection):
@@ -201,6 +190,8 @@ class PreprocessingInspector(AccordionSection):
     def _widgets(self):
         defaults = PreprocessingConfig()
 
+        # everybody used QFormLayout, I didn't :\
+
         # 1. Denoising
         self.denoise_xy_box = QDoubleSpinBox()
         self.denoise_xy_box.setObjectName(names.PREPROC_DENOISE_XY_FIELD)
@@ -212,9 +203,7 @@ class PreprocessingInspector(AccordionSection):
             lambda val: self.param_changed.emit("denoise_xy_scale_um", val)
         )
         self.add_widget(
-            create_param_row(
-                texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box, texts.PREPROC_DENOISE_XY_TOOLTIP
-            )
+            labeled_row(texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box, texts.PREPROC_DENOISE_XY_TOOLTIP)
         )
 
         self.denoise_z_box = QDoubleSpinBox()
@@ -227,9 +216,7 @@ class PreprocessingInspector(AccordionSection):
             lambda val: self.param_changed.emit("denoise_z_scale_um", val)
         )
         self.add_widget(
-            create_param_row(
-                texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box, texts.PREPROC_DENOISE_Z_TOOLTIP
-            )
+            labeled_row(texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box, texts.PREPROC_DENOISE_Z_TOOLTIP)
         )
 
         self.add_widget(VSeparator())
@@ -242,7 +229,7 @@ class PreprocessingInspector(AccordionSection):
         self.bg_mode.setCurrentText(defaults.bg_mode.value)
         self.bg_mode.currentTextChanged.connect(self._on_bg_mode_changed)
         self.add_widget(
-            create_param_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode, texts.PREPROC_DENOISE_BG_MODE_TOOLTIP)
+            labeled_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode, texts.PREPROC_DENOISE_BG_MODE_TOOLTIP)
         )
 
         self.bg_percentile = QDoubleSpinBox()
@@ -254,7 +241,7 @@ class PreprocessingInspector(AccordionSection):
         self.bg_percentile.setEnabled(defaults.bg_mode == BgMode.PERCENTILE_PER_SLICE)
         self.bg_percentile.valueChanged.connect(lambda val: self.param_changed.emit("bg_percentile", val))
         self.add_widget(
-            create_param_row(
+            labeled_row(
                 texts.LABEL_PREPROC_BG_PERCENTILE,
                 self.bg_percentile,
                 texts.PREPROC_BG_PERCENTILE_TOOLTIP,
@@ -270,7 +257,7 @@ class PreprocessingInspector(AccordionSection):
         self.bg_sigma_xy_um.setEnabled(defaults.bg_mode == BgMode.WIDE_GAUSSIAN)
         self.bg_sigma_xy_um.valueChanged.connect(lambda val: self.param_changed.emit("bg_sigma_xy_um", val))
         self.add_widget(
-            create_param_row(
+            labeled_row(
                 texts.LABEL_PREPROC_BG_SIGMA_XY,
                 self.bg_sigma_xy_um,
                 texts.PREPROC_BG_WIDE_GAUSSIAN_TOOLTIP,
@@ -298,7 +285,7 @@ class PreprocessingInspector(AccordionSection):
             lambda val: self.param_changed.emit("lowest_intensity", val)
         )
         self.add_widget(
-            create_param_row(
+            labeled_row(
                 texts.LABEL_PREPROC_LOWEST_INTENSITY,
                 self.lowest_instensity,
                 texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP,
@@ -315,7 +302,7 @@ class PreprocessingInspector(AccordionSection):
         self.highest_intensity.valueChanged.connect(
             lambda val: self.param_changed.emit("highest_intensity", val)
         )
-        self.add_widget(create_param_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
+        self.add_widget(labeled_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
 
         self.suggest_window_btn = QPushButton(texts.PREPROC_SUGGEST_WINDOW)
         self.suggest_window_btn.setObjectName(names.PREPROC_SUGGEST_WINDOW)
@@ -360,9 +347,7 @@ class PreprocessingInspector(AccordionSection):
         gamma_layout.addWidget(self.gamma_correction_to_apply, stretch=1)
         gamma_layout.addWidget(self.gamma_value_label)
 
-        self.add_widget(
-            create_param_row(texts.LABEL_PREPROC_GAMMA, gamma_container, texts.PREPROC_GAMMA_TOOLTIP)
-        )
+        self.add_widget(labeled_row(texts.LABEL_PREPROC_GAMMA, gamma_container, texts.PREPROC_GAMMA_TOOLTIP))
 
         self.add_widget(VSeparator())
 
@@ -384,9 +369,7 @@ class PreprocessingInspector(AccordionSection):
         self.clahe_clip.setEnabled(defaults.clahe_enabled)
         self.clahe_clip.valueChanged.connect(lambda val: self.param_changed.emit("clahe_clip", val))
         self.add_widget(
-            create_param_row(
-                texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip, texts.PREPROC_CLAHE_CLIP_TOOLTIP
-            )
+            labeled_row(texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip, texts.PREPROC_CLAHE_CLIP_TOOLTIP)
         )
 
         self.clahe_kernel_xy_um = QDoubleSpinBox()
@@ -400,7 +383,7 @@ class PreprocessingInspector(AccordionSection):
             lambda val: self.param_changed.emit("clahe_kernel_xy_um", val)
         )
         self.add_widget(
-            create_param_row(
+            labeled_row(
                 texts.LABEL_PREPROC_CLAHE_KERNEL_XY,
                 self.clahe_kernel_xy_um,
                 texts.PREPROC_CLAHE_KERNEL_TOOLTIP,

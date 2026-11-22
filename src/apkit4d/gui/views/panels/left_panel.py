@@ -24,6 +24,7 @@ from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.labeled_row import labeled_row
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
@@ -95,7 +96,7 @@ class LeftPanel(SidePanel):
         opacity_row = QWidget()
         opacity_layout = QHBoxLayout(opacity_row)
         opacity_layout.setContentsMargins(0, 0, 0, 0)
-        opacity_layout.addWidget(self._opacity_slider, stretch=1)
+        opacity_layout.addWidget(self._opacity_slider)
         opacity_layout.addWidget(self._opacity_value)
 
         self._background_button = ColorButton(texts.DIALOG_BACKGROUND)
@@ -109,30 +110,28 @@ class LeftPanel(SidePanel):
         self._appearance_section = AccordionSection(texts.SECTION_APPEARANCE)
         self._appearance_section.setObjectName(names.APPEARANCE_SECTION)
         self._appearance_section.add_widget(theme_button)
-        self._colormap_box = self._add_box(
-            self._appearance_section, texts.BOX_COLORMAP, names.COLORMAP_BOX, self._colormap_combo
+        self._appearance_section.add_widget(
+            labeled_row(texts.BOX_COLORMAP, self._colormap_combo, names.COLORMAP_BOX)
         )
-        self._opacity_box = self._add_box(
-            self._appearance_section, texts.BOX_OPACITY, names.OPACITY_BOX, opacity_row
+        self._appearance_section.add_widget(labeled_row(texts.BOX_OPACITY, opacity_row, names.OPACITY_BOX))
+        self._appearance_section.add_widget(
+            labeled_row(texts.BOX_BACKGROUND, self._background_button, names.BACKGROUND_BOX)
         )
-        self._background_box = self._add_box(
-            self._appearance_section, texts.BOX_BACKGROUND, names.BACKGROUND_BOX, self._background_button
-        )
-        self._outline_box = self._add_box(
-            self._appearance_section, texts.BOX_OUTLINE, names.OUTLINE_BOX, self._outline_button
+        self._appearance_section.add_widget(
+            labeled_row(texts.BOX_OUTLINE, self._outline_button, names.OUTLINE_BOX)
         )
 
         self._show_trajectories_checkbox = QCheckBox(texts.LABEL_SHOW_TRAJECTORIES)
         self._show_trajectories_checkbox.setObjectName(names.SHOW_TRAJECTORIES_CHECKBOX)
         self._show_trajectories_checkbox.setChecked(True)
         self._show_trajectories_checkbox.toggled.connect(self.show_trajectories_toggled)
-        self._show_trajectories_checkbox.hide()
+        self._show_trajectories_checkbox.hide()  # TODO: layers
 
         self._show_blobs_checkbox = QCheckBox(texts.LABEL_SHOW_BLOBS)
         self._show_blobs_checkbox.setObjectName(names.SHOW_BLOBS_CHECKBOX)
         self._show_blobs_checkbox.setChecked(True)
         self._show_blobs_checkbox.toggled.connect(self.show_blobs_toggled)
-        self._show_blobs_checkbox.hide()
+        self._show_blobs_checkbox.hide()  # TODO: layers
 
         self._trajectory_tail_spinbox = QSpinBox()
         self._trajectory_tail_spinbox.setObjectName(names.TRAJECTORY_TAIL_SPINBOX)
@@ -154,29 +153,26 @@ class LeftPanel(SidePanel):
         self._trajectory_colormap_combo.addItems(list(view_style.TRAJECTORY_COLORMAPS))
         self._trajectory_colormap_combo.currentTextChanged.connect(self.trajectory_colormap_changed)
 
-        self._trajectory_color_mode_box = self._add_box(
-            self._appearance_section,
-            texts.BOX_TRAJECTORY_COLOR_MODE,
-            names.TRAJECTORY_COLOR_MODE_BOX,
-            self._trajectory_color_mode_combo,
+        self._appearance_section.add_widget(
+            labeled_row(
+                texts.BOX_TRAJECTORY_COLOR_MODE,
+                self._trajectory_color_mode_combo,
+                names.TRAJECTORY_COLOR_MODE_BOX,
+            )
         )
-        self._trajectory_colormap_box = self._add_box(
-            self._appearance_section,
-            texts.BOX_TRAJECTORY_COLORMAP,
-            names.TRAJECTORY_COLORMAP_BOX,
-            self._trajectory_colormap_combo,
+        self._appearance_section.add_widget(
+            labeled_row(
+                texts.BOX_TRAJECTORY_COLORMAP, self._trajectory_colormap_combo, names.TRAJECTORY_COLORMAP_BOX
+            )
+        )
+        self._appearance_section.add_widget(
+            labeled_row(texts.BOX_TRAJECTORY_TAIL, self._trajectory_tail_spinbox, names.TRAJECTORY_TAIL_BOX)
         )
 
         self._layers_section = AccordionSection(texts.SECTION_LAYERS)
         self._layers_section.setObjectName(names.LAYERS_SECTION)
         self._layers_section.add_widget(self._show_trajectories_checkbox)
         self._layers_section.add_widget(self._show_blobs_checkbox)
-        self._trajectory_tail_box = self._add_box(
-            self._layers_section,
-            texts.BOX_TRAJECTORY_TAIL,
-            names.TRAJECTORY_TAIL_BOX,
-            self._trajectory_tail_spinbox,
-        )
 
         self._histograms_section = HistogramsSection()
 
@@ -210,26 +206,6 @@ class LeftPanel(SidePanel):
     def histograms_section(self) -> HistogramsSection:
         """Section with the intensity histograms."""
         return self._histograms_section
-
-    @property
-    def colormap_box(self) -> QWidget:
-        """Box for the choice of the colormap of the volume."""
-        return self._colormap_box
-
-    @property
-    def opacity_box(self) -> QWidget:
-        """Box for the opacity of the volume."""
-        return self._opacity_box
-
-    @property
-    def background_box(self) -> QWidget:
-        """Box for the background color of the 3D view."""
-        return self._background_box
-
-    @property
-    def outline_box(self) -> QWidget:
-        """Box for the color of the outline of the volume."""
-        return self._outline_box
 
     @property
     def colormap(self) -> str:
@@ -305,13 +281,3 @@ class LeftPanel(SidePanel):
         mode = self.trajectory_color_mode
         self._trajectory_colormap_combo.setEnabled(mode == TrajectoryColorMode.SPEED)
         self.trajectory_color_mode_changed.emit(mode)
-
-    def _add_box(self, section: AccordionSection, title: str, name: str, control: QWidget) -> QWidget:
-        box = QWidget()
-        box.setObjectName(name)
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QLabel(title))
-        layout.addWidget(control)
-        section.add_widget(box)
-        return box
