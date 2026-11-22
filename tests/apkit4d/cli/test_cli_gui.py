@@ -30,21 +30,20 @@ def test_apkit4d_gui_is_defined(runner: CliRunner, fake_gui: MagicMock):  # pyri
     assert result.exit_code == 0
 
 
-@pytest.mark.parametrize("param", ["czi", "--software-gl", "--diagnostic", "--mock"])
+@pytest.mark.parametrize("param", ["file", "--mock"])
 def test_apkit4d_gui_has_params_defined(param: str):
     assert is_param_defined(GUI, param)
 
 
-@pytest.mark.parametrize("option", ["--software-gl", "--diagnostic", "--mock"])
-def test_gui_options_are_flags_with_default_false(option: str):
-    opt = get_option(GUI, option)
+def test_mock_is_a_flag_with_default_false():
+    opt = get_option(GUI, "--mock")
     assert opt.is_flag
     assert isinstance(opt.type, click.types.BoolParamType)
     assert opt.default is False
 
 
-def test_czi_is_an_optional_path_argument_with_default_none():
-    arg = get_argument(GUI, "czi")
+def test_file_is_an_optional_path_argument_with_default_none():
+    arg = get_argument(GUI, "file")
     assert not arg.required
     assert arg.nargs == 1
     assert isinstance(arg.type, click.Path)
@@ -75,3 +74,16 @@ def test_gui_rejects_czi_with_mock_flag(runner: CliRunner, fake_gui: MagicMock, 
     r = runner.invoke(cli, ["gui", str(czi), "--mock"])
     assert r.exit_code == 2
     assert "Cannot specify both" in r.output
+
+
+def test_gui_opens_saved_results_too(runner: CliRunner, fake_gui: MagicMock, tmp_path: pathlib.Path):
+    results = tmp_path / "sample_blobs_params.json"
+    _ = results.write_text("{}", encoding="utf-8")
+    r = runner.invoke(cli, ["gui", str(results)])
+    assert r.exit_code == 0
+    fake_gui.run.assert_called_once_with(results, mock=False)
+
+
+def test_gui_has_no_unused_flags():
+    assert not is_param_defined(GUI, "--software-gl")
+    assert not is_param_defined(GUI, "--diagnostic")
