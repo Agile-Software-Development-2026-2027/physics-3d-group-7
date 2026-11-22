@@ -6,6 +6,7 @@ Object names of the main window, its menus and its columns.
 STATUS_BAR: str = "status_bar"
 FILE_MENU: str = "file_menu"
 OPEN_ACTION: str = "open_action"
+OPEN_RESULTS_ACTION: str = "open_results_action"
 QUIT_ACTION: str = "quit_action"
 COLUMNS_SPLITTER: str = "columns_splitter"
 VIEW_MENU: str = "view_menu"

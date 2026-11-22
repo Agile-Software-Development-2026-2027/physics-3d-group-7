@@ -1,7 +1,11 @@
 """Tests for generalized precomputed session models and source adapters."""
 
+import copy
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import pytest
 
 from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
@@ -94,6 +98,20 @@ def test_precomputed_frame_source_delegates_and_matches_protocol() -> None:
     assert int(wrapped.read(2)[0, 0, 0]) == 2
     wrapped.close()
     assert base.closed
+
+
+def test_precomputed_frame_source_delegates_the_other_attributes_of_the_source() -> None:
+    # detection reads `path` and `channel` of a CziSource when it runs again on a loaded recording
+    base = _DummyFrameSource()
+    base.path = Path("sample.czi")
+    base.channel = 1
+    wrapped = PrecomputedFrameSource(base, PrecomputedSession())
+
+    assert wrapped.path == Path("sample.czi")
+    assert wrapped.channel == 1
+    assert copy.copy(wrapped).channel == 1
+    with pytest.raises(AttributeError):
+        _ = wrapped.missing
 
 
 def test_mock_frame_source_satisfies_precomputed_source_protocol() -> None:
