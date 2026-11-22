@@ -5,7 +5,8 @@ import pytest
 from scipy.spatial.distance import pdist
 
 from apkit4d.core.image import Image
-from apkit4d.detection.blob_detection import BlobParams, find_blobs
+from apkit4d.core.models import DetectionConfig
+from apkit4d.detection.blob_detection import find_blobs
 from apkit4d.io.mock import (
     MOCK_TRACK_COLUMNS,
     MockConfig,
@@ -69,7 +70,7 @@ def test_generate_mock_tracks_maintain_blob_separation_across_all_frames() -> No
     """Algae must not converge on the same location in any frame so blob detection stays clean."""
     cfg = MockConfig()
     tracks, _ = generate_mock_tracks(cfg)
-    params = BlobParams()
+    params = DetectionConfig()
 
     for _, frame_df in tracks.groupby("frame"):
         if len(frame_df) < 2:
@@ -120,7 +121,7 @@ def test_mock_frame_source_reads_clean_volume_and_supports_blob_detection() -> N
         assert float(vol0[zi, yi, xi]) > 0.5
 
     # Real blob detection should find every mock algae 1-to-1 on sampled frames
-    params = BlobParams()
+    params = DetectionConfig()
     for t in (0, 30, cfg.n_t // 2, 90, cfg.n_t - 1):
         vol_t: Image[np.float32] = source.read(t)
         expected = source.tracks[source.tracks["frame"] == t]

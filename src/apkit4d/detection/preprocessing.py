@@ -6,75 +6,14 @@ See the `preprocess` function for more details on the pipeline.
 
 Memory copies and allocations are avoided as much as possible during the
 preprocessing sub-pipeline.
-
-RefactorNote:
-    BgMode was updated to inherit from enum.StrEnum, this allows native string representation,
-    JSON serialization while mantaining backward compatibility with enum comparison.
 """
-
-from dataclasses import asdict, dataclass, fields
-from enum import StrEnum
 
 import numpy as np
 from scipy import ndimage
 from skimage.exposure import equalize_adapthist
 
 from apkit4d.core.image import Image
-
-
-class BgMode(StrEnum):
-    NONE = "None"
-    PERCENTILE_PER_SLICE = "Percentile per slice"
-    WIDE_GAUSSIAN = "Wide Gaussian"
-
-
-@dataclass
-class PreprocParams:
-    """User specified configuration for image preprocessing"""
-
-    # Scale of the Gaussian smoothing denoise along the x, y axes
-    denoise_xy_scale_um: float = 0.0
-
-    # Scale of the Gaussian smoothing denoise along the z axis (anisotropic)
-    denoise_z_scale_um: float = 0.0
-
-    # Background removal strategy
-    bg_mode: BgMode = BgMode.NONE
-
-    # The percentile for BgMode.PERCENTILE_PER_SLICE
-    bg_percentile: float = 50.0
-
-    # Sigma scale for the Gaussing smoothing applied when BgMode.WIDE_GAUSSIAN
-    bg_sigma_xy_um: float = 60.0
-
-    # Intensity window for normalization. Narrower -> more contrast
-    normalization_enabled: bool = True
-    lowest_intensity: float = 0.0
-    highest_intensity: float = 1000.0
-
-    logarithmic_compression_enabled: bool = False
-
-    # If equal to 1.0, has no effect
-    gamma_correction_to_apply: float = 1.0
-
-    clahe_enabled: bool = False
-
-    # Controls noise amplification
-    clahe_clip: float = 0.01
-
-    # Size micrometers of the local neighborhood (tile) used in CLAHE.
-    clahe_kernel_xy_um: float = 150.0
-
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d):
-        names = {f.name for f in fields(cls)}
-        kwargs = {k: v for k, v in (d or {}).items() if k in names}
-        if "bg_mode" in kwargs and kwargs["bg_mode"] is not None:
-            kwargs["bg_mode"] = BgMode(kwargs["bg_mode"])
-        return cls(**kwargs)
+from apkit4d.core.models import BgMode, PreprocessingConfig
 
 
 def sigmas_to_voxels(
@@ -88,7 +27,7 @@ def sigmas_to_voxels(
 
 
 def denoise(
-    vol: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+    vol: Image[np.float32], p: PreprocessingConfig, voxel_dim: tuple[float, float, float]
 ) -> Image[np.float32]:
     """Smooths out `vol` via Gaussian filtering. Averages the noise.
 
@@ -110,7 +49,7 @@ def denoise(
 
 
 def subtract_background(
-    smoothed: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+    smoothed: Image[np.float32], p: PreprocessingConfig, voxel_dim: tuple[float, float, float]
 ) -> Image[np.float32]:
     """Removes background noise from the already smoothed volume.
 
@@ -143,7 +82,7 @@ def subtract_background(
     return np.clip(smoothed, 0, None, out=smoothed)  # no allocation
 
 
-def normalize_intensity(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
+def normalize_intensity(volume: Image[np.float32], p: PreprocessingConfig) -> Image[np.float32]:
     """Normalizes intensities in [0.0, 1.0]"""
 
     np.subtract(volume, np.float32(p.lowest_intensity), out=volume)
@@ -163,7 +102,7 @@ def logarithmic_compression(volume: Image[np.float32]) -> Image[np.float32]:
     return volume
 
 
-def gamma_correction(volume: Image[np.float32], p: PreprocParams) -> Image[np.float32]:
+def gamma_correction(volume: Image[np.float32], p: PreprocessingConfig) -> Image[np.float32]:
     """Applies non-linear gamma correction if gamma != 1.0."""
 
     if p.gamma_correction_to_apply == 1.0:
@@ -172,7 +111,7 @@ def gamma_correction(volume: Image[np.float32], p: PreprocParams) -> Image[np.fl
 
 
 def clahe(
-    volume: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+    volume: Image[np.float32], p: PreprocessingConfig, voxel_dim: tuple[float, float, float]
 ) -> Image[np.float32]:
     """Applies Contrast Limited Adaptive Histogram Equalization (CLAHE).
 
@@ -188,7 +127,7 @@ def clahe(
 
 
 def preprocess(
-    vol_roi: Image[np.float32], p: PreprocParams, voxel_dim: tuple[float, float, float]
+    vol_roi: Image[np.float32], p: PreprocessingConfig, voxel_dim: tuple[float, float, float]
 ) -> Image[np.float32]:
     """Applies a preprocessing pipeline on a raw but sliced volume.
 

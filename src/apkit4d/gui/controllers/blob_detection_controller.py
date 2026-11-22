@@ -1,7 +1,7 @@
 import inspect
 import logging
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Protocol, cast
@@ -12,9 +12,8 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -44,7 +43,7 @@ class BlobDetection:
     seeds_response: NDArray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
 
-def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
+def detect_blobs(prepared: PreparedVolume, params: DetectionConfig) -> BlobDetection:
     """Runs in the worker thread: only the detection, the volume is already prepared."""
     cropped = CroppedFrame(
         frame=prepared.frame,
@@ -60,7 +59,7 @@ def detect_blobs(prepared: PreparedVolume, params: BlobParams) -> BlobDetection:
     preproc = PreprocessedFrame(
         cropped=cropped,
         image=prepared.image,
-        params=PreprocParams(normalization_enabled=prepared.is_image_normalized),
+        params=PreprocessingConfig(normalization_enabled=prepared.is_image_normalized),
     )
     result = detect_blobs_in_frame(
         preproc,
@@ -87,7 +86,7 @@ class BlobDetectionController(QObject):
         parent: Qt parent, so the controller lives as long as its owner.
 
     Signals:
-        params_changed: Emitted when BlobParams properties are changed from the view
+        params_changed: Emitted when DetectionConfig properties are changed from the view
         seeds_response_changed: seeds_response_changed: Emitted with the LoG response of the
                                 candidates of a detection, or None when the recording changes.
     """
@@ -119,9 +118,9 @@ class BlobDetectionController(QObject):
         self._volume_controller = volume_controller
 
         self._params = (
-            BlobParams.from_dict(pipeline_model.get_step_params(PipelineStep.DETECTION))
+            DetectionConfig(**pipeline_model.get_step_params(PipelineStep.DETECTION))
             if pipeline_model is not None
-            else BlobParams()
+            else DetectionConfig()
         )
 
         # set default inspector parameters
@@ -160,9 +159,9 @@ class BlobDetectionController(QObject):
         self._detection_generation = 0
         self._detection_running_generation: int | None = None
         self._detection_running_source: FrameSource | None = None
-        self._detection_running_params: tuple[PreprocParams, BlobParams, RegionOfInterest | None] | None = (
-            None
-        )
+        self._detection_running_params: (
+            tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None] | None
+        ) = None
         self._detection_started_at: float = 0.0
 
         if self._pipeline_model is not None:
@@ -182,11 +181,11 @@ class BlobDetectionController(QObject):
         self._precomputed_by_frame: dict[int, pd.DataFrame] | None = None
 
     @property
-    def params(self) -> BlobParams:
+    def params(self) -> DetectionConfig:
         """Current blob detection parameters."""
         return self._params
 
-    def set_params(self, params: BlobParams) -> None:
+    def set_params(self, params: DetectionConfig) -> None:
         """Synchronize controller and inspector widgets from `params` without emitting signals."""
         self._params = params
         self._inspector.set_params(params)
@@ -266,11 +265,11 @@ class BlobDetectionController(QObject):
     def _on_step_params_changed(self, step: PipelineStep) -> None:
         if step != PipelineStep.DETECTION or self._pipeline_model is None:
             return
-        model_params = BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION))
+        model_params = DetectionConfig(**self._pipeline_model.get_step_params(PipelineStep.DETECTION))
         if model_params != self._params:
             self.set_params(model_params)
 
-    def _detection_params(self) -> tuple[PreprocParams, BlobParams, RegionOfInterest | None]:
+    def _detection_params(self) -> tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None]:
         """Take a snapshot of the Stage 3 sequence detection parameters."""
         assert self._pipeline_model is not None
         roi = self._volume_controller.roi if self._volume_controller is not None else None
@@ -280,7 +279,7 @@ class BlobDetectionController(QObject):
 
         return (
             self._pipeline_model.get_preproc_params(),
-            BlobParams.from_dict(self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
+            DetectionConfig(**self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
             roi,
         )
 
@@ -430,7 +429,7 @@ class BlobDetectionController(QObject):
 
     @Slot(str, float)
     def _on_blob_param_changed(self, field: str, value: float):
-        self._params = replace(self._params, **{field: value})
+        self._params = self._params.model_copy(update={field: value})
 
         if self._inspector.update_on_change:
             self._schedule_a_detect()

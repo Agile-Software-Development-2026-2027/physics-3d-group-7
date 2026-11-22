@@ -3,10 +3,8 @@
 import numpy as np
 import pandas as pd
 
-from apkit4d.core.models import TrackingConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import (
@@ -64,7 +62,7 @@ def test_precomputed_session_effective_blobs_and_step_inference() -> None:
     roi_only = PrecomputedSession(roi=RegionOfInterest(0.0, 5.0, 0.0, 5.0, 0.0, 5.0))
     assert infer_completed_steps(roi_only) == ("roi",)
 
-    preproc_only = PrecomputedSession(preproc_params=PreprocParams())
+    preproc_only = PrecomputedSession(preproc_params=PreprocessingConfig())
     assert infer_completed_steps(preproc_only) == ("roi", "preprocessing")
 
     blobs_df = pd.DataFrame({"frame": [0], "x_um": [1.0], "y_um": [1.0], "z_um": [1.0]})
@@ -79,7 +77,7 @@ def test_precomputed_session_effective_blobs_and_step_inference() -> None:
 
     explicit = PrecomputedSession(
         tracking=tracking_res,
-        blob_params=BlobParams(),
+        blob_params=DetectionConfig(),
         completed_steps=("roi", "preprocessing"),
     )
     assert infer_completed_steps(explicit) == ("roi", "preprocessing")

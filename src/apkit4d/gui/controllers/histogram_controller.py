@@ -20,7 +20,7 @@ from apkit4d.gui.views.histograms.roi_intensity_histogram import (
     RoiIntensityHistogram,
     compute_roi_histogram_stats,
 )
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 
 
 class HistogramController(QObject):
@@ -34,7 +34,7 @@ class HistogramController(QObject):
         volume_controller: VolumeController | None,
         pipeline_model: PipelineModel,
         preproc_histogram: PreprocessedIntensityHistogram | None = None,
-        preproc_section: PreprocessingSection | None = None,
+        preproc_section: PreprocessingInspector | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)

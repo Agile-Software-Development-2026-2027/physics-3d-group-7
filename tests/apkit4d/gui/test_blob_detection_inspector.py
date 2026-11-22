@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.stages import StageInspectorView
@@ -178,7 +178,7 @@ def test_blob_detection_inspector_set_params_blocks_signals_and_roundtrips(inspe
     inspector._diameter_z_equals_xy.setChecked(True)
     emitted.clear()
 
-    custom = BlobParams(
+    custom = DetectionConfig(
         diameter_xy_um=12.0,
         diameter_z_um=48.0,
         threshold=0.35,

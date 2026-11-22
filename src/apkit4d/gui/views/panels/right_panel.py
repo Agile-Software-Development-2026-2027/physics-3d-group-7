@@ -22,8 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.theme import (
@@ -36,7 +35,7 @@ from apkit4d.gui.theme import (
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.stages.batch_inspector import BatchInspector
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
 from apkit4d.gui.views.stages.trajectory_linking_inspector import TrajectoryLinkingInspector
 from apkit4d.gui.views.widgets.accordion import AccordionSection
@@ -359,7 +358,7 @@ class RightPanel(SidePanel):
             if play_btn := self._play_buttons.get(step):
                 play_btn.setEnabled(enabled)
 
-        preproc = cast(PreprocessingSection | None, self.get_section(PipelineStep.PREPROCESSING))
+        preproc = cast(PreprocessingInspector | None, self.get_section(PipelineStep.PREPROCESSING))
         batch: BatchInspector | None = getattr(self, "batch_inspector", None)
         for inspector in (
             self._roi_inspector,
@@ -371,7 +370,7 @@ class RightPanel(SidePanel):
             if inspector is not None:
                 inspector.set_enabled_state(enabled)
 
-    def set_detection_params(self, params: BlobParams) -> None:
+    def set_detection_params(self, params: DetectionConfig) -> None:
         """Synchronize detection inspector with the model."""
         if (inspector := self.detection_inspector) is not None:
             inspector.set_params(params)
@@ -499,7 +498,7 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    preproc_sec = PreprocessingSection()
+                    preproc_sec = PreprocessingInspector()
                     preproc_sec.param_changed.connect(
                         lambda param, value: self.notify_param_changed(
                             PipelineStep.PREPROCESSING.value, param, value
