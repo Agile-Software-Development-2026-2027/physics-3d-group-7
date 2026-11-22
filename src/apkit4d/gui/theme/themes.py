@@ -41,6 +41,7 @@ class ThemeColors:
     lowest_bound_hist: str
     highest_bound_hist: str
     threshold_line_hist: str
+    danger: str
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,7 @@ LIGHT_COLORS: ThemeColors = ThemeColors(
     lowest_bound_hist="#b45309",
     highest_bound_hist="#dc2626",
     threshold_line_hist="#dc2626",
+    danger="#dc2626",
 )
 
 DARK_COLORS: ThemeColors = ThemeColors(
@@ -121,6 +123,7 @@ DARK_COLORS: ThemeColors = ThemeColors(
     lowest_bound_hist="#e5c07b",
     highest_bound_hist="#e06c75",
     threshold_line_hist="#e06c75",
+    danger="#e06c75",
 )
 
 THEME_COLORS: dict[Theme, ThemeColors] = {Theme.LIGHT: LIGHT_COLORS, Theme.DARK: DARK_COLORS}

@@ -6,6 +6,7 @@ Texts of the right column: stage titles, stage controls and statistics.
 BUTTON_TOGGLE_ALL: str = "Toggle All"
 TOOLTIP_TOGGLE_ALL: str = "Toggle collapse/expand state of all accordion sections"
 TOOLTIP_STATS_TOGGLE: str = "Toggle statistics details"
+BUTTON_RESET_DEFAULTS: str = "Reset to defaults"
 # pipeline stage controls
 LABEL_STAGE_VALUE: str = "Parameter:"
 BUTTON_PLAY_STAGE: str = "▶"
@@ -28,8 +29,19 @@ STATS_DEFAULT_DETAILS: str = "Ready to configure and run stages."
 STATS_INITIAL_SUMMARY: str = "Working: 15%"
 STATS_INITIAL_DETAILS: str = "Task: Processing Volume Data\nProgress: 15%\nElapsed: 00:01:24\nStatus: Active"
 STATS_WORKING_SUMMARY: str = "Working: {step}..."
+STATS_WORKING_ELAPSED_SUMMARY: str = "Working: {step} ({elapsed})"
+STATS_WORKING_PROGRESS_SUMMARY: str = "Working: {step} — {done}/{total} {items} ({pct}%)"
 STATS_WORKING_DETAILS: str = (
     "Active Step: {step}\nStatus: In Progress\nTarget: {target}\nCompleted: {completed}"
+)
+STATS_WORKING_PROGRESS_DETAILS: str = (
+    "Active Step: {step}\n"
+    "Processed: {done} / {total} {items} ({remaining} remaining)\n"
+    "Elapsed: {elapsed}  |  ETA: {eta}\n"
+    "Target: {target}  |  Completed: {completed}"
+)
+STATS_WORKING_INDETERMINATE_DETAILS: str = (
+    "Active Step: {step}\nStatus: In Progress\nElapsed: {elapsed}\nTarget: {target}\nCompleted: {completed}"
 )
 STATS_COMPLETED_PROGRESS_SUMMARY: str = "Completed: {completed} / {total} stages"
 STATS_COMPLETED_PROGRESS_DETAILS: str = (
@@ -37,3 +49,4 @@ STATS_COMPLETED_PROGRESS_DETAILS: str = (
 )
 STATS_COMPLETED_SUMMARY: str = "Pipeline: Completed"
 STATS_COMPLETED_DETAILS: str = "All 5 pipeline stages are complete."
+STATS_DETECTION_BLOCKED_SUMMARY: str = "Blob detection blocked"

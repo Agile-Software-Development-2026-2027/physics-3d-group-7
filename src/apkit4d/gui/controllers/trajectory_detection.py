@@ -1,5 +1,6 @@
 """Prepare real blob detections for trajectory linking."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ import pandas as pd
 from apkit4d.batching.processor import BatchProcessor
 from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
+from apkit4d.gui.constants import texts
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import read_table
 from apkit4d.pipeline.contracts import DetectionSink
@@ -30,6 +32,7 @@ def detect_sequence(
     workers: int = 1,
     out_dir: str | Path | None = None,
     sink: DetectionSink | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> DetectionData:
     """Detect blobs across all frames in a sequence.
 
@@ -44,11 +47,15 @@ def detect_sequence(
         workers: Number of worker processes to request for frame processing.
         out_dir: Optional directory for streaming detections to disk instead of RAM.
         sink: Optional custom ``DetectionSink`` overriding default sink selection.
+        progress_callback: Optional callback invoked with ``(completed_frames, total_frames)``.
 
     Returns:
         DetectionData containing the detections DataFrame, frame interval
         ``dt_s``, and sequence metadata dictionary.
     """
+    if not preproc_params.normalization_enabled:
+        raise ValueError(texts.DETECTION_REQUIRES_NORMALIZATION)
+
     processor = BatchProcessor(
         config=BatchConfig(workers=workers),
         preproc_params=preproc_params,
@@ -58,6 +65,7 @@ def detect_sequence(
         czi,
         out_dir=out_dir,
         roi=roi,
+        progress_callback=progress_callback,
         sink=sink,
     )
     if result.detections is not None:

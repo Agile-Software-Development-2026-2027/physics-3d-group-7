@@ -20,6 +20,7 @@ from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
 from apkit4d.gui.views.widgets.labeled_button import LabeledButton
 from apkit4d.gui.views.widgets.number_stepper import NumberStepper
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class PlaybackBar(QWidget):
@@ -140,6 +141,7 @@ class PlaybackBar(QWidget):
         self._measure_widths()
 
         self.setEnabled(False)  # nothing to play until a file is open
+        self._wheel_guard = install_wheel_guard(self)
 
     def set_frame_count(self, count: int) -> None:
         """

@@ -12,6 +12,7 @@ from apkit4d.gui.constants import appearance, texts
 from apkit4d.gui.views.widgets.colors import focus_pen, plain_button_colors
 from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 ColorRole = QPalette.ColorRole
 
@@ -20,9 +21,9 @@ class NumberStepper(QWidget):
     """
     A rounded frame with a minus button, a number that can be typed and a plus button.
 
-    The value changes when a button is pressed, when the wheel turns over the number while it has the
-    focus, and when the user types a number and confirms it. A value outside the range is brought back
-    inside it. With no decimals it is a whole number.
+    The value changes when a button is pressed, when the wheel turns over the number while holding
+    Ctrl or Shift, and when the user types a number and confirms it. A value outside the range is brought
+    back inside it. With no decimals it is a whole number.
 
     Args:
         width: Width of the whole widget.
@@ -71,6 +72,7 @@ class NumberStepper(QWidget):
         layout.addWidget(minus)
         layout.addWidget(self._spin, 1)
         layout.addWidget(plus)
+        self._wheel_guard = install_wheel_guard(self)
 
     def value(self) -> float:
         """The number that is shown."""

@@ -17,6 +17,7 @@ from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.gui.views.widgets.v_separator import VSeparator
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = None) -> QWidget:
@@ -36,7 +37,6 @@ class PreprocessingInspector(AccordionSection):
 
     param_changed = Signal(str, object)
     reset_requested = Signal()
-    complete_requested = Signal()
     suggest_window_clicked = Signal()
     normalization_toggled = Signal(bool)
 
@@ -60,9 +60,9 @@ class PreprocessingInspector(AccordionSection):
         self.clahe_clip: QDoubleSpinBox
         self.clahe_kernel_xy_um: QDoubleSpinBox
         self.reset_btn: QPushButton
-        self.complete_btn: QPushButton
 
         self._widgets()
+        self._wheel_guard = install_wheel_guard(self)
 
     def get_params(self) -> PreprocessingConfig:
         """Retrieve the preprocessing parameters."""
@@ -82,7 +82,6 @@ class PreprocessingInspector(AccordionSection):
             self.logarithmic_compression_enabled,
             self.gamma_correction_to_apply,
             self.reset_btn,
-            self.complete_btn,
         ):
             widget.setEnabled(enabled)
 
@@ -414,12 +413,6 @@ class PreprocessingInspector(AccordionSection):
         self.reset_btn.setObjectName(names.PREPROC_RESET)
         self.reset_btn.clicked.connect(lambda: self._on_reset(defaults))
         self.add_widget(self.reset_btn)
-
-        self.complete_btn = QPushButton(texts.PREPROC_COMPLETE)
-        self.complete_btn.setObjectName(names.COMPLETE_STAGE_BUTTON)
-        self.complete_btn.setToolTip(texts.TOOLTIP_COMPLETE_STAGE)
-        self.complete_btn.clicked.connect(self.complete_requested.emit)
-        self.add_widget(self.complete_btn)
 
     def _on_reset(self, defaults: PreprocessingConfig):
         self.set_preproc_params(defaults)

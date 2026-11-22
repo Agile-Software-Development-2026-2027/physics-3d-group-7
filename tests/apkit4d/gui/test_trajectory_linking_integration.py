@@ -33,6 +33,7 @@ def _prepare_tracking(controller: MainController) -> None:
         PipelineStep.DETECTION,
     ):
         controller.pipeline_controller.complete_stage(step)
+    controller._window.right_panel.set_stages_enabled(True)
 
 
 def test_tracking_pipeline_completes(qtbot, qapp) -> None:
@@ -250,6 +251,7 @@ def test_tracking_requires_real_detections(qtbot, qapp, monkeypatch) -> None:
         PipelineStep.DETECTION,
     ):
         controller.pipeline_controller.complete_stage(step)
+    controller._window.right_panel.set_stages_enabled(True)
 
     def forbidden(*args, **kwargs):
         raise AssertionError("Tracking must not recompute detections")

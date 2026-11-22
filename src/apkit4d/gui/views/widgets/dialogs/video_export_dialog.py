@@ -29,6 +29,7 @@ from apkit4d.gui.controllers.video_export_controller import (
     VideoExportController,
 )
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class VideoPreset(StrEnum):
@@ -84,6 +85,7 @@ class VideoExportDialog(QDialog):
         self._connect_controller_signals()
         self._connect_widget_signals()
         self.finished.connect(lambda _: self._controller.restore_playback())
+        self._wheel_guard = install_wheel_guard(self)
         self._request_initial_preview()
 
     def _build_preview_group(self) -> QGroupBox:
