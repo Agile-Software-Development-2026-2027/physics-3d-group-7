@@ -140,7 +140,10 @@ def batch(
         output_format=format,
     )
 
-    preproc_params = PreprocParams.from_dict(entry.get("preproc"))
+    preproc_entry = entry.get("preproc")
+    if preproc_entry is not None and preproc_entry.get("bg_mode", "") == "nessuno":
+        preproc_entry["bg_mode"] = "None"
+    preproc_params = PreprocParams.from_dict(preproc_entry)
     blob_entry = entry.get("blob")
     blob_params = DetectionConfig(**({} if blob_entry is None else blob_entry))
 
