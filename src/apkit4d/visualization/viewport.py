@@ -1626,6 +1626,13 @@ class Viewport(QWidget):
             RegionOfInterest | None: The confirmed ROI, or None if no ROI was in editing mode.
         """
         if self._roi_mode != RoiMode.EDITING or self._current_roi is None:
+            if self._roi_mode != RoiMode.INACTIVE:
+                self._roi_mode = RoiMode.INACTIVE
+                self._roi_start_point = None
+                self._disable_roi_box_widget()
+                self._remove_roi_preview_actor()
+                self.unsetCursor()
+                self._request_render()
             return None
 
         # read the latest bounds from the box widget representation one last time

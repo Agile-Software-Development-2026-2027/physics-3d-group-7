@@ -28,11 +28,12 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
         }
     )
 
-    def fake_process_sequence(self, czi, *, out_dir, roi, sink):
+    def fake_process_sequence(self, czi, *, out_dir, roi, progress_callback, sink):
         assert czi == czi_path
         assert self.config.workers == 1
         assert out_dir is None
         assert roi is None
+        assert progress_callback is None
         assert sink is None
 
         return SequenceDetectionResult(
@@ -60,7 +61,7 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
 def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Return an empty table when no blobs are found."""
 
-    def fake_process_sequence(self, czi, *, out_dir, roi, sink):
+    def fake_process_sequence(self, czi, *, out_dir, roi, progress_callback, sink):
         return SequenceDetectionResult(
             detections=None,
             table_path=None,

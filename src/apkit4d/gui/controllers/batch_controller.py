@@ -1,5 +1,6 @@
 """Export completed pipeline data using the existing table writer."""
 
+import time
 from functools import partial
 from pathlib import Path
 
@@ -33,11 +34,12 @@ class BatchController(QObject):
         self._pipeline = pipeline
         self._source: tuple[Path, int] | None = None
         self._task: int | None = None
+        self._batch_started_at: float = 0.0
         self._runner = TaskRunner(self)
         self._runner.succeeded.connect(self._succeeded)
         self._runner.failed.connect(self._failed)
         self.progress_changed.connect(self._progress)
-        pipeline.set_batch_runner(self.run)
+        pipeline.set_stage_runner(PipelineStep.BATCH, self.run)
         files.loaded.connect(self.set_source)
         files.closed.connect(self.clear_source)
         self._set_enabled()
@@ -45,6 +47,7 @@ class BatchController(QObject):
     def set_source(self, path: Path, source: FrameSource) -> None:
         self._pipeline.reset_pipeline()
         self._source = (path, getattr(source, "channel", 0)) if source.info.n_t > 0 else None
+        self._view.set_default_output_dir(str(path.parent))
         self._view.output_dir.setText(str(path.parent))
         for field in (self._view.first_frame, self._view.last_frame):
             field.setRange(1, max(1, source.info.n_t))
@@ -67,6 +70,7 @@ class BatchController(QObject):
         button = self._window.right_panel.get_play_button(PipelineStep.BATCH)
         if button is not None:
             button.setEnabled(enabled)
+        self._pipeline.refresh_stage_gates()
 
     def run(self) -> None:
         if (
@@ -102,6 +106,7 @@ class BatchController(QObject):
                 last=last,
                 progress=self.progress_changed.emit,
             )
+            self._batch_started_at = time.monotonic()
             self._progress(0, len(detections))
             self._task = self._runner.run(job)
             self._set_enabled()
@@ -109,17 +114,17 @@ class BatchController(QObject):
             self._show_error(error)
 
     def _progress(self, done: int, total: int) -> None:
-        stats = self._window.right_panel.bottom_stats
         if self._pipeline.model.get_status(PipelineStep.BATCH) != StepStatus.RUNNING:
             return
-        stats.progress.setRange(0, max(1, total))
-        stats.progress.setValue(done if total else 1)
-        stats.progress.show()
-        self._pipeline.report_batch(
-            texts.BATCH_PROGRESS.format(done=done, total=total),
-            texts.BATCH_WORKING,
-            StepStatus.RUNNING,
+        elapsed = time.monotonic() - self._batch_started_at if self._batch_started_at else 0.0
+        self._pipeline.report_stage_progress(
+            PipelineStep.BATCH,
+            done=done,
+            total=total,
+            elapsed_seconds=elapsed,
+            item_label="detections",
         )
+        self._window.right_panel.set_stats_progress(done, total)
 
     def _succeeded(self, task: int, result: object) -> None:
         if task != self._task:

@@ -25,6 +25,7 @@ from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 
@@ -193,6 +194,7 @@ class LeftPanel(SidePanel):
 
         # after adding the content, because the section measures it to open
         self._appearance_section.set_expanded(True, animate=False)
+        self._wheel_guard = install_wheel_guard(self)
 
     @property
     def appearance_section(self) -> AccordionSection:

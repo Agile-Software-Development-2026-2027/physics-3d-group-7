@@ -1,4 +1,6 @@
+import inspect
 import logging
+import time
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -95,6 +97,7 @@ class BlobDetectionController(QObject):
 
     params_changed = Signal(str, float)
     seeds_response_changed = Signal(object)  # NDArray, or None when there is nothing to show
+    detection_progress = Signal(int, int)
 
     def __init__(
         self,
@@ -152,6 +155,7 @@ class BlobDetectionController(QObject):
         self._detection_runner = TaskRunner(self)
         self._detection_runner.succeeded.connect(self._on_detection_ready)
         self._detection_runner.failed.connect(self._on_detection_failed)
+        self.detection_progress.connect(self._on_detection_progress)
         self._detection_task: int | None = None
         self._detection_generation = 0
         self._detection_running_generation: int | None = None
@@ -159,11 +163,17 @@ class BlobDetectionController(QObject):
         self._detection_running_params: tuple[PreprocParams, BlobParams, RegionOfInterest | None] | None = (
             None
         )
+        self._detection_started_at: float = 0.0
 
         if self._pipeline_model is not None:
             self._pipeline_model.pipeline_reset.connect(self._on_detection_pipeline_reset)
             self._pipeline_model.step_status_changed.connect(self._on_detection_step_status_changed)
             self._pipeline_model.step_params_changed.connect(self._on_step_params_changed)
+        if self._pipeline_controller is not None:
+            self._pipeline_controller.set_stage_runner(
+                PipelineStep.DETECTION,
+                self._start_detection_if_needed,
+            )
 
         self._prepared: PreparedVolume | None = None  # the volume on screen
         self._busy = False  # True when a detection is running
@@ -278,7 +288,8 @@ class BlobDetectionController(QObject):
         if step != PipelineStep.DETECTION:
             return
         if status == StepStatus.RUNNING:
-            self._start_detection_if_needed()
+            if self._pipeline_controller is None:
+                self._start_detection_if_needed()
         else:
             self._detection_generation += 1
 
@@ -297,6 +308,10 @@ class BlobDetectionController(QObject):
         ):
             return
 
+        if not self._pipeline_model.get_preproc_params().normalization_enabled:
+            self._report_detection_failure(ValueError(texts.DETECTION_REQUIRES_NORMALIZATION))
+            return
+
         if self._pipeline_model.batch_results is not None:
             detections, _metadata = self._pipeline_model.batch_results
             if self._precomputed_by_frame is None and not detections.empty:
@@ -313,10 +328,34 @@ class BlobDetectionController(QObject):
             self._detection_running_source = source
             self._detection_running_params = params
             self._detection_running_generation = self._detection_generation
+            self._detection_started_at = time.monotonic()
+
+            total_frames = getattr(getattr(source, "info", None), "n_t", 0)
+            if isinstance(total_frames, int) and total_frames > 0:
+                self._pipeline_controller.report_stage_progress(
+                    PipelineStep.DETECTION,
+                    done=0,
+                    total=total_frames,
+                    elapsed_seconds=0.0,
+                    item_label="frames",
+                )
 
             preproc, blob, roi = params
-            self._detection_task = self._detection_runner.run(
+            sig = inspect.signature(detect_sequence)
+            accepts_progress = "progress_callback" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            detect_call = (
                 partial(
+                    detect_sequence,
+                    cast(CziSource, source),
+                    preproc,
+                    blob,
+                    roi,
+                    progress_callback=self.detection_progress.emit,
+                )
+                if accepts_progress
+                else partial(
                     detect_sequence,
                     cast(CziSource, source),
                     preproc,
@@ -324,9 +363,21 @@ class BlobDetectionController(QObject):
                     roi,
                 )
             )
+            self._detection_task = self._detection_runner.run(detect_call)
             logger.debug("Started Stage 3 sequence detection (generation=%d)", self._detection_generation)
         except Exception as error:
             self._report_detection_failure(error)
+
+    def _on_detection_progress(self, done: int, total: int) -> None:
+        if self._pipeline_controller is None or not self._detection_result_is_current():
+            return
+        self._pipeline_controller.report_stage_progress(
+            PipelineStep.DETECTION,
+            done=done,
+            total=total,
+            elapsed_seconds=time.monotonic() - self._detection_started_at,
+            item_label="frames",
+        )
 
     def _detection_result_is_current(self) -> bool:
         if self._pipeline_model is None or self._file_controller is None:

@@ -2,20 +2,25 @@
 Unit tests for RightPanel, BottomStatsSection, and its theme, layout, and control synchronization.
 """
 
+from pathlib import Path
 from typing import assert_never
+from unittest.mock import MagicMock
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QSizePolicy, QSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QSizePolicy, QSpinBox
 from pytestqt.qtbot import QtBot
 
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 from apkit4d.gui.views.widgets.accordion import AccordionSection
+from apkit4d.io.czi import CziInfo, CziSource
 from tests.apkit4d.gui.helper import find_widget
 
 
@@ -300,6 +305,101 @@ def test_right_panel_relays_preprocessing_signals(qtbot: QtBot) -> None:
         section.reset_btn.click()
     assert reset_blocker.args == ["preprocessing"]
 
-    with qtbot.waitSignal(panel.complete_stage_requested) as complete_blocker:
-        section.complete_btn.click()
-    assert complete_blocker.args == [PipelineStep.PREPROCESSING]
+
+def test_bottom_stats_progress_and_hide(qtbot) -> None:
+    stats = BottomStatsSection()
+    qtbot.addWidget(stats)
+
+    assert stats.progress.isHidden()
+
+    # Zero total uses indeterminate mode instead of jumping to 1/1 (100%)
+    stats.set_progress(0, 0)
+    assert not stats.progress.isHidden()
+    assert stats.progress.minimum() == 0
+    assert stats.progress.maximum() == 0
+
+    stats.set_progress(3, 10)
+    assert stats.progress.maximum() == 10
+    assert stats.progress.value() == 3
+
+    stats.hide_progress()
+    assert stats.progress.isHidden()
+    assert stats.progress.value() == 0
+
+
+def test_all_right_panel_stages_disabled_until_czi_loaded(qtbot, qapp) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    controller = MainController(window, qapp, window)
+    panel = window.right_panel
+
+    for step in PipelineStep:
+        play_btn = panel.get_play_button(step)
+        assert play_btn is not None
+        assert not play_btn.isEnabled()
+
+    assert panel.roi_inspector is not None and not panel.roi_inspector.isEnabled()
+    assert not panel.get_section(PipelineStep.PREPROCESSING).denoise_xy_box.isEnabled()
+    assert panel.detection_inspector is not None
+    assert not panel.detection_inspector._find_blobs_button.isEnabled()
+    assert panel._tracking_inspector is not None and not panel._tracking_inspector._min_len.isEnabled()
+    assert not panel.batch_inspector.isEnabled()
+
+    source = MagicMock(spec=CziSource)
+    source.channel = 0
+    source.info = CziInfo("sample.czi", 3, 4, 8, 8, 1, "uint16", 1.0, 1.0, 1.0, 0.5, "test")
+    controller.file_controller.loaded.emit(Path("sample.czi"), source)
+
+    for step in PipelineStep:
+        play_btn = panel.get_play_button(step)
+        assert play_btn is not None
+        assert play_btn.isEnabled()
+
+    assert panel.roi_inspector.isEnabled()
+    assert panel.get_section(PipelineStep.PREPROCESSING).denoise_xy_box.isEnabled()
+    assert panel.detection_inspector._find_blobs_button.isEnabled()
+    assert panel._tracking_inspector._min_len.isEnabled()
+    assert panel.batch_inspector.isEnabled()
+
+    controller.file_controller.closed.emit()
+    for step in PipelineStep:
+        play_btn = panel.get_play_button(step)
+        assert play_btn is not None
+        assert not play_btn.isEnabled()
+    assert not panel.roi_inspector.isEnabled()
+    assert not panel.batch_inspector.isEnabled()
+
+
+def test_all_accordions_have_unified_reset_to_defaults_button(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    reset_names = (
+        names.ROI_INSPECTOR_RESET_BUTTON,
+        names.PREPROC_RESET,
+        names.DETECTION_INSPECTOR_RESET_BUTTON,
+        names.TRACKING_INSPECTOR_RESET_BUTTON,
+        names.BATCH_INSPECTOR_RESET_BUTTON,
+    )
+    for button_name in reset_names:
+        btn = find_widget(panel, QPushButton, button_name)
+        assert btn.text() == texts.BUTTON_RESET_DEFAULTS
+
+
+def test_detection_reset_restores_model_and_inspector_defaults(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+    model = PipelineModel()
+    controller = PipelineController(model, panel)
+    assert controller.model is model
+
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.75, min_volume_um3=500.0)
+    inspector = panel.detection_inspector
+    assert inspector is not None
+    assert inspector.lo_g_threshold == 0.75
+
+    reset_btn = find_widget(inspector, QPushButton, names.DETECTION_INSPECTOR_RESET_BUTTON)
+    reset_btn.click()
+
+    assert model.get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+    assert inspector.get_params() == BlobParams()

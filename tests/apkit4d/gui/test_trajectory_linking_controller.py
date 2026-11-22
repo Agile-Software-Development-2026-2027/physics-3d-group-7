@@ -1,11 +1,16 @@
 """Tests for asynchronous trajectory linking."""
 
+from unittest.mock import MagicMock
+
 import pandas as pd
 
 from apkit4d.core.models import TrackingConfig
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.trajectory_linking_controller import (
     TrajectoryLinkingController,
 )
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
+from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.tracking.linker import TrackingResult
 
 
@@ -58,3 +63,51 @@ def test_tracking_cannot_start_twice(qtbot) -> None:
         assert not controller.run(detections, TrackingConfig())
 
     assert not controller.is_running
+
+
+def test_tracking_controller_orchestrates_stage_4_standalone(qtbot) -> None:
+    """TrajectoryLinkingController runs Stage 4 directly without MainController."""
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+    model = PipelineModel()
+    pipeline = PipelineController(model, panel)
+    traj_ctrl = MagicMock()
+
+    controller = TrajectoryLinkingController(
+        pipeline_model=model,
+        pipeline_controller=pipeline,
+        trajectory_controller=traj_ctrl,
+    )
+
+    model.set_batch_results(make_detections(), {"info": {"dt_s": 0.5}})
+    for step in (PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION):
+        pipeline.complete_stage(step)
+
+    pipeline.run_up_to(PipelineStep.TRACKING)
+
+    qtbot.waitUntil(lambda: model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED, timeout=10000)
+    assert isinstance(controller.result, TrackingResult)
+    traj_ctrl.set_trajectories.assert_called_once()
+
+
+def test_tracking_controller_fails_gracefully_without_detections(qtbot) -> None:
+    """Running Stage 4 without batch_results resets status to IDLE and reports failure."""
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+    model = PipelineModel()
+    pipeline = PipelineController(model, panel)
+
+    controller = TrajectoryLinkingController(
+        pipeline_model=model,
+        pipeline_controller=pipeline,
+    )
+
+    for step in (PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION):
+        pipeline.complete_stage(step)
+
+    pipeline.run_up_to(PipelineStep.TRACKING)
+
+    assert controller.result is None
+    assert model.get_status(PipelineStep.TRACKING) == StepStatus.IDLE
+    assert panel.bottom_stats.summary_label.text() == "Trajectory linking failed"
+    assert "No detections available" in panel.bottom_stats.details_label.text()
