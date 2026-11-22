@@ -64,6 +64,17 @@ class RoiStageController(QObject):
         self._pipeline_controller.complete_stage(PipelineStep.ROI)
         logger.debug("Committed active ROI and completed Stage 1")
 
+    def show_roi(self, roi: RegionOfInterest) -> None:
+        """
+        Show `roi` as the accepted ROI: the volume is cropped to it and the inspector shows its bounds.
+
+        Used for the ROI of saved results, whose parameters and stage status are restored by the caller.
+        """
+        self._roi_history.clear()
+        if self._volume_controller is not None:
+            self._volume_controller.set_roi(roi)
+        self._apply_roi_to_inspector(roi)
+
     @property
     def full_volume_bounds(self) -> Bounds6D | None:
         """Full uncropped physical bounds of the active recording, if known."""

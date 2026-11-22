@@ -1,5 +1,6 @@
 """Saved results open on their recording and fill the pipeline as if the analysis had just run."""
 
+import json
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import QFileDialog
 
 from apkit4d.batching.export import save_batch_results
 from apkit4d.core.models import TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.file_controller import FileController
 from apkit4d.gui.controllers.main_controller import MainController
@@ -18,6 +20,9 @@ from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.czi import CziInfo
 from apkit4d.io.session import PrecomputedSource
+from apkit4d.io.table import read_table
+
+ROI = RegionOfInterest(x_min=1.0, x_max=6.0, y_min=1.0, y_max=6.0, z_min=0.0, z_max=2.0)
 
 
 class FakeRecording:
@@ -66,6 +71,7 @@ def saved(tmp_path):
         "info": {"dt_s": 0.5},
         "preproc": {},
         "blob": {"threshold": 0.25},
+        "roi": ROI.to_dict(),
     }
     result = save_batch_results(
         detections,
@@ -183,25 +189,54 @@ def test_a_file_that_is_not_saved_results_is_reported(window, tmp_path):
     assert "notes_blobs_params.json is not a valid json file" in status(window)
 
 
-def test_saved_results_fill_the_pipeline_and_the_view(qtbot, qapp, window, saved):
-    _, params = saved
-    view = MagicMock()
+def open_in_the_app(qtbot, qapp, window, params, view):
+    """Open the saved results like File > Open Results does, and wait until they are in the pipeline."""
     controller = MainController(window, qapp, window, open_source=FakeRecording, view=view)
-
     window.results_opened.emit(params)
     qtbot.waitUntil(
         lambda: controller.pipeline_model.get_status(PipelineStep.TRACKING) == StepStatus.COMPLETED,
         timeout=5000,
     )
     wait_for_background_tasks()
+    return controller
+
+
+def test_saved_results_fill_the_pipeline_and_the_view(qtbot, qapp, window, saved):
+    recording, params = saved
+    view = MagicMock()
+    controller = open_in_the_app(qtbot, qapp, window, params, view)
 
     for step in (PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION):
         assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
+    assert controller.pipeline_model.get_step_params(PipelineStep.ROI) == ROI.to_dict()
+    assert controller.volume_controller is not None and controller.volume_controller.roi == ROI
     assert controller.pipeline_model.get_step_params(PipelineStep.DETECTION)["threshold"] == 0.25
     assert controller.pipeline_model.get_step_params(PipelineStep.TRACKING)["min_len"] == 2
     assert controller.tracking_result is not None
     assert len(controller.tracking_result.tracks) == 3
     assert view.show_blobs.call_args.args[0].n_points == 1  # the only blob of frame 0
 
+    # the blobs are back in the pipeline, so they can be linked again with other parameters
+    batch_results = controller.pipeline_model.batch_results
+    assert batch_results is not None
+    assert len(batch_results[0]) == 4
+    assert batch_results[1]["czi"] == str(recording.resolve())
+
     controller.playback_controller.go_to_frame(1)
     qtbot.waitUntil(lambda: view.show_blobs.call_args.args[0].n_points == 2, timeout=5000)
+
+
+def test_opened_results_can_be_exported_again_with_their_tracks_and_roi(qtbot, qapp, window, saved, tmp_path):
+    _, params = saved
+    controller = open_in_the_app(qtbot, qapp, window, params, MagicMock())
+    inspector = window.right_panel.batch_inspector
+    inspector.output_dir.setText(str(tmp_path / "again"))
+
+    controller.pipeline_controller.run_pipeline()
+    qtbot.waitUntil(lambda: (tmp_path / "again" / "sample_blobs_params.json").is_file(), timeout=10000)
+
+    again = json.loads((tmp_path / "again" / "sample_blobs_params.json").read_text())
+    assert again["roi"] == ROI.to_dict()
+    assert again["tracking"]["min_len"] == 2
+    assert read_table(tmp_path / "again" / again["table"])["frame"].tolist() == [0, 1, 1, 2]
+    assert read_table(tmp_path / "again" / again["tracks_table"])["track_id"].tolist() == [0, 0, 0]

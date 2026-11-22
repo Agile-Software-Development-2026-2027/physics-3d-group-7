@@ -195,6 +195,7 @@ class MainController(QObject):
             self.file_controller,
             self.pipeline_controller,
             self,
+            tracking=self._tracking_controller,
         )
         self._video_export_controller = VideoExportController(
             playback_controller=self._playback_controller,
@@ -304,9 +305,15 @@ class MainController(QObject):
                 break
             self._pipeline_model.set_step_status(step, StepStatus.COMPLETED)
 
+        if session.roi is not None:
+            self._roi_controller.show_roi(session.roi)
+
         blobs_df = session.effective_blobs
         if self._blob_controller is not None:
             self._blob_controller.set_precomputed_blobs(blobs_df)
+        if session.blobs is not None and session.metadata is not None:
+            # saved results can be linked and exported again, like the blobs of a detection that just ran
+            self._pipeline_model.set_batch_results(session.blobs, session.metadata)
 
         effective_dt = dt_s
         if effective_dt is None and self._file_controller.source is not None:

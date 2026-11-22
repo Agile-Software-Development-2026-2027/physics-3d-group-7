@@ -30,6 +30,7 @@ from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfi
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import table_path
 from apkit4d.pipeline.contracts import DetectionSink, SequenceDetectionResult
+from apkit4d.pipeline.frame_stages import coerce_roi
 from apkit4d.pipeline.sinks import InMemoryDetectionSink, StreamingDiskDetectionSink
 
 logger = logging.getLogger(__name__)
@@ -245,6 +246,7 @@ class BatchProcessor:
 
             elapsed_seconds = time.time() - time_start
             info_dict = asdict(info) if is_dataclass(info) else info.__dict__
+            roi_used = coerce_roi(roi)  # saved with the results, so that opening them restores it
 
             metadata: dict[str, Any] = {
                 "czi": str(file_path),
@@ -255,6 +257,7 @@ class BatchProcessor:
                 "info": info_dict,
                 "preproc": pp_dict,
                 "blob": bp_dict,
+                "roi": roi_used.to_dict() if roi_used is not None else None,
                 "n_blobs": 0,
                 "format": fmt,
                 "formato": fmt,

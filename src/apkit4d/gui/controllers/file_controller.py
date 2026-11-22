@@ -146,7 +146,7 @@ class FileController(QObject):
 
     def _open_with_results(self, path: Path, results: SavedResults) -> FrameSource:
         """Runs in the background thread: the recording comes back with the saved results attached."""
-        session = results.load_session()  # first, so that a missing table leaves no recording open
+        session = results.load_session(path)  # first, so that a missing table leaves no recording open
         source = self._open_source(path)
         channel = getattr(source, "channel", 0)
         if channel != results.channel:

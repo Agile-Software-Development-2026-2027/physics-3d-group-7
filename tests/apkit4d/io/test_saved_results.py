@@ -8,6 +8,7 @@ import pytest
 
 from apkit4d.batching.export import save_batch_results
 from apkit4d.core.models import BgMode, PreprocessingConfig, TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.io.saved_results import read_saved_results
 from apkit4d.io.table import write_table
 
@@ -24,7 +25,7 @@ TRACKS = DETECTIONS.assign(track_id=[0, 0, 1, 1])
 PREPROCESSING = PreprocessingConfig(bg_mode=BgMode.WIDE_GAUSSIAN, gamma_correction_to_apply=0.8)
 
 
-def export(folder, recording, *, detections=DETECTIONS, tracks=None, config=None, fmt="parquet"):
+def export(folder, recording, *, detections=DETECTIONS, tracks=None, config=None, fmt="parquet", roi=None):
     """Save results of `recording` in `folder` like the Batch stage does, and return the json path."""
     metadata = {
         "czi": str(recording),
@@ -34,6 +35,7 @@ def export(folder, recording, *, detections=DETECTIONS, tracks=None, config=None
         "info": {"dt_s": 0.5},
         "preproc": PREPROCESSING.model_dump(),
         "blob": {"threshold": 0.25},
+        "roi": roi.to_dict() if roi is not None else None,
     }
     result = save_batch_results(
         detections, metadata, folder, fmt, 0, 3, lambda *_: None, tracks=tracks, tracking_config=config
@@ -68,6 +70,21 @@ def test_exported_results_come_back_with_their_recording(tmp_path, recording, fm
     assert session.preproc_params.bg_mode == BgMode.WIDE_GAUSSIAN
     assert session.preproc_params.gamma_correction_to_apply == 0.8
     assert session.tracking_config == TrackingConfig(min_len=2)
+
+
+def test_the_roi_and_the_metadata_come_back_pointing_to_the_recording_shown(tmp_path, recording):
+    roi = RegionOfInterest(x_min=1.0, x_max=5.0, y_min=2.0, y_max=6.0, z_min=0.0, z_max=3.0)
+    saved = read_saved_results(export(tmp_path, recording, roi=roi))
+
+    session = saved.load_session()
+    assert session.roi == roi
+    assert session.metadata is not None
+    assert session.metadata["czi"] == str(recording.resolve())
+    assert (session.metadata["t0"], session.metadata["t1"], session.metadata["channel"]) == (0, 3, 0)
+
+    # the user said the recording is somewhere else: linking and exporting again must use that one
+    moved = tmp_path / "moved.czi"
+    assert saved.load_session(moved).metadata["czi"] == str(moved)
 
 
 def test_results_without_tracks_ignore_old_tracks_in_the_folder(tmp_path, recording):

@@ -31,6 +31,9 @@ class PrecomputedSession:
         tracking_config: Optional tracking configuration associated with the session.
         completed_steps: Explicit pipeline step identifiers already completed. When ``None``,
             completed stages are inferred automatically from present artifacts.
+        metadata: Optional metadata of the detection that produced `blobs` (recording, channel,
+            frames, acquisition info), as saved results carry it. With it the blobs can be linked or
+            exported again, like the ones of a detection that has just run.
     """
 
     blobs: pd.DataFrame | None = None
@@ -40,6 +43,7 @@ class PrecomputedSession:
     blob_params: DetectionConfig | None = None
     tracking_config: TrackingConfig | None = None
     completed_steps: tuple[str, ...] | None = None
+    metadata: dict[str, Any] | None = None
 
     @property
     def effective_blobs(self) -> pd.DataFrame | None:

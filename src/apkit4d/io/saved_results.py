@@ -17,6 +17,7 @@ from typing import Any, Final
 import pandas as pd
 
 from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.io.session import PrecomputedSession
 from apkit4d.io.table import find_table, read_table
 from apkit4d.tracking.linker import TrackingResult
@@ -55,12 +56,16 @@ class SavedResults:
         """Channel of the recording the results were computed on."""
         return int(self.metadata.get("channel", 0))
 
-    def load_session(self) -> PrecomputedSession:
+    def load_session(self, recording: Path | None = None) -> PrecomputedSession:
         """
         Read the saved tables and parameters, ready to be shown on the recording.
 
         Parameters that cannot be read, like the preprocessing of the old ApKit4D that used other
         names, are left out: the blobs and the tracks are shown anyway.
+
+        Args:
+            recording: The recording the results are shown on, when it is not `self.recording`
+                (e.g. the user said where it is). The metadata of the session points to it.
 
         Raises:
             FileNotFoundError: If a table that was saved is missing.
@@ -81,12 +86,15 @@ class SavedResults:
                 tracks = tracks.rename(columns={"particle": "track_id"})
             tracking = TrackingResult(tracks=tracks, metadata={})
 
+        shown_on = recording or self.recording or self.metadata["czi"]
         return PrecomputedSession(
             blobs=blobs,
             tracking=tracking,
+            roi=self._params("roi", RegionOfInterest.from_dict),
             preproc_params=self._params("preproc", PreprocessingConfig.model_validate),
             blob_params=self._params("blob", DetectionConfig.model_validate),
             tracking_config=self._params("tracking", TrackingConfig.model_validate),
+            metadata={**self.metadata, "czi": str(shown_on), "channel": self.channel},
         )
 
     def _table_path(self, key: str, suffix: str) -> Path | None:
