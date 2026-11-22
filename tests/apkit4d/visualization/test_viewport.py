@@ -1213,7 +1213,9 @@ class TestViewportVolumeSubRoi:
         assert prop.opacity_unit_distance == pytest.approx(expected_unit_dist)
         assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
 
-    def test_gpu_shader_renders_attenuated_outside_at_one_percent_without_mutating_data(self, viewport):
+    def test_gpu_shader_renders_attenuated_outside_at_one_percent_without_mutating_data(
+        self, viewport, qtbot
+    ):
         viewport.resize(400, 400)
         viewport.plotter.render_window.SetMultiSamples(0)
         viewport.plotter.render_window.SetSize(400, 400)
@@ -1229,14 +1231,19 @@ class TestViewportVolumeSubRoi:
         viewport.plotter.camera_position = [(25.5, 35.5, 90.0), (25.5, 35.5, 15.5), (0.0, 1.0, 0.0)]
         viewport.plotter.camera.parallel_scale = 20.0
 
+        viewport.show()
+        qtbot.waitExposed(viewport)
+
         viewport.set_vis_sub_roi_bounds((20.0, 31.0, 30.0, 41.0, 0.0, 31.0))
         viewport.set_vis_sub_roi_outside_opacity(0.01)
         viewport.set_vis_sub_roi_enabled(True)
         viewport.plotter.render()
+        qtbot.wait(50)
         img_sub = viewport.screenshot()
 
         viewport.set_vis_sub_roi_enabled(False)
         viewport.plotter.render()
+        qtbot.wait(50)
         img_full = viewport.screenshot()
 
         assert viewport._volume_grid is not None
