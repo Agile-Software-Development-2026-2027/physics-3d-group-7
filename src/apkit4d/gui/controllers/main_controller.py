@@ -42,7 +42,7 @@ from apkit4d.gui.models.pipeline_model import (
     StepStatus,
 )
 from apkit4d.gui.views.main_window import MainWindow
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
@@ -108,13 +108,13 @@ class MainController(QObject):
             self._volume_controller.window_suggested.connect(self._on_window_suggested)
 
             if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
-                cast(PreprocessingSection, preproc_sec).suggest_window_clicked.connect(
+                cast(PreprocessingInspector, preproc_sec).suggest_window_clicked.connect(
                     self._on_suggest_window_clicked
                 )
 
         preproc_section = (
             cast(
-                PreprocessingSection,
+                PreprocessingInspector,
                 self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING),
             )
             if hasattr(self.pipeline_controller.view, "get_section")
@@ -149,7 +149,7 @@ class MainController(QObject):
             )
 
             if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
-                preproc_sec = cast(PreprocessingSection, preproc_sec)
+                preproc_sec = cast(PreprocessingInspector, preproc_sec)
                 self._blob_controller.on_normalization_toggled(preproc_sec.normalization_enabled.isChecked())
                 preproc_sec.normalization_toggled.connect(self._blob_controller.on_normalization_toggled)
 
@@ -464,4 +464,4 @@ class MainController(QObject):
 
     def _on_window_suggested(self, lo: float, hi: float) -> None:
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
-            cast(PreprocessingSection, preproc_sec).set_intensity_window(lo, hi)
+            cast(PreprocessingInspector, preproc_sec).set_intensity_window(lo, hi)

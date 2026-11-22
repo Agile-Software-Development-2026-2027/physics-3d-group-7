@@ -10,7 +10,7 @@ from apkit4d.gui.views.histograms.preprocessed_intensity_histogram import Prepro
 from apkit4d.gui.views.histograms.roi_intensity_histogram import RoiIntensityHistogram
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 
 
 class FakeVolumeView:
@@ -178,7 +178,7 @@ def test_histogram_controller_drag_with_normalization_enabled(qtbot) -> None:
     right_panel = RightPanel()
     qtbot.addWidget(right_panel)
     preproc_section = right_panel.get_section(PipelineStep.PREPROCESSING)
-    assert isinstance(preproc_section, PreprocessingSection)
+    assert isinstance(preproc_section, PreprocessingInspector)
 
     model = PipelineModel()
     model.update_step_params(PipelineStep.PREPROCESSING, normalization_enabled=True)
@@ -226,7 +226,7 @@ def test_histogram_controller_drag_with_normalization_disabled(qtbot) -> None:
     right_panel = RightPanel()
     qtbot.addWidget(right_panel)
     preproc_section = right_panel.get_section(PipelineStep.PREPROCESSING)
-    assert isinstance(preproc_section, PreprocessingSection)
+    assert isinstance(preproc_section, PreprocessingInspector)
 
     model = PipelineModel()
     model.update_step_params(PipelineStep.PREPROCESSING, normalization_enabled=False)
@@ -268,7 +268,7 @@ def test_histogram_drag_updates_model_without_circular_panel_signal(qtbot, monke
     right_panel = RightPanel()
     qtbot.addWidget(right_panel)
     preproc_section = right_panel.get_section(PipelineStep.PREPROCESSING)
-    assert isinstance(preproc_section, PreprocessingSection)
+    assert isinstance(preproc_section, PreprocessingInspector)
 
     panel_signals: list[tuple[str, str, object]] = []
     right_panel.step_param_changed.connect(lambda s, p, v: panel_signals.append((s, p, v)))

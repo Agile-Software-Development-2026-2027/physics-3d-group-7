@@ -35,7 +35,7 @@ from apkit4d.gui.theme import (
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.stages.batch_inspector import BatchInspector
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
 from apkit4d.gui.views.stages.trajectory_linking_inspector import TrajectoryLinkingInspector
 from apkit4d.gui.views.widgets.accordion import AccordionSection
@@ -451,7 +451,7 @@ class RightPanel(SidePanel):
                     sec.add_widget(roi_inspector)
                     self._roi_inspector = roi_inspector
                 case PipelineStep.PREPROCESSING:
-                    preproc_sec = PreprocessingSection()
+                    preproc_sec = PreprocessingInspector()
                     preproc_sec.param_changed.connect(
                         lambda param, value: self.notify_param_changed(
                             PipelineStep.PREPROCESSING.value, param, value

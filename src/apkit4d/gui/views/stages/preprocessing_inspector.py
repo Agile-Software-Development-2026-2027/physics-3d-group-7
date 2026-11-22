@@ -31,7 +31,7 @@ def create_param_row(label_text: str, widget: QWidget, tooltip: str | None = Non
     return row
 
 
-class PreprocessingSection(AccordionSection):
+class PreprocessingInspector(AccordionSection):
     """The preprocessing accordion"""
 
     param_changed = Signal(str, object)

@@ -9,7 +9,7 @@ from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepS
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.stages import StageInspectorView
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 
 
 class SignalCatcher:
@@ -195,7 +195,7 @@ def test_preproc_complete_button_enabled_only_when_roi_completed(right_panel) ->
 
 
 def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
-    section = PreprocessingSection()
+    section = PreprocessingInspector()
     qtbot.addWidget(section)
 
     assert isinstance(section, StageInspectorView)
@@ -221,7 +221,7 @@ def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
 
 
 def test_set_lowest_and_highest_intensity_block_signals(qtbot) -> None:
-    section = PreprocessingSection()
+    section = PreprocessingInspector()
     qtbot.addWidget(section)
 
     emitted: list[tuple[str, object]] = []
