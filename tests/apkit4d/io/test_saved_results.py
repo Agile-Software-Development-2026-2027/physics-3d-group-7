@@ -7,8 +7,7 @@ import pandas as pd
 import pytest
 
 from apkit4d.batching.export import save_batch_results
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.preprocessing import BgMode, PreprocParams
+from apkit4d.core.models import BgMode, PreprocessingConfig, TrackingConfig
 from apkit4d.io.saved_results import read_saved_results
 from apkit4d.io.table import write_table
 
@@ -22,6 +21,7 @@ DETECTIONS = pd.DataFrame(
     }
 )
 TRACKS = DETECTIONS.assign(track_id=[0, 0, 1, 1])
+PREPROCESSING = PreprocessingConfig(bg_mode=BgMode.WIDE_GAUSSIAN, gamma_correction_to_apply=0.8)
 
 
 def export(folder, recording, *, detections=DETECTIONS, tracks=None, config=None, fmt="parquet"):
@@ -32,7 +32,7 @@ def export(folder, recording, *, detections=DETECTIONS, tracks=None, config=None
         "t0": 0,
         "t1": 3,
         "info": {"dt_s": 0.5},
-        "preproc": PreprocParams(bg_mode=BgMode.WIDE_GAUSSIAN, gamma_correction_to_apply=0.8).to_dict(),
+        "preproc": PREPROCESSING.model_dump(),
         "blob": {"threshold": 0.25},
     }
     result = save_batch_results(

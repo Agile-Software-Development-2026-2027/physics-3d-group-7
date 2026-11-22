@@ -16,9 +16,7 @@ from typing import Any, Final
 
 import pandas as pd
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.io.session import PrecomputedSession
 from apkit4d.io.table import find_table, read_table
 from apkit4d.tracking.linker import TrackingResult
@@ -86,8 +84,8 @@ class SavedResults:
         return PrecomputedSession(
             blobs=blobs,
             tracking=tracking,
-            preproc_params=self._params("preproc", PreprocParams.from_dict),
-            blob_params=self._params("blob", BlobParams.from_dict),
+            preproc_params=self._params("preproc", PreprocessingConfig.model_validate),
+            blob_params=self._params("blob", DetectionConfig.model_validate),
             tracking_config=self._params("tracking", TrackingConfig.model_validate),
         )
 
