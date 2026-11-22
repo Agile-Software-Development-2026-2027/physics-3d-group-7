@@ -32,9 +32,9 @@ class IntensityHistogram(pg.PlotWidget):
         self._pending_reset_range: bool = False
         self._async_mode: bool = False
 
-        plot_item = self.getPlotItem()
-        plot_item.hideButtons()
-        plot_item.setMenuEnabled(True)
+        if plot_item := self.getPlotItem():
+            plot_item.hideButtons()
+            plot_item.setMenuEnabled(True)
         self.setLogMode(x=False, y=True)
         self.setLabel("bottom", texts.LABEL_HISTOGRAM_INTENSITY, units=x_units)
         self.setLabel("left", texts.LABEL_HISTOGRAM_COUNTS)
