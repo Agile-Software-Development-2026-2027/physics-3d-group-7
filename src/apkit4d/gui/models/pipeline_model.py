@@ -249,11 +249,11 @@ class PipelineModel(QObject):
         return dict(self._params[step])
 
     def get_preproc_params(self) -> PreprocessingConfig:
-        """Return the PreprocParams dataclass instance for the preprocessing step."""
+        """Return the PreprocessingConfig dataclass instance for the preprocessing step."""
         return PreprocessingConfig(**self._params[PipelineStep.PREPROCESSING])
 
     def set_preproc_params(self, params: PreprocessingConfig) -> None:
-        """Update preprocessing parameters from a PreprocParams instance."""
+        """Update preprocessing parameters from a PreprocessingConfig instance."""
         self.update_step_params(PipelineStep.PREPROCESSING, **params.model_dump())
 
     def plan_execution(

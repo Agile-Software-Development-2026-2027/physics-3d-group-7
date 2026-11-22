@@ -81,8 +81,8 @@ def detect_frame(
     Args:
         src: CziSource instance providing frame access.
         t: Zero-based frame timepoint index.
-        pp: Preprocessing parameters (PreprocParams or dict).
-        bp: Blob detection parameters (BlobParams or dict).
+        pp: Preprocessing parameters (PreprocessingConfig or dict).
+        bp: Blob detection parameters (DetectionConfig or dict).
         roi: Optional RegionOfInterest (world coordinates, micrometers) or dictionary
             specifying ROI bounds. None processes the whole volume.
         include_time: If True, inserts timestamp 't_s' at column index 1.
@@ -125,14 +125,15 @@ def _detect_frames_worker(
     """Execute blob detection across a chunk of frames inside a worker process.
 
     Each worker instantiates its own CziSource since native file handles cannot be
-    safely shared across processes. Parameter dataclasses (PreprocParams, BlobParams,
-    RegionOfInterest) are pickled directly across processes by ProcessPoolExecutor.
+    safely shared across processes. Parameter dataclasses (PreprocessingConfig,
+    DetectionConfig, RegionOfInterest) are pickled directly across processes b
+    ProcessPoolExecutor.
 
     Args:
         czi_path: Path to CZI microscopy acquisition file.
         channel: Channel index to process.
-        pp: Preprocessing configuration (PreprocParams or dict).
-        bp: Blob detection configuration (BlobParams or dict).
+        pp: Preprocessing configuration (PreprocessingConfig or dict).
+        bp: Blob detection configuration (DetectionConfig or dict).
         frames: List of frame indices to process.
         roi: Optional RegionOfInterest bounds specification or dict.
         pp_dict: Backward-compatible alias for pp.

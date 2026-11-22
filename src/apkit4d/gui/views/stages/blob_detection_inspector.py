@@ -360,7 +360,7 @@ class BlobDetectionInspector(QWidget):
         self._update_on_change_info.setVisible(disabled)
 
     def get_params(self) -> DetectionConfig:
-        """Read current detection widget values into a `BlobParams` instance."""
+        """Read current detection widget values into a `DetectionConfig` instance."""
         return DetectionConfig(
             diameter_xy_um=self._diameter_xy.value(),
             diameter_z_um=self._diameter_z.value(),

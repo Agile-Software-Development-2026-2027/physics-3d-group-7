@@ -46,13 +46,13 @@ def coerce_preproc_params(params: PreprocessingConfig | Mapping[str, Any] | None
 
 
 def coerce_blob_params(params: DetectionConfig | Mapping[str, Any] | None) -> DetectionConfig:
-    """Convert None or a mapping into a BlobParams instance."""
+    """Convert None or a mapping into a DetectionConfig instance."""
     if params is None:
         return DetectionConfig()
     if isinstance(params, DetectionConfig):
         return params
     if isinstance(params, Mapping):
-        # May want to add a check for keys that are not in BlobParams to avoid silent errors
+        # May want to add a check for keys that are not in DetectionConfig to avoid silent errors
         return DetectionConfig(**dict(params))
 
 

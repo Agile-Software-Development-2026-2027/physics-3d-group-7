@@ -86,7 +86,7 @@ class BlobDetectionController(QObject):
         parent: Qt parent, so the controller lives as long as its owner.
 
     Signals:
-        params_changed: Emitted when BlobParams properties are changed from the view
+        params_changed: Emitted when DetectionConfig properties are changed from the view
         seeds_response_changed: seeds_response_changed: Emitted with the LoG response of the
                                 candidates of a detection, or None when the recording changes.
     """

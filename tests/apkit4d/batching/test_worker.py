@@ -246,7 +246,7 @@ class TestDetectFrame:
             mock_source.close.assert_called_once()
 
     def test_detect_frames_worker_with_dataclasses(self) -> None:
-        """Verify _detect_frames_worker accepts direct PreprocParams and BlobParams objects."""
+        """Verify _detect_frames_worker accepts direct PreprocessingConfig and DetectionConfig objects."""
         mock_source = MagicMock(spec=CziSource)
         mock_source.info = CziInfo(
             path="dummy.czi",
