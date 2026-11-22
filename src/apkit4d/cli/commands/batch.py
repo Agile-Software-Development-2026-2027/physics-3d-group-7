@@ -5,8 +5,7 @@ from typing import Any
 import click
 
 from apkit4d.batching.processor import run_batch
-from apkit4d.core.models import BatchConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import BatchConfig, DetectionConfig
 from apkit4d.detection.preprocessing import PreprocParams
 
 
@@ -142,7 +141,8 @@ def batch(
     )
 
     preproc_params = PreprocParams.from_dict(entry.get("preproc"))
-    blob_params = BlobParams.from_dict(entry.get("blob"))
+    blob_entry = entry.get("blob")
+    blob_params = DetectionConfig(**({} if blob_entry is None else blob_entry))
 
     result = run_batch(
         czi=czi,

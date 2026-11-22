@@ -7,9 +7,8 @@ from typing import Any
 import pandas as pd
 
 from apkit4d.batching.processor import BatchProcessor
-from apkit4d.core.models import BatchConfig
+from apkit4d.core.models import BatchConfig, DetectionConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import read_table
@@ -26,7 +25,7 @@ class DetectionData:
 def detect_sequence(
     czi: str | Path | CziSource,
     preproc_params: PreprocParams,
-    blob_params: BlobParams,
+    blob_params: DetectionConfig,
     roi: RegionOfInterest | None = None,
     *,
     workers: int = 1,

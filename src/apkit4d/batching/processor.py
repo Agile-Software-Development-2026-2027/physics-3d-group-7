@@ -26,8 +26,7 @@ from apkit4d.batching.worker import (
     cap_workers,
     detect_frame,
 )
-from apkit4d.core.models import BatchConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import BatchConfig, DetectionConfig
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import table_path
@@ -94,7 +93,7 @@ class BatchProcessor:
         self,
         config: BatchConfig | None = None,
         preproc_params: PreprocParams | None = None,
-        blob_params: BlobParams | None = None,
+        blob_params: DetectionConfig | None = None,
     ) -> None:
         """Initialize the batch processor with configuration parameters.
 
@@ -105,7 +104,7 @@ class BatchProcessor:
         """
         self.config = config or BatchConfig()
         self.preproc_params = preproc_params or PreprocParams()
-        self.blob_params = blob_params or BlobParams()
+        self.blob_params = blob_params or DetectionConfig()
 
     def _resolve_source(
         self,
@@ -193,7 +192,7 @@ class BatchProcessor:
             completed_frames = 0
 
             pp_dict = self.preproc_params.to_dict()
-            bp_dict = self.blob_params.to_dict()
+            bp_dict = self.blob_params.model_dump()
 
             logger.info(
                 "Starting sequence detection (%d frames, workers=%d, sink=%s)",
@@ -349,7 +348,7 @@ def run_batch(
     channel: int = 0,
     config: BatchConfig | None = None,
     preproc_params: PreprocParams | None = None,
-    blob_params: BlobParams | None = None,
+    blob_params: DetectionConfig | None = None,
     t0: int | None = None,
     t1: int | None = None,
     out_dir: str | Path | None = None,
@@ -389,7 +388,7 @@ def run(
     czi: str | Path | CziSource,
     channel: int = 0,
     pp: PreprocParams | None = None,
-    bp: BlobParams | None = None,
+    bp: DetectionConfig | None = None,
     t0: int | None = None,
     t1: int | None = None,
     out_dir: str | Path = Path("data/processed"),

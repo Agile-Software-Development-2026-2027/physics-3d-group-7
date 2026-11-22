@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
 from apkit4d.gui.models.output_type import OutputType
@@ -300,8 +300,8 @@ class BlobDetectionInspector(QWidget):
         self._lo_g_threshold = self._create_double_spinbox(
             0,
             names.DETECTION_INSPECTOR_LOG_THRESHOLD,
-            minimum=BlobParams.LOG_THRESHOLD_MIN,
-            maximum=BlobParams.LOG_THRESHOLD_MAX,
+            minimum=DetectionConfig.LOG_THRESHOLD_MIN,
+            maximum=DetectionConfig.LOG_THRESHOLD_MAX,
             step=0.01,
         )
         self._add_field(
@@ -454,9 +454,9 @@ class BlobDetectionInspector(QWidget):
     def disable_update_on_change(self, disabled: bool):
         self._update_on_change.setDisabled(disabled)
 
-    def get_params(self) -> BlobParams:
+    def get_params(self) -> DetectionConfig:
         """Read current detection widget values into a `BlobParams` instance."""
-        return BlobParams(
+        return DetectionConfig(
             diameter_xy_um=self._diameter_xy.value(),
             diameter_z_um=self._diameter_z.value(),
             threshold=self._lo_g_threshold.value(),
@@ -466,7 +466,7 @@ class BlobDetectionInspector(QWidget):
             max_volume_um3=self._max_volume.value(),
         )
 
-    def set_params(self, params: BlobParams) -> None:
+    def set_params(self, params: DetectionConfig) -> None:
         """Populate detection parameter widgets from `params` with signals blocked."""
         sync_z = self._diameter_z_equals_xy.isChecked() and params.diameter_z_um == params.diameter_xy_um
         with (

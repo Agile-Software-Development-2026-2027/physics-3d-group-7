@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.theme import ThemeColors
 
@@ -30,7 +30,7 @@ class SeedResponseHistogram(pg.PlotWidget):
         super().__init__(parent)
 
         self._values: NDArray[np.float32] = np.empty(0, dtype=np.float32)
-        self._threshold = BlobParams.LOG_THRESHOLD_MIN
+        self._threshold = DetectionConfig.LOG_THRESHOLD_MIN
         self._moved_by_code = False  # True while the code, not the user, moves the line
 
         self.setBackground(None)
@@ -52,7 +52,7 @@ class SeedResponseHistogram(pg.PlotWidget):
             pos=self._threshold,
             angle=90,
             movable=True,
-            bounds=(BlobParams.LOG_THRESHOLD_MIN, BlobParams.LOG_THRESHOLD_MAX),
+            bounds=(DetectionConfig.LOG_THRESHOLD_MIN, DetectionConfig.LOG_THRESHOLD_MAX),
             label="{value:0.2f}",
             labelOpts={"position": 0.9},
         )
@@ -151,7 +151,7 @@ class SeedResponseHistogram(pg.PlotWidget):
     def _update_range(self) -> None:
         # the threshold line is not part of the autorange, this set the range so that it is always visible
         top = max(float(self._values.max()) if self._values.size else 0.0, self._threshold)
-        self.getViewBox().setXRange(BlobParams.LOG_THRESHOLD_MIN, max(top, 0.1), padding=0.1)
+        self.getViewBox().setXRange(DetectionConfig.LOG_THRESHOLD_MIN, max(top, 0.1), padding=0.1)
         self.enableAutoRange(axis="y")
 
     def _update_title(self, threshold: float | None = None) -> None:

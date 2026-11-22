@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from apkit4d.batching.processor import BatchProcessor
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.trajectory_detection import detect_sequence
 from apkit4d.io.czi import CziInfo, CziSource
@@ -49,7 +49,7 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
     result = detect_sequence(
         czi_path,
         PreprocParams(),
-        BlobParams(),
+        DetectionConfig(),
     )
 
     pd.testing.assert_frame_equal(result.detections, expected)
@@ -75,7 +75,7 @@ def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: p
     result = detect_sequence(
         tmp_path / "sample.czi",
         PreprocParams(),
-        BlobParams(),
+        DetectionConfig(),
     )
 
     assert result.detections.empty
@@ -109,7 +109,7 @@ def test_detect_sequence_reuses_open_czi_source_without_disk_io(tmp_path: Path) 
     result = detect_sequence(
         source,
         PreprocParams(),
-        BlobParams(threshold=0.05, min_volume_um3=1.0),
+        DetectionConfig(threshold=0.05, min_volume_um3=1.0),
     )
 
     assert list(tmp_path.iterdir()) == []
@@ -145,7 +145,7 @@ def test_detect_sequence_falls_back_to_disk_sink_when_out_dir_provided(tmp_path:
     result = detect_sequence(
         source,
         PreprocParams(),
-        BlobParams(threshold=0.05, min_volume_um3=1.0),
+        DetectionConfig(threshold=0.05, min_volume_um3=1.0),
         out_dir=out_dir,
     )
 

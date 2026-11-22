@@ -7,8 +7,9 @@ from typing import Any, cast
 import numpy as np
 
 from apkit4d.core.image import Image
+from apkit4d.core.models import DetectionConfig
 from apkit4d.core.roi import RegionOfInterest, VoxelSize3D
-from apkit4d.detection.blob_detection import BlobParams, find_blobs
+from apkit4d.detection.blob_detection import find_blobs
 from apkit4d.detection.preprocessing import PreprocParams, preprocess
 from apkit4d.pipeline.contracts import CroppedFrame, FrameDetectionResult, PreprocessedFrame
 
@@ -44,15 +45,15 @@ def coerce_preproc_params(params: PreprocParams | Mapping[str, Any] | None) -> P
         return PreprocParams.from_dict(dict(params))
 
 
-def coerce_blob_params(params: BlobParams | Mapping[str, Any] | None) -> BlobParams:
+def coerce_blob_params(params: DetectionConfig | Mapping[str, Any] | None) -> DetectionConfig:
     """Convert None or a mapping into a BlobParams instance."""
     if params is None:
-        return BlobParams()
-    if isinstance(params, BlobParams):
+        return DetectionConfig()
+    if isinstance(params, DetectionConfig):
         return params
     if isinstance(params, Mapping):
         # May want to add a check for keys that are not in BlobParams to avoid silent errors
-        return BlobParams.from_dict(dict(params))
+        return DetectionConfig(**dict(params))
 
 
 def crop_frame(
@@ -96,7 +97,7 @@ def preprocess_frame(cropped: CroppedFrame, params: PreprocParams) -> Preprocess
 
 def detect_blobs_in_frame(
     preproc: PreprocessedFrame,
-    params: BlobParams,
+    params: DetectionConfig,
     *,
     dt_s: float | None = None,
     include_time: bool = True,

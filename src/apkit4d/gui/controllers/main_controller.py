@@ -324,7 +324,9 @@ class MainController(QObject):
                 PipelineStep.PREPROCESSING, **session.preproc_params.to_dict()
             )
         if session.blob_params is not None:
-            self._pipeline_model.update_step_params(PipelineStep.DETECTION, **session.blob_params.to_dict())
+            self._pipeline_model.update_step_params(
+                PipelineStep.DETECTION, **session.blob_params.model_dump()
+            )
         if session.tracking_config is not None:
             self._pipeline_model.update_step_params(
                 PipelineStep.TRACKING, **session.tracking_config.model_dump()

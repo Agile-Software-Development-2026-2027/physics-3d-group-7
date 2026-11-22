@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from apkit4d.core.models import DetectionConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.pipeline.contracts import (
     CroppedFrame,
@@ -44,8 +44,8 @@ class TestCoercionHelpers:
         assert coerce_preproc_params({"normalization_enabled": True, "lowest_intensity": 10.0}) == custom
 
     def test_coerce_blob_params_variants(self) -> None:
-        assert coerce_blob_params(None) == BlobParams()
-        custom = BlobParams(threshold=0.25)
+        assert coerce_blob_params(None) == DetectionConfig()
+        custom = DetectionConfig(threshold=0.25)
         assert coerce_blob_params(custom) is custom
         assert coerce_blob_params({"threshold": 0.25}) == custom
 
@@ -88,7 +88,7 @@ class TestFrameStages:
         assert preproc.is_normalized is True
         assert preproc.image.dtype == np.float32
 
-        bp = BlobParams(threshold=0.05, min_volume_um3=1.0, diameter_xy_um=4.0, diameter_z_um=4.0)
+        bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0, diameter_xy_um=4.0, diameter_z_um=4.0)
         result = detect_blobs_in_frame(
             preproc,
             bp,
@@ -117,15 +117,15 @@ class TestFrameStages:
 
         assert preproc.is_normalized is False
         with pytest.raises(ValueError, match="normalization must be enabled"):
-            detect_blobs_in_frame(preproc, BlobParams(), require_normalized=True)
+            detect_blobs_in_frame(preproc, DetectionConfig(), require_normalized=True)
 
     def test_detect_blobs_in_frame_without_time_or_dt(self) -> None:
         vol = np.zeros((6, 8, 8), dtype=np.uint16)
         cropped = crop_frame(vol, frame=1, voxel_um=(1.0, 1.0, 1.0))
         preproc = preprocess_frame(cropped, PreprocParams(normalization_enabled=True))
 
-        res_no_time = detect_blobs_in_frame(preproc, BlobParams(), include_time=False)
+        res_no_time = detect_blobs_in_frame(preproc, DetectionConfig(), include_time=False)
         assert "t_s" not in res_no_time.detections.columns
 
-        res_nan_time = detect_blobs_in_frame(preproc, BlobParams(), dt_s=None, include_time=True)
+        res_nan_time = detect_blobs_in_frame(preproc, DetectionConfig(), dt_s=None, include_time=True)
         assert "t_s" in res_nan_time.detections.columns

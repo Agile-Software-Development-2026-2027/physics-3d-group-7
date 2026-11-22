@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import Qt
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.controllers import blob_detection_controller as module
 from apkit4d.gui.controllers.blob_detection_controller import (
     BlobDetection,
@@ -379,7 +379,7 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
         image=np.zeros((2, 3, 4), dtype=np.float32),
         offset=(1, 2, 3),
     )
-    params = BlobParams()
+    params = DetectionConfig()
     seen = {}
 
     def fake_find_blobs(image, p, voxel_dim, **kwargs):
@@ -402,7 +402,7 @@ def test_detect_blobs_runs_find_blobs_on_the_prepared_volume(monkeypatch):
 def test_detect_blobs_rejects_unnormalized_prepared_volume():
     prepared = make_prepared(frame=0, is_image_normalized=False)
     with pytest.raises(ValueError, match="normalization must be enabled"):
-        module.detect_blobs(prepared, BlobParams())
+        module.detect_blobs(prepared, DetectionConfig())
 
 
 def test_precomputed_blobs_render_across_frames_without_detection(setup, fake_detect):
@@ -499,8 +499,8 @@ def test_pipeline_model_detection_params_sync_controller_and_inspector(qtbot) ->
     assert inspector.min_volume == pytest.approx(333.0)
 
     model.reset_step_params(PipelineStep.DETECTION)
-    assert controller.params == BlobParams()
-    assert inspector.get_params() == BlobParams()
+    assert controller.params == DetectionConfig()
+    assert inspector.get_params() == DetectionConfig()
 
 
 def test_stage_3_sequence_detection_populates_precomputed_blobs_for_playback(qtbot, monkeypatch) -> None:

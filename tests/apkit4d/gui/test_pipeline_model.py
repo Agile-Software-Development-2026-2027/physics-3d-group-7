@@ -6,8 +6,7 @@ from copy import replace
 
 import pytest
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.detection.preprocessing import BgMode, PreprocParams
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -215,7 +214,7 @@ def complete_up_to_detection(model: PipelineModel) -> None:
 
 
 def test_detection_params_start_from_the_blob_params_defaults() -> None:
-    assert PipelineModel().get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+    assert PipelineModel().get_step_params(PipelineStep.DETECTION) == DetectionConfig().model_dump()
 
 
 def test_reset_detection_params_restores_the_defaults() -> None:
@@ -224,14 +223,17 @@ def test_reset_detection_params_restores_the_defaults() -> None:
 
     model.reset_step_params(PipelineStep.DETECTION)
 
-    assert model.get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+    assert model.get_step_params(PipelineStep.DETECTION) == DetectionConfig().model_dump()
 
 
 def test_get_blob_params_returns_the_current_values() -> None:
     model = PipelineModel()
     model.update_step_params(PipelineStep.DETECTION, threshold=0.5)
 
-    assert model.get_step_params(PipelineStep.DETECTION) == replace(BlobParams(), threshold=0.5).to_dict()
+    assert (
+        model.get_step_params(PipelineStep.DETECTION)
+        == replace(DetectionConfig(), threshold=0.5).model_dump()
+    )
 
 
 def test_a_completed_detection_is_dirty_when_a_parameter_changes() -> None:
@@ -247,7 +249,7 @@ def test_a_completed_detection_is_not_dirty_when_a_parameter_gets_the_same_value
     model = PipelineModel()
     complete_up_to_detection(model)
 
-    model.update_step_params(PipelineStep.DETECTION, threshold=BlobParams().threshold)
+    model.update_step_params(PipelineStep.DETECTION, threshold=DetectionConfig().threshold)
 
     assert not model.is_step_dirty(PipelineStep.DETECTION)
 

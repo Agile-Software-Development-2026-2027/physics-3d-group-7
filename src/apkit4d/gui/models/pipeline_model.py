@@ -9,8 +9,7 @@ from typing import Any, assert_never
 import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.detection.preprocessing import PreprocParams
 
 
@@ -321,7 +320,7 @@ class PipelineModel(QObject):
             case PipelineStep.PREPROCESSING:
                 return PreprocParams().to_dict()
             case PipelineStep.DETECTION:
-                return BlobParams().to_dict()
+                return DetectionConfig().model_dump()
             case PipelineStep.BATCH:
                 return {}  # TODO add default params
             case PipelineStep.TRACKING:

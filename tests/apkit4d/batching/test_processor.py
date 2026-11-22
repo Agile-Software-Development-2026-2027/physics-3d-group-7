@@ -17,8 +17,7 @@ from apkit4d.batching.processor import (
     run_batch,
     stem_of,
 )
-from apkit4d.core.models import BatchConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import BatchConfig, DetectionConfig
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo, CziSource
 
@@ -79,7 +78,7 @@ class TestBatchProcessor:
         """Verify BatchProcessor sequential execution end-to-end."""
         out_dir = tmp_path / "processed"
         config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
-        bp = BlobParams(threshold=0.05, min_volume_um3=1.0)
+        bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0)
         pp = PreprocParams()
 
         progress_calls = []
@@ -216,7 +215,7 @@ class TestBatchProcessor:
         processor = BatchProcessor(
             config=config,
             preproc_params=PreprocParams(),
-            blob_params=BlobParams(threshold=0.05, min_volume_um3=1.0),
+            blob_params=DetectionConfig(threshold=0.05, min_volume_um3=1.0),
         )
 
         result = processor.process_sequence(mock_source, t0=0, t1=1)

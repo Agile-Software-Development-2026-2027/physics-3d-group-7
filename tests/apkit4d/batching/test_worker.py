@@ -24,8 +24,8 @@ from apkit4d.batching.worker import (
     cap_workers,
     detect_frame,
 )
+from apkit4d.core.models import DetectionConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo, CziSource
 
@@ -98,7 +98,7 @@ class TestDetectFrame:
     def test_detect_frame_basic(self, mock_czi_source: MagicMock) -> None:
         """Verify detect_frame on a volume produces detection DataFrame."""
         pp = PreprocParams(denoise_xy_scale_um=0.0, denoise_z_scale_um=0.0)
-        bp = BlobParams(threshold=0.05, min_volume_um3=1.0)
+        bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0)
 
         df = detect_frame(mock_czi_source, t=0, pp=pp, bp=bp, include_time=False)
         assert isinstance(df, pd.DataFrame)
@@ -114,7 +114,7 @@ class TestDetectFrame:
     def test_detect_frame_with_time(self, mock_czi_source: MagicMock) -> None:
         """Verify detect_frame inserts t_s column when include_time is True."""
         pp = PreprocParams()
-        bp = BlobParams(threshold=0.05, min_volume_um3=1.0)
+        bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0)
 
         df = detect_frame(mock_czi_source, t=2, pp=pp, bp=bp, include_time=True)
         assert isinstance(df, pd.DataFrame)
@@ -265,7 +265,7 @@ class TestDetectFrame:
         )
         mock_source.read.return_value = np.zeros((5, 10, 10), dtype=np.uint16)
         pp = PreprocParams(denoise_xy_scale_um=1.0)
-        bp = BlobParams(threshold=0.2)
+        bp = DetectionConfig(threshold=0.2)
         roi = RegionOfInterest(x_min=0.0, x_max=5.0, y_min=0.0, y_max=10.0, z_min=0.0, z_max=5.0)
 
         with patch("apkit4d.batching.worker.CziSource", return_value=mock_source):
@@ -285,7 +285,7 @@ class TestDetectFrame:
         import pickle
 
         pp = PreprocParams(denoise_xy_scale_um=1.5, denoise_z_scale_um=2.0)
-        bp = BlobParams(threshold=0.15, min_volume_um3=100.0)
+        bp = DetectionConfig(threshold=0.15, min_volume_um3=100.0)
         roi = RegionOfInterest(x_min=4.0, x_max=30.0, y_min=5.0, y_max=25.0, z_min=2.0, z_max=10.0)
 
         payload = pickle.dumps((pp, bp, roi))

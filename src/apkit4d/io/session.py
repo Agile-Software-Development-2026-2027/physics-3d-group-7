@@ -6,9 +6,8 @@ from typing import Any, Protocol, runtime_checkable
 import pandas as pd
 from numpy.typing import NDArray
 
-from apkit4d.core.models import TrackingConfig
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo
 from apkit4d.tracking.linker import TrackingResult
@@ -39,7 +38,7 @@ class PrecomputedSession:
     tracking: TrackingResult | None = None
     roi: RegionOfInterest | None = None
     preproc_params: PreprocParams | None = None
-    blob_params: BlobParams | None = None
+    blob_params: DetectionConfig | None = None
     tracking_config: TrackingConfig | None = None
     completed_steps: tuple[str, ...] | None = None
 

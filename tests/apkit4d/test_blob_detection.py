@@ -4,9 +4,9 @@ import pytest
 from scipy import ndimage
 
 from apkit4d.core.image import Image
+from apkit4d.core.models import DetectionConfig
 from apkit4d.detection.blob_detection import (
     DETECTION_COLUMNS,
-    BlobParams,
     _ellipsoid,
     _sigmas,
     find_blobs,
@@ -19,7 +19,7 @@ from apkit4d.detection.blob_detection import (
 
 
 def test_sigmas():
-    params = BlobParams(diameter_z_um=384.38, diameter_xy_um=29.234)
+    params = DetectionConfig(diameter_z_um=384.38, diameter_xy_um=29.234)
     voxel = (17.3, 3.324, 3.324)
 
     sigma_z = (params.diameter_z_um / 2) / np.sqrt(3) / voxel[0]
@@ -29,14 +29,14 @@ def test_sigmas():
 
 
 def test_sigmas_clamps_at_a_miniminum():
-    params = BlobParams(diameter_z_um=0.1, diameter_xy_um=0.1)
+    params = DetectionConfig(diameter_z_um=1.0, diameter_xy_um=1.0)
     voxel = (1.0, 1.0, 1.0)
     assert _sigmas(params, voxel) == (0.5, 0.5, 0.5)
 
 
 def test_log_response_of_a_flat_image_produces_zoeroes_response():
     img = np.ones((50, 50, 50), dtype=np.float32) * 10.0
-    params = BlobParams()
+    params = DetectionConfig()
     voxel = (1.0, 1.0, 1.0)
 
     _, resp = log_response(img, params, voxel)
@@ -49,7 +49,7 @@ def test_log_response_finds_the_peak_corresponding_to_a_blob():
     img[20, 20, 20] = 100.0
     img = ndimage.gaussian_filter(img, sigma=3.0)  # diffuse the peak a bit
 
-    params = BlobParams(diameter_xy_um=10.0, diameter_z_um=30.0)
+    params = DetectionConfig(diameter_xy_um=10.0, diameter_z_um=30.0)
     _, resp = log_response(img, params, (1.0, 1.0, 1.0))
 
     assert resp[16, 20, 16] > 0.0
@@ -84,7 +84,7 @@ def test_find_seeds_finds_a_single_peak_above_the_threshold():
     peak_coord = (4, 4, 4)
     response[peak_coord] = 0.8  # above threshold
 
-    seeds = find_seeds(response, BlobParams(threshold=0.1), (1.0, 1.0, 1.0))
+    seeds = find_seeds(response, DetectionConfig(threshold=0.1), (1.0, 1.0, 1.0))
 
     assert len(seeds) == 1
     assert tuple(seeds[0]) == peak_coord
@@ -95,7 +95,7 @@ def test_find_seeds_seeds_below_threshold_are_excluded():
     response[3, 2, 4] = 0.05
     response[7, 8, 6] = 0.5
 
-    seeds = find_seeds(response, BlobParams(threshold=0.2), (1.0, 1.0, 1.0))
+    seeds = find_seeds(response, DetectionConfig(threshold=0.2), (1.0, 1.0, 1.0))
 
     assert len(seeds) == 1
     assert tuple(seeds[0]) == (7, 8, 6)
@@ -105,7 +105,7 @@ def test_find_seeds_passing_an_explicity_threshold_overrides_the_one_in_blob_par
     response = np.zeros((7, 7, 7), dtype=np.float32)
     response[4, 3, 5] = 0.3
 
-    seeds = find_seeds(response, BlobParams(threshold=0.1), (1.0, 1.0, 1.0), threshold=0.5)
+    seeds = find_seeds(response, DetectionConfig(threshold=0.1), (1.0, 1.0, 1.0), threshold=0.5)
 
     assert len(seeds) == 0
 
@@ -119,7 +119,7 @@ def test_find_seeds_suppresses_peaks_closer_than_the_split_distance():
     response[6, 6, 6] = 0.7  # secondary peak, thouches the previous
     response[1, 2, 3] = 0.5  # unrelated peak
 
-    params = BlobParams(threshold=0.1, split=2.0, diameter_xy_um=2.1, diameter_z_um=2.1)
+    params = DetectionConfig(threshold=0.1, split=2.0, diameter_xy_um=2.1, diameter_z_um=2.1)
 
     seeds = find_seeds(response, params, (1.0, 1.0, 1.0))
 
@@ -137,7 +137,7 @@ def test_watershed_floods_a_peak_and_generates_a_labeled_region():
 
     seeds = np.array([[15, 15, 15]], dtype=np.int64)
 
-    labels = watershed_from_seeds(smoothed, seeds, BlobParams(grow_frac=0.3))
+    labels = watershed_from_seeds(smoothed, seeds, DetectionConfig(grow_frac=0.3))
 
     assert labels[15, 15, 15] == 1
     assert labels[15, 14, 15] == 1
@@ -149,7 +149,7 @@ def test_watershed_does_nothing_with_empty_seeds():
     smoothed = np.ones(shape, dtype=np.float32)
     seeds = np.empty((0, 3), dtype=np.int64)
 
-    labels = watershed_from_seeds(smoothed, seeds, BlobParams())
+    labels = watershed_from_seeds(smoothed, seeds, DetectionConfig())
 
     assert labels.shape == shape
     assert np.all(labels == 0)
@@ -161,7 +161,7 @@ def test_watershed_segments_regions_with_multiple_seeds():
     smoothed[20, 20, 20] = 0.8
     seeds = np.array([[10, 10, 10], [20, 20, 20]], dtype=np.int64)
 
-    labels = watershed_from_seeds(smoothed, seeds, BlobParams(grow_frac=0.1))
+    labels = watershed_from_seeds(smoothed, seeds, DetectionConfig(grow_frac=0.1))
 
     assert labels[10, 10, 10] == 1
     assert labels[20, 20, 20] == 2
@@ -173,7 +173,7 @@ def test_find_blobs_returns_empty_df_and_seed_response_when_image_is_below_thres
     image[9, 8, 6] = 0.234
 
     df, labels, seed_resp = find_blobs(
-        image, BlobParams(threshold=0.5), voxel_dim=(1.0, 1.0, 1.0), return_labels=True
+        image, DetectionConfig(threshold=0.5), voxel_dim=(1.0, 1.0, 1.0), return_labels=True
     )
 
     assert isinstance(df, pd.DataFrame)
@@ -196,7 +196,7 @@ def test_find_blobs_detects_the_blobs_measures_them_and_returns_the_filled_out_d
 
     image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 4.0) * 0.9
 
-    params = BlobParams(diameter_xy_um=3.0, diameter_z_um=3.0, threshold=0.01, min_volume_um3=1.0)
+    params = DetectionConfig(diameter_xy_um=3.0, diameter_z_um=3.0, threshold=0.01, min_volume_um3=1.0)
     voxel_dim = (1.0, 1.0, 1.0)
 
     df, labels, seed_resp = find_blobs(
@@ -219,7 +219,7 @@ def test_find_blobs_removes_from_labels_blobs_that_have_a_volume_smaller_than_th
 
     image[2:7, 2:7, 2:7] = give_me_a_smooth_blob((5, 5, 5), 4.0) * 0.9
 
-    params = BlobParams(
+    params = DetectionConfig(
         diameter_xy_um=3.0,
         diameter_z_um=3.0,
         threshold=0.01,
@@ -237,7 +237,7 @@ def test_find_blobs_removes_from_labels_blobs_that_have_a_volume_bigger_than_the
     image = np.zeros(shape, dtype=np.float32)
     image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 20.0) * 0.9
 
-    params = BlobParams(
+    params = DetectionConfig(
         diameter_xy_um=15.0,
         diameter_z_um=15.0,
         threshold=0.01,
@@ -362,7 +362,7 @@ def test_find_blobs_empty_after_stats_filtering():
 
     image[2:9, 2:9, 2:9] = give_me_a_smooth_blob((7, 7, 7), 4.0) * 0.9
 
-    params = BlobParams(
+    params = DetectionConfig(
         diameter_xy_um=3.0,
         diameter_z_um=3.0,
         threshold=0.01,
@@ -382,7 +382,7 @@ def test_find_blobs_empty_after_stats_filtering():
 
 
 def test_blob_params_defaults_crystallized():
-    params = BlobParams()
+    params = DetectionConfig()
     assert params.diameter_xy_um == 15.0
     assert params.diameter_z_um == 70.0
     assert params.threshold == 0.1
@@ -393,8 +393,8 @@ def test_blob_params_defaults_crystallized():
 
 
 def test_blob_params_to_dict_does_what_it_says():
-    params = BlobParams(threshold=0.5, min_volume_um3=100.0)
-    d = params.to_dict()
+    params = DetectionConfig(threshold=0.5, min_volume_um3=100.0)
+    d = params.model_dump()
 
     assert isinstance(d, dict)
     assert d["threshold"] == 0.5
@@ -403,7 +403,7 @@ def test_blob_params_to_dict_does_what_it_says():
 
 
 def test_blob_params_from_dict():
-    params = BlobParams.from_dict({"diameter_xy_um": 10.0, "threshold": 0.2, "grow_frac": 0.4})
+    params = DetectionConfig(**{"diameter_xy_um": 10.0, "threshold": 0.2, "grow_frac": 0.4})
 
     assert params.diameter_xy_um == 10.0
     assert params.threshold == 0.2
@@ -412,8 +412,8 @@ def test_blob_params_from_dict():
 
 
 def test_blob_params_from_dict_ignores_extra_keys():
-    params = BlobParams.from_dict(
-        {
+    params = DetectionConfig(
+        **{
             "threshold": 0.3,
             "unknown_parameter": 999,
             "another_bogus_key": "test",
@@ -424,11 +424,6 @@ def test_blob_params_from_dict_ignores_extra_keys():
     assert not hasattr(params, "unknown_parameter")
 
 
-def test_blob_params_from_dict_handles_none():
-    params_none = BlobParams.from_dict(None)
-    assert params_none.threshold == 0.1  # default
-
-
 def test_blob_params_from_dict_handles_empty_dict():
-    params_empty = BlobParams.from_dict({})
+    params_empty = DetectionConfig(**{})
     assert params_empty.threshold == 0.1  # default

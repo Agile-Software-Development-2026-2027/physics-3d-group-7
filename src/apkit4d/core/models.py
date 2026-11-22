@@ -2,7 +2,7 @@
 Data models and configurations for apkit4d tracking and batching pipeline.
 """
 
-from typing import Self
+from typing import ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -160,4 +160,81 @@ class BatchConfig(BaseModel):
         gt=0.0,
         le=1.0,
         description="Fraction of available system RAM allowed for worker processes.",
+    )
+
+
+class DetectionConfig(BaseModel):
+    """Configuration for blob detection.
+
+    Attributes:
+        LOG_THRESHOLD_MIN: Minimum allowed value for the LoG threshold
+        LOG_THRESHOLD_MAX: Maximum allowed value for the LoG threshold
+        diameter_xy_um: Expected blob size for the LoG filter scale along the X and Y axes.
+                        Affects how far apart detected seeds must be.
+        diameter_z_um: Expected blob size for the LoG filter scale along the Z axis.
+                       Usually elongated w.r.t. the X and Y axes.
+        threshold: -LoG response threshold over the preprocessed volume in [0, 1]
+        split: Minimum tolerated distance between the seeds, expressed as a fraction
+               of the diameter. Below 1.0 the cell breaks down in more cells in the
+               direction of Z. (misurato sul file LF4D 10x: a 0.6 il 32% dei blob ha un
+               vicino a meno di 8 µm in XY, a 1.0 il 5%)
+        grow_frac: Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak.
+        min_volume_um3: Min volume of a blob. Blobs with volume under this constraint are filtered out.
+        max_volume_um3: Max volume of a blob. Blobs with volume above this constraint are filtered out.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    LOG_THRESHOLD_MIN: ClassVar[float] = 0.0
+    LOG_THRESHOLD_MAX: ClassVar[float] = 5.0
+
+    diameter_xy_um: float = Field(
+        default=15.0,
+        ge=1.0,
+        description="""
+        Expected blob size for the LoG filter scale along the X and Y axes.
+        Affects how far apart detected seeds must be.
+        """.replace("\n", ""),
+    )
+    diameter_z_um: float = Field(
+        default=70.0,
+        ge=1.0,
+        description="""
+        Expected blob size for the LoG filter scale along the Z axis.
+        Usually elongated w.r.t. the X and Y axes.
+        """.replace("\n", ""),
+    )
+
+    threshold: float = Field(
+        default=0.1,
+        ge=LOG_THRESHOLD_MIN,
+        le=LOG_THRESHOLD_MAX,
+        description="-LoG response threshold over the preprocessed volume in [0, 1]",
+    )
+
+    split: float = Field(
+        default=1.0,
+        ge=0.1,
+        description="""
+        Minimum tolerated distance between the seeds, expressed as a fraction of the diameter.
+        Below 1.0 the cell breaks down in more cells in the direction of Z.
+        """.replace("\n", ""),
+    )
+
+    grow_frac: float = Field(
+        default=0.3,
+        ge=0.01,
+        description="Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak",
+    )
+
+    min_volume_um3: float = Field(
+        default=200.0,
+        ge=0.0,
+        description="Min volume of a blob. Blobs with volume under this constraint are filtered out.",
+    )
+
+    max_volume_um3: float = Field(
+        default=1e6,
+        ge=0.0,
+        description="Min volume of a blob. Blobs with volume under this constraint are filtered out.",
     )

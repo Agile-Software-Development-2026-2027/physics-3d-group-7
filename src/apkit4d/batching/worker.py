@@ -14,8 +14,8 @@ from typing import Any, Final
 import pandas as pd
 import psutil
 
+from apkit4d.core.models import DetectionConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.pipeline.frame_stages import (
@@ -71,7 +71,7 @@ def detect_frame(
     src: CziSource,
     t: int,
     pp: PreprocParams | dict[str, Any] | None = None,
-    bp: BlobParams | dict[str, Any] | None = None,
+    bp: DetectionConfig | dict[str, Any] | None = None,
     roi: RegionOfInterest | dict[str, Any] | Any | None = None,
     include_time: bool = False,
 ) -> pd.DataFrame:
@@ -116,7 +116,7 @@ def _detect_frames_worker(
     czi_path: str | Path,
     channel: int,
     pp: PreprocParams | dict[str, Any] | None = None,
-    bp: BlobParams | dict[str, Any] | None = None,
+    bp: DetectionConfig | dict[str, Any] | None = None,
     frames: list[int] | None = None,
     roi: RegionOfInterest | dict[str, Any] | Any | None = None,
     *,
