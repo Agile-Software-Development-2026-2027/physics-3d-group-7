@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.v_separator import VSeparator
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class RoiInspector(QWidget):
@@ -40,6 +41,8 @@ class RoiInspector(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._volume_bounds: Bounds6D | None = None
+        self._editing_mode: bool = False
+        self._has_undo: bool = False
 
         self._main_layout = QVBoxLayout(self)
         self._main_layout.setContentsMargins(0, 0, 0, 0)
@@ -47,6 +50,7 @@ class RoiInspector(QWidget):
 
         self._build_roi_section()
         self.set_editing_mode(False)
+        self._wheel_guard = install_wheel_guard(self)
 
     # helper to create the 6 spinboxes for X/Y/Z min/max coordinates in micrometers
     def _create_spinbox(self, object_name: str) -> QDoubleSpinBox:
@@ -119,27 +123,13 @@ class RoiInspector(QWidget):
         action_layout.addWidget(self._cancel_btn)
         form.addRow(action_widget)
 
-        history_widget = QWidget()
-        history_layout = QHBoxLayout(history_widget)
-        history_layout.setContentsMargins(0, 0, 0, 0)
-        history_layout.setSpacing(8)
-
         # Undo button to revert to previous roi
         self._undo_btn = QPushButton(texts.INSPECTOR_BUTTON_UNDO_ROI)
         self._undo_btn.setObjectName(names.ROI_INSPECTOR_UNDO_BUTTON)
         self._undo_btn.setToolTip(texts.INSPECTOR_TOOLTIP_UNDO_ROI)
         self._undo_btn.setEnabled(False)  # enabled only when there is a previous ROI to revert to
         self._undo_btn.clicked.connect(self.undo_roi_clicked.emit)
-
-        # Reset to full volume button
-        self._reset_btn = QPushButton(texts.INSPECTOR_BUTTON_RESET_ROI)
-        self._reset_btn.setObjectName(names.ROI_INSPECTOR_RESET_BUTTON)
-        self._reset_btn.setToolTip(texts.INSPECTOR_TOOLTIP_RESET_ROI)
-        self._reset_btn.clicked.connect(self.reset_roi_clicked.emit)
-
-        history_layout.addWidget(self._undo_btn)
-        history_layout.addWidget(self._reset_btn)
-        form.addRow(history_widget)
+        form.addRow(self._undo_btn)
 
         # Status label
         self._status_label = QLabel(texts.INSPECTOR_STATUS_ROI_FULL)
@@ -169,6 +159,13 @@ class RoiInspector(QWidget):
         self.save_button.setObjectName(names.ROI_INSPECTOR_SAVE_BUTTON)
         self.save_button.setToolTip(texts.INSPECTOR_TOOLTIP_SAVE_ROI)
         form.addRow(self.save_button)
+        form.addRow(VSeparator())
+
+        self._reset_btn = QPushButton(texts.INSPECTOR_BUTTON_RESET_ROI)
+        self._reset_btn.setObjectName(names.ROI_INSPECTOR_RESET_BUTTON)
+        self._reset_btn.setToolTip(texts.INSPECTOR_TOOLTIP_RESET_ROI)
+        self._reset_btn.clicked.connect(self.reset_roi_clicked.emit)
+        form.addRow(self._reset_btn)
 
         self._main_layout.addWidget(group)
 
@@ -232,8 +229,10 @@ class RoiInspector(QWidget):
 
     def set_editing_mode(self, editing: bool) -> None:
         """Enable or disable the Accept and Cancel buttons based on whether a preview is active."""
-        self._accept_btn.setEnabled(editing)
-        self._cancel_btn.setEnabled(editing)
+        self._editing_mode = editing
+        can_edit = self.isEnabled() and editing
+        self._accept_btn.setEnabled(can_edit)
+        self._cancel_btn.setEnabled(can_edit)
         if editing:
             self._status_label.setText(texts.INSPECTOR_STATUS_ROI_SELECTING)
 
@@ -254,4 +253,26 @@ class RoiInspector(QWidget):
 
     def set_undo_enabled(self, enabled: bool) -> None:
         """Enable or disable the Undo button depending on whether ROI history is available."""
-        self._undo_btn.setEnabled(enabled)
+        self._has_undo = enabled
+        self._undo_btn.setEnabled(self.isEnabled() and enabled)
+
+    def set_enabled_state(self, enabled: bool) -> None:
+        """Enable or disable interactive ROI controls while preserving preview/undo gating."""
+        self.setEnabled(enabled)
+        for widget in (
+            self._x_min,
+            self._x_max,
+            self._y_min,
+            self._y_max,
+            self._z_min,
+            self._z_max,
+            self._select_btn,
+            self._reset_btn,
+            self.min_frame,
+            self.max_frame,
+            self.save_button,
+        ):
+            widget.setEnabled(enabled)
+        self._accept_btn.setEnabled(enabled and self._editing_mode)
+        self._cancel_btn.setEnabled(enabled and self._editing_mode)
+        self._undo_btn.setEnabled(enabled and self._has_undo)

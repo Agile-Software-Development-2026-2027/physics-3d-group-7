@@ -34,10 +34,12 @@ class MainWindow(QMainWindow):
     Signals:
         file_opened: Emitted with the path of a .czi file once it has been accepted.
         results_opened: Emitted with the path of the json of saved results chosen by the user.
+        video_export_requested: Emitted when the user requests a video export.
     """
 
     file_opened = Signal(Path)
     results_opened = Signal(Path)
+    video_export_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -169,6 +171,13 @@ class MainWindow(QMainWindow):
             texts.ACTION_OPEN_RESULTS,
             shortcuts.OPEN_RESULTS,
             self._choose_results,
+        )
+        self._add_action(
+            menu,
+            names.EXPORT_VIDEO_ACTION,
+            texts.ACTION_EXPORT_VIDEO,
+            shortcuts.EXPORT_VIDEO,
+            self.video_export_requested.emit,
         )
         menu.addSeparator()
         self._add_action(menu, names.QUIT_ACTION, texts.ACTION_QUIT, shortcuts.QUIT, self.close)

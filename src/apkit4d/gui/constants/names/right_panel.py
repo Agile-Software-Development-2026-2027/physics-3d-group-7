@@ -10,6 +10,8 @@ SCROLL_CONTENT: str = "accordion_scroll_content"
 STAGE_NUMBER_FIELD: str = "stage_number_field"
 PLAN_UP_TO_BUTTON: str = "plan_up_to_button"
 COMPLETE_STAGE_BUTTON: str = "complete_stage_button"
+# batch inspector controls
+BATCH_INSPECTOR_RESET_BUTTON: str = "batch_inspector_reset_button"
 # bottom stats section
 BOTTOM_STATS_SECTION: str = "bottom_stats_section"
 BOTTOM_STATS_HEADER: str = "bottom_stats_header"

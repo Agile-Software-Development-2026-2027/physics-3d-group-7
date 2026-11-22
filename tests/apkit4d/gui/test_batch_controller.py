@@ -95,6 +95,7 @@ def test_export_runs_only_when_pipeline_reaches_batch(setup_batch, qtbot, tmp_pa
     assert saved["blob"] == metadata["blob"]
     assert saved["info"] == metadata["info"]
     assert saved["channel"] == 1 and saved["t0"] == 1 and saved["t1"] == 2
+    assert window.right_panel.bottom_stats.progress.isHidden()
     source.read.assert_not_called()
 
 
@@ -163,3 +164,20 @@ def test_new_output_folder_reexports_without_repeating_analysis(setup_batch, qtb
     assert (tmp_path / "second" / "sample_blobs.parquet").is_file()
     assert pipeline.model.is_complete
     source.read.assert_not_called()
+
+
+def test_batch_reset_to_defaults_restores_source_folder_format_and_frames(setup_batch, tmp_path):
+    window, _controller, _files, _source, _pipeline, _detections, _metadata = setup_batch
+    view = window.right_panel.batch_inspector
+
+    view.output_dir.setText(str(tmp_path / "custom"))
+    view.format.setCurrentText("csv")
+    view.first_frame.setValue(2)
+    view.last_frame.setValue(3)
+
+    view.reset_btn.click()
+
+    assert view.output_dir.text() == str(tmp_path)
+    assert view.format.currentText() == "parquet"
+    assert view.first_frame.value() == 1
+    assert view.last_frame.value() == 4

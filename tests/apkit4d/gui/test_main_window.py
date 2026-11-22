@@ -10,7 +10,7 @@ from apkit4d.core.models import TrackingConfig
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui import app as gui_app
 from apkit4d.gui.app import run
-from apkit4d.gui.constants import application, texts
+from apkit4d.gui.constants import application, names, shortcuts, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
@@ -63,6 +63,29 @@ def test_quit_action_closes_the_window(window):
     window.show()
     window.findChild(QAction, "quit_action").trigger()
     assert not window.isVisible()
+
+
+def test_export_video_action_requests_export(window, qtbot):
+    action = window.findChild(QAction, names.EXPORT_VIDEO_ACTION)
+    assert action is not None
+    assert action.shortcut().toString() == shortcuts.EXPORT_VIDEO
+
+    with qtbot.waitSignal(window.video_export_requested):
+        action.trigger()
+
+
+def test_export_video_action_opens_dialog(window, qapp, monkeypatch):
+    from apkit4d.gui.controllers import main_controller
+
+    dialog = MagicMock()
+    dialog_class = MagicMock(return_value=dialog)
+    monkeypatch.setattr(main_controller, "VideoExportDialog", dialog_class)
+    controller = MainController(window, qapp, window, view=MagicMock())
+
+    window.findChild(QAction, names.EXPORT_VIDEO_ACTION).trigger()
+
+    dialog_class.assert_called_once_with(controller._video_export_controller, window)
+    dialog.exec.assert_called_once_with()
 
 
 def test_run_returns_the_exit_code_of_the_application(qapp, czi_file, monkeypatch):
