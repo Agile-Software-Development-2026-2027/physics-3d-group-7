@@ -6,6 +6,7 @@ Texts of the right column: stage titles, stage controls and statistics.
 BUTTON_TOGGLE_ALL: str = "Toggle All"
 TOOLTIP_TOGGLE_ALL: str = "Toggle collapse/expand state of all accordion sections"
 TOOLTIP_STATS_TOGGLE: str = "Toggle statistics details"
+BUTTON_RESET_DEFAULTS: str = "Reset to defaults"
 # pipeline stage controls
 LABEL_STAGE_VALUE: str = "Parameter:"
 BUTTON_PLAY_STAGE: str = "▶"

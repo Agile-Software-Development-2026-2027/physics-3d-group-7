@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.core.models import TrackingConfig
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.theme import (
@@ -363,6 +364,11 @@ class RightPanel(SidePanel):
             if inspector is not None:
                 inspector.set_enabled_state(enabled)
 
+    def set_detection_params(self, params: BlobParams) -> None:
+        """Synchronize detection inspector with the model."""
+        if (inspector := self.detection_inspector) is not None:
+            inspector.set_params(params)
+
     def set_tracking_params(self, config: TrackingConfig) -> None:
         """Synchronize tracking inspector with the model."""
         if self._tracking_inspector is not None:
@@ -499,6 +505,9 @@ class RightPanel(SidePanel):
                 case PipelineStep.DETECTION:
                     detection_inspector = BlobDetectionInspector()
                     detection_inspector.setObjectName(names.DETECTION_INSPECTOR_STEP)
+                    detection_inspector.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.DETECTION.value)
+                    )
                     sec.add_widget(detection_inspector)
                 case PipelineStep.TRACKING:
                     tracking_inspector = TrajectoryLinkingInspector()
@@ -533,6 +542,9 @@ class RightPanel(SidePanel):
                     )
                     self.batch_inspector.last_frame.valueChanged.connect(
                         lambda value: self.notify_param_changed(PipelineStep.BATCH, "t1", value - 1)
+                    )
+                    self.batch_inspector.reset_requested.connect(
+                        lambda: self.step_params_reset.emit(PipelineStep.BATCH.value)
                     )
                     sec.add_widget(self.batch_inspector)
                 case _:

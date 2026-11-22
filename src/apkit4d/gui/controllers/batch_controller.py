@@ -47,6 +47,7 @@ class BatchController(QObject):
     def set_source(self, path: Path, source: FrameSource) -> None:
         self._pipeline.reset_pipeline()
         self._source = (path, getattr(source, "channel", 0)) if source.info.n_t > 0 else None
+        self._view.set_default_output_dir(str(path.parent))
         self._view.output_dir.setText(str(path.parent))
         for field in (self._view.first_frame, self._view.last_frame):
             field.setRange(1, max(1, source.info.n_t))

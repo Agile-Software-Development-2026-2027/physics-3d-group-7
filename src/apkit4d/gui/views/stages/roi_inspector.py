@@ -121,27 +121,13 @@ class RoiInspector(QWidget):
         action_layout.addWidget(self._cancel_btn)
         form.addRow(action_widget)
 
-        history_widget = QWidget()
-        history_layout = QHBoxLayout(history_widget)
-        history_layout.setContentsMargins(0, 0, 0, 0)
-        history_layout.setSpacing(8)
-
         # Undo button to revert to previous roi
         self._undo_btn = QPushButton(texts.INSPECTOR_BUTTON_UNDO_ROI)
         self._undo_btn.setObjectName(names.ROI_INSPECTOR_UNDO_BUTTON)
         self._undo_btn.setToolTip(texts.INSPECTOR_TOOLTIP_UNDO_ROI)
         self._undo_btn.setEnabled(False)  # enabled only when there is a previous ROI to revert to
         self._undo_btn.clicked.connect(self.undo_roi_clicked.emit)
-
-        # Reset to full volume button
-        self._reset_btn = QPushButton(texts.INSPECTOR_BUTTON_RESET_ROI)
-        self._reset_btn.setObjectName(names.ROI_INSPECTOR_RESET_BUTTON)
-        self._reset_btn.setToolTip(texts.INSPECTOR_TOOLTIP_RESET_ROI)
-        self._reset_btn.clicked.connect(self.reset_roi_clicked.emit)
-
-        history_layout.addWidget(self._undo_btn)
-        history_layout.addWidget(self._reset_btn)
-        form.addRow(history_widget)
+        form.addRow(self._undo_btn)
 
         # Status label
         self._status_label = QLabel(texts.INSPECTOR_STATUS_ROI_FULL)
@@ -171,6 +157,13 @@ class RoiInspector(QWidget):
         self.save_button.setObjectName(names.ROI_INSPECTOR_SAVE_BUTTON)
         self.save_button.setToolTip(texts.INSPECTOR_TOOLTIP_SAVE_ROI)
         form.addRow(self.save_button)
+        form.addRow(VSeparator())
+
+        self._reset_btn = QPushButton(texts.INSPECTOR_BUTTON_RESET_ROI)
+        self._reset_btn.setObjectName(names.ROI_INSPECTOR_RESET_BUTTON)
+        self._reset_btn.setToolTip(texts.INSPECTOR_TOOLTIP_RESET_ROI)
+        self._reset_btn.clicked.connect(self.reset_roi_clicked.emit)
+        form.addRow(self._reset_btn)
 
         self._main_layout.addWidget(group)
 

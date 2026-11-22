@@ -7,12 +7,14 @@ from typing import assert_never
 from unittest.mock import MagicMock
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QSizePolicy, QSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QSizePolicy, QSpinBox
 from pytestqt.qtbot import QtBot
 
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
+from apkit4d.gui.controllers.pipeline_controller import PipelineController
+from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import BottomStatsSection, RightPanel
@@ -366,3 +368,38 @@ def test_all_right_panel_stages_disabled_until_czi_loaded(qtbot, qapp) -> None:
         assert not play_btn.isEnabled()
     assert not panel.roi_inspector.isEnabled()
     assert not panel.batch_inspector.isEnabled()
+
+
+def test_all_accordions_have_unified_reset_to_defaults_button(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+
+    reset_names = (
+        names.ROI_INSPECTOR_RESET_BUTTON,
+        names.PREPROC_RESET,
+        names.DETECTION_INSPECTOR_RESET_BUTTON,
+        names.TRACKING_INSPECTOR_RESET_BUTTON,
+        names.BATCH_INSPECTOR_RESET_BUTTON,
+    )
+    for button_name in reset_names:
+        btn = find_widget(panel, QPushButton, button_name)
+        assert btn.text() == texts.BUTTON_RESET_DEFAULTS
+
+
+def test_detection_reset_restores_model_and_inspector_defaults(qtbot) -> None:
+    panel = RightPanel()
+    qtbot.addWidget(panel)
+    model = PipelineModel()
+    controller = PipelineController(model, panel)
+    assert controller.model is model
+
+    model.update_step_params(PipelineStep.DETECTION, threshold=0.75, min_volume_um3=500.0)
+    inspector = panel.detection_inspector
+    assert inspector is not None
+    assert inspector.lo_g_threshold == 0.75
+
+    reset_btn = find_widget(inspector, QPushButton, names.DETECTION_INSPECTOR_RESET_BUTTON)
+    reset_btn.click()
+
+    assert model.get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
+    assert inspector.get_params() == BlobParams()

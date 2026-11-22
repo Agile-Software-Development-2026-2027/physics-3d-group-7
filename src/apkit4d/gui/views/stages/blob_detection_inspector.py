@@ -1,42 +1,28 @@
-from pathlib import Path
-
-from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDoubleSpinBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import names, texts
-from apkit4d.gui.constants.application import DEFAULT_PROCESSED_DATA_DIR
-from apkit4d.gui.models.output_type import OutputType
-from apkit4d.gui.theme import ThemeColors
+from apkit4d.gui.theme import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.v_separator import VSeparator
 
 
 class BlobDetectionInspector(QWidget):
-    """Inspector widget for configuring blob detection parameters and batch processing settings.
+    """Inspector widget for configuring 3D blob detection parameters.
 
     Args:
         parent: Optional parent widget.
 
     Signals:
-        frame_start_changed: Emitted when the start frame changes.
-        frame_end_changed: Emitted when the end frame changes.
-        output_folder_changed: Emitted when the output folder path changes.
-        workers_changed: Emitted when the worker count changes.
-        output_format_changed: Emitted when the output format changes.
         diameter_xy_changed: Emitted when the XY diameter changes.
         diameter_z_changed: Emitted when the Z diameter changes.
         diameter_z_equal_to_xy_toggled: Emitted when the Z equals XY toggle state changes.
@@ -48,13 +34,9 @@ class BlobDetectionInspector(QWidget):
         update_on_change_toggled: Emitted when the update-on-change toggle state changes.
         show_segments_toggled: Emitted when the show-segments toggle state changes.
         find_blob_clicked: Emitted when the find blobs button is clicked.
+        reset_requested: Emitted when the user requests resetting parameters to defaults.
     """
 
-    frame_start_changed: Signal = Signal(int)
-    frame_end_changed: Signal = Signal(int)
-    output_folder_changed: Signal = Signal(Path)
-    workers_changed: Signal = Signal(int)
-    output_format_changed: Signal = Signal(OutputType)
     diameter_xy_changed: Signal = Signal(float)
     diameter_z_changed: Signal = Signal(float)
     diameter_z_equal_to_xy_toggled: Signal = Signal(bool)
@@ -66,6 +48,7 @@ class BlobDetectionInspector(QWidget):
     update_on_change_toggled: Signal = Signal(bool)
     show_segments_toggled: Signal = Signal(bool)
     find_blob_clicked: Signal = Signal()
+    reset_requested: Signal = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -74,8 +57,8 @@ class BlobDetectionInspector(QWidget):
         self._main_layout.setContentsMargins(0, 0, 0, 0)
         self._main_layout.setSpacing(12)
 
-        self._build_batch_processing_section()
         self._build_detection_parameters_section()
+        self.apply_theme(THEME_COLORS[DEFAULT_THEME])
 
     @property
     def diameter_xy(self):
@@ -174,86 +157,6 @@ class BlobDetectionInspector(QWidget):
         layout.setSpacing(10)
         layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         return group, layout
-
-    def _build_batch_processing_section(self):
-        group, form = self._create_section(
-            texts.INSPECTOR_SECTION_BATCH_PROCESSING,
-            names.DETECTION_INSPECTOR_BATCH_PROCESSING_GROUP,
-        )
-
-        # frame selection
-        self._frame_start = QSpinBox()
-        self._frame_start.setObjectName(names.DETECTION_INSPECTOR_FRAME_START)
-        self._frame_start.setRange(0, 999999)
-        self._frame_start.valueChanged.connect(self.frame_start_changed.emit)
-
-        self._frame_end = QSpinBox()
-        self._frame_end.setObjectName(names.DETECTION_INSPECTOR_FRAME_END)
-        self._frame_end.setRange(0, 999999)
-        self._frame_end.valueChanged.connect(self.frame_end_changed.emit)
-
-        frame_range_widget = QWidget()
-        frame_layout = QHBoxLayout(frame_range_widget)
-        frame_layout.setContentsMargins(0, 0, 0, 0)
-        frame_layout.setSpacing(8)
-
-        frame_layout.addWidget(QLabel(texts.START_TIME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
-        frame_layout.addWidget(self._frame_start)
-        frame_layout.addWidget(QLabel(texts.END_TIME_LABEL), alignment=Qt.AlignmentFlag.AlignRight)
-        frame_layout.addWidget(self._frame_end)
-
-        self._frame_range_label = QLabel(texts.INSPECTOR_LABEL_FRAME_RANGE)
-        self._frame_range_label.setToolTip(texts.INSPECTOR_TOOLTIP_FRAME_RANGE)
-        form.addRow(self._frame_range_label, frame_range_widget)
-        form.addRow(VSeparator())
-
-        self._frame_start.valueChanged.connect(
-            lambda v: self._frame_end.setValue(v) if v > self._frame_end.value() else None
-        )
-        self._frame_end.valueChanged.connect(
-            lambda v: self._frame_start.setValue(v) if v < self._frame_start.value() else None
-        )
-
-        # batch
-        self._output_folder = QLineEdit()
-        self._output_folder.setObjectName(names.DETECTION_INSPECTOR_OUTPUT_FOLDER)
-        self._output_folder.setText(str(DEFAULT_PROCESSED_DATA_DIR))
-        self._output_folder.setPlaceholderText(texts.INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER)
-        self._output_folder.textChanged.connect(lambda path: self.output_folder_changed.emit(Path(path)))
-
-        self._output_browse_button = QPushButton("...")
-        self._output_browse_button.setObjectName(names.DETECTION_INSPECTOR_OUTPUT_BROWSE_BUTTON)
-        self._output_browse_button.setFixedWidth(32)
-        self._output_browse_button.clicked.connect(self._choose_output_folder)
-
-        output_widget = QWidget()
-        output_layout = QHBoxLayout(output_widget)
-        output_layout.setContentsMargins(0, 0, 0, 0)
-        output_layout.addWidget(self._output_folder)
-        output_layout.addWidget(self._output_browse_button)
-
-        form.addRow(texts.INSPECTOR_LABEL_OUTPUT_FOLDER, output_widget)
-
-        self._workers = QSpinBox()
-        self._workers.setObjectName(names.DETECTION_INSPECTOR_WORKERS)
-        self._workers.setRange(1, 256)
-        self._workers.setValue(4)
-        self._workers.valueChanged.connect(self.workers_changed.emit)
-
-        form.addRow(texts.INSPECTOR_LABEL_WORKERS, self._workers)
-
-        self._output_format = QComboBox()
-        self._output_format.setObjectName(names.DETECTION_INSPECTOR_OUTPUT_FORMAT)
-        for item_type in OutputType:
-            label = texts.get_output_type_label(item_type)
-            self._output_format.addItem(label, item_type)
-        self._output_format.currentIndexChanged.connect(
-            lambda _: self.output_format_changed.emit(self._output_format.currentData())
-        )
-
-        form.addRow(texts.INSPECTOR_LABEL_FORMAT, self._output_format)
-
-        self._main_layout.addWidget(group)
 
     def _build_detection_parameters_section(self):
         group, form = self._create_section(
@@ -376,6 +279,7 @@ class BlobDetectionInspector(QWidget):
         self._update_on_change_info.setObjectName("blob_detection_inspector_update_on_change_info")
         self._update_on_change_info.setContentsMargins(10, 0, 10, 0)
         self._update_on_change_info.setWordWrap(True)
+        self._update_on_change_info.setVisible(False)
         form.addRow(self._update_on_change_info)
 
         self._show_segments = QCheckBox()
@@ -397,6 +301,7 @@ class BlobDetectionInspector(QWidget):
         self._find_blob_button_info = QLabel(texts.INSPECTOR_BUTTON_DISABLED_INFO)
         self._find_blob_button_info.setWordWrap(True)
         self._find_blob_button_info.setContentsMargins(10, 0, 10, 0)
+        self._find_blob_button_info.setVisible(False)
         form.addRow(self._find_blob_button_info)
 
         form.addRow(VSeparator())
@@ -406,6 +311,12 @@ class BlobDetectionInspector(QWidget):
         self._detection_status.setWordWrap(True)
 
         form.addRow(self._detection_status)
+        form.addRow(VSeparator())
+
+        self._reset_button = QPushButton(texts.BUTTON_RESET_DEFAULTS)
+        self._reset_button.setObjectName(names.DETECTION_INSPECTOR_RESET_BUTTON)
+        self._reset_button.clicked.connect(self.reset_requested.emit)
+        form.addRow(self._reset_button)
 
         self._main_layout.addWidget(group)
 
@@ -420,16 +331,6 @@ class BlobDetectionInspector(QWidget):
         label.setToolTip(tooltip)
         widget.setToolTip(tooltip)
         form.addRow(label, widget)
-
-    def _choose_output_folder(self):
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            texts.INSPECTOR_DIALOG_OUTPUT_FOLDER,
-            self._output_folder.text(),
-        )
-
-        if directory:
-            self._output_folder.setText(directory)
 
     def set_detection_status(self, status: str):
         """Updates the status text displayed in the blob detection status label.
@@ -450,9 +351,11 @@ class BlobDetectionInspector(QWidget):
 
     def disable_find_blob(self, disabled: bool):
         self._find_blobs_button.setDisabled(disabled)
+        self._find_blob_button_info.setVisible(disabled)
 
     def disable_update_on_change(self, disabled: bool):
         self._update_on_change.setDisabled(disabled)
+        self._update_on_change_info.setVisible(disabled)
 
     def get_params(self) -> BlobParams:
         """Read current detection widget values into a `BlobParams` instance."""
@@ -502,10 +405,11 @@ class BlobDetectionInspector(QWidget):
             self._update_on_change,
             self._show_segments,
             self._find_blobs_button,
+            self._reset_button,
         ):
             widget.setEnabled(enabled)
         self._diameter_z.setEnabled(enabled and not self._diameter_z_equals_xy.isChecked())
 
     def apply_theme(self, colors: ThemeColors) -> None:
-        self._update_on_change_info.setStyleSheet(f"color: {colors.disabled_text}")
-        self._find_blob_button_info.setStyleSheet(f"color: {colors.disabled_text}")
+        self._update_on_change_info.setStyleSheet(f"color: {colors.danger}")
+        self._find_blob_button_info.setStyleSheet(f"color: {colors.danger}")

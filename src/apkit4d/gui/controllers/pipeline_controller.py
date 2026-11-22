@@ -8,6 +8,7 @@ from typing import Any
 from PySide6.QtCore import QObject
 
 from apkit4d.core.models import TrackingConfig
+from apkit4d.detection.blob_detection import BlobParams
 from apkit4d.gui.constants import texts
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -273,7 +274,10 @@ class PipelineController(QObject):
 
     def _on_model_step_params_changed(self, step: PipelineStep) -> None:
         """Keep stage inspector widgets synchronized with programmatic model parameter updates."""
-        if step == PipelineStep.TRACKING:
+        if step == PipelineStep.DETECTION:
+            blob_params = BlobParams.from_dict(self._model.get_step_params(step))
+            self._view.set_detection_params(blob_params)
+        elif step == PipelineStep.TRACKING:
             config = TrackingConfig(**self._model.get_step_params(step))
             self._view.set_tracking_params(config)
 
