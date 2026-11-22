@@ -2,7 +2,8 @@
 Data models and configurations for apkit4d tracking and batching pipeline.
 """
 
-from typing import Self
+from enum import StrEnum
+from typing import ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -160,4 +161,169 @@ class BatchConfig(BaseModel):
         gt=0.0,
         le=1.0,
         description="Fraction of available system RAM allowed for worker processes.",
+    )
+
+
+class DetectionConfig(BaseModel):
+    """Configuration for blob detection.
+
+    Attributes:
+        LOG_THRESHOLD_MIN: Minimum allowed value for the LoG threshold
+        LOG_THRESHOLD_MAX: Maximum allowed value for the LoG threshold
+        diameter_xy_um: Expected blob size for the LoG filter scale along the X and Y axes.
+                        Affects how far apart detected seeds must be.
+        diameter_z_um: Expected blob size for the LoG filter scale along the Z axis.
+                       Usually elongated w.r.t. the X and Y axes.
+        threshold: -LoG response threshold over the preprocessed volume in [0, 1]
+        split: Minimum tolerated distance between the seeds, expressed as a fraction
+               of the diameter. Below 1.0 the cell breaks down in more cells in the
+               direction of Z. (misurato sul file LF4D 10x: a 0.6 il 32% dei blob ha un
+               vicino a meno di 8 µm in XY, a 1.0 il 5%)
+        grow_frac: Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak.
+        min_volume_um3: Min volume of a blob. Blobs with volume under this constraint are filtered out.
+        max_volume_um3: Max volume of a blob. Blobs with volume above this constraint are filtered out.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    LOG_THRESHOLD_MIN: ClassVar[float] = 0.0
+    LOG_THRESHOLD_MAX: ClassVar[float] = 5.0
+
+    diameter_xy_um: float = Field(
+        default=15.0,
+        ge=1.0,
+        description="""
+        Expected blob size for the LoG filter scale along the X and Y axes.
+        Affects how far apart detected seeds must be.
+        """.replace("\n", ""),
+    )
+    diameter_z_um: float = Field(
+        default=70.0,
+        ge=1.0,
+        description="""
+        Expected blob size for the LoG filter scale along the Z axis.
+        Usually elongated w.r.t. the X and Y axes.
+        """.replace("\n", ""),
+    )
+
+    threshold: float = Field(
+        default=0.1,
+        ge=LOG_THRESHOLD_MIN,
+        le=LOG_THRESHOLD_MAX,
+        description="-LoG response threshold over the preprocessed volume in [0, 1]",
+    )
+
+    split: float = Field(
+        default=1.0,
+        ge=0.1,
+        description="""
+        Minimum tolerated distance between the seeds, expressed as a fraction of the diameter.
+        Below 1.0 the cell breaks down in more cells in the direction of Z.
+        """.replace("\n", ""),
+    )
+
+    grow_frac: float = Field(
+        default=0.3,
+        ge=0.01,
+        description="Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak",
+    )
+
+    min_volume_um3: float = Field(
+        default=200.0,
+        ge=0.0,
+        description="Min volume of a blob. Blobs with volume under this constraint are filtered out.",
+    )
+
+    max_volume_um3: float = Field(
+        default=1e6,
+        ge=0.0,
+        description="Min volume of a blob. Blobs with volume under this constraint are filtered out.",
+    )
+
+
+class BgMode(StrEnum):
+    """Background removal strategy to use during preprocessing.
+
+    RefactorNote:
+        BgMode was updated to inherit from enum.StrEnum, this allows native string representation,
+        JSON serialization while mantaining backward compatibility with enum comparison.
+    """
+
+    NONE = "None"
+    PERCENTILE_PER_SLICE = "Percentile per slice"
+    WIDE_GAUSSIAN = "Wide Gaussian"
+
+
+class PreprocessingConfig(BaseModel):
+    """Configuration for preprocessing a volume raw volume after ROI selection.
+
+    Attributes:
+        denoise_xy_scale_um: Scale of the Gaussian smoothing denoise along the X, Y axes.
+        denoise_z_scale_um: Scale of the Gaussian smoothing denoise along the Z axis (anisotropic).
+        bg_mode: Background removal strategy.
+        bg_percentile: The percentile for BgMode.PERCENTILE_PER_SLICE.
+        bg_sigma_xy_um: Sigma scale for the Gaussing smoothing applied when bg_mode is BgMode.WIDE_GAUSSIAN.
+        normalization_enabled: Whether normalization of the volume from [lo, hi] to [0, 1] is enabled.
+        lowest_intensity: Intensity lower bound for window normalization.
+        lowest_intensity: Intensity upper bound for window normalization.
+        logarithmic_compression_enabled: Whether logarithmic compression is enabled. Logarithmic
+                                         compression dims bright peaks and highlights dim details.
+        gamma_correction_to_apply: If γ = 1 nothing changes, if γ < 1.0 brightens mid-tones,
+                                   if γ > 1.0 darkens mid-tones.
+        clahe_enabled: Whether Contrast Limited Adaptive Histogram Equalization is enabled.
+        clahe_clip: Controls noise amplification with CLAHE.
+        clahe_kernel_xy_um: Size micrometers of the local neighborhood (tile) used in CLAHE.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    denoise_xy_scale_um: float = Field(
+        default=0.0, ge=0.0, description="Scale of the Gaussian smoothing denoise along the X, Y axes."
+    )
+    denoise_z_scale_um: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Scale of the Gaussian smoothing denoise along the Z axis (anisotropic).",
+    )
+
+    bg_mode: BgMode = Field(default=BgMode.NONE, description="Background removal strategy.")
+    bg_percentile: float = Field(
+        default=50.0, ge=0.0, le=100.0, description="The percentile for BgMode.PERCENTILE_PER_SLICE."
+    )
+    bg_sigma_xy_um: float = Field(
+        default=60.0,
+        ge=1.0,
+        description="Sigma scale for the Gaussing smoothing applied when bg_mode is BgMode.WIDE_GAUSSIAN.",
+    )
+
+    normalization_enabled: bool = Field(
+        default=True, description="Whether normalization of the volume from [lo, hi] to [0, 1] is enabled."
+    )
+    lowest_intensity: float = Field(
+        default=0.0, ge=0.0, description="Intensity lower bound for window normalization."
+    )
+    highest_intensity: float = Field(
+        default=1000.0, ge=0.0, description="Intensity upper bound for window normalization."
+    )
+
+    logarithmic_compression_enabled: bool = Field(
+        default=False,
+        description="Whether logarithmic compression is enabled. "
+        "Logarithmic compression dims bright peaks and highlights dim details.",
+    )
+
+    gamma_correction_to_apply: float = Field(
+        default=1.0,
+        ge=0.1,
+        description="If γ = 1 nothing changes, if γ < 1.0 brightens mid-tones, if γ > 1.0 darkens mid-tones.",
+    )
+
+    clahe_enabled: bool = Field(
+        default=False, description="Whether Contrast Limited Adaptive Histogram Equalization is enabled."
+    )
+    clahe_clip: float = Field(
+        default=0.01, ge=0.001, le=1.0, description="Controls noise amplification with CLAHE."
+    )
+    clahe_kernel_xy_um: float = Field(
+        default=150.0, ge=0.0, description="Size micrometers of the local neighborhood (tile) used in CLAHE."
     )

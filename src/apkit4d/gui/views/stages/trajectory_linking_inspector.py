@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import names, texts
+from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
 
 class TrajectoryLinkingInspector(QWidget):
@@ -82,6 +83,7 @@ class TrajectoryLinkingInspector(QWidget):
         form.addRow(self._reset_button)
 
         self._main_layout.addWidget(group)
+        self._wheel_guard = install_wheel_guard(self)
 
     def get_params(self) -> TrackingConfig:
         """Read current tracking widget values into a `TrackingConfig` instance."""

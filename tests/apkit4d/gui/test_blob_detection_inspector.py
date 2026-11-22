@@ -2,18 +2,14 @@ import pytest
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDoubleSpinBox,
-    QFileDialog,
     QLabel,
-    QLineEdit,
     QPushButton,
-    QSpinBox,
 )
 
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.gui.constants import names
-from apkit4d.gui.models.output_type import OutputType
+from apkit4d.core.models import DetectionConfig
+from apkit4d.gui.constants import names, texts
+from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.stages import StageInspectorView
 from apkit4d.gui.views.stages.blob_detection_inspector import BlobDetectionInspector
 from tests.apkit4d.gui.helper import find_widget
@@ -28,14 +24,7 @@ def inspector(qtbot) -> BlobDetectionInspector:
 
 def test_widgets_have_unique_object_names(inspector):
     object_names = [
-        names.DETECTION_INSPECTOR_BATCH_PROCESSING_GROUP,
         names.DETECTION_INSPECTOR_DETECTION_PARAMETERS_GROUP,
-        names.DETECTION_INSPECTOR_FRAME_START,
-        names.DETECTION_INSPECTOR_FRAME_END,
-        names.DETECTION_INSPECTOR_OUTPUT_FOLDER,
-        names.DETECTION_INSPECTOR_OUTPUT_BROWSE_BUTTON,
-        names.DETECTION_INSPECTOR_WORKERS,
-        names.DETECTION_INSPECTOR_OUTPUT_FORMAT,
         names.DETECTION_INSPECTOR_DIAMETER_XY,
         names.DETECTION_INSPECTOR_DIAMETER_Z,
         names.DETECTION_INSPECTOR_DIAMETER_Z_EQUALS_XY,
@@ -48,84 +37,12 @@ def test_widgets_have_unique_object_names(inspector):
         names.DETECTION_INSPECTOR_SHOW_SEGMENTS,
         names.DETECTION_INSPECTOR_FIND_BLOBS_BUTTON,
         names.DETECTION_INSPECTOR_DETECTION_STATUS,
+        names.DETECTION_INSPECTOR_RESET_BUTTON,
     ]
 
     assert len(object_names) == len(set(object_names))
     for object_name in object_names:
         assert len(inspector.findChildren(QObject, object_name)) == 1
-
-
-def test_output_format_options(inspector):
-    output_format = find_widget(inspector, QComboBox, names.DETECTION_INSPECTOR_OUTPUT_FORMAT)
-
-    assert output_format.count() == len(OutputType)
-
-    for index, output_type in enumerate(OutputType):
-        assert output_format.itemData(index) == output_type
-
-
-def test_frame_start_cannot_exceed_frame_end(inspector):
-    frame_start = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_START)
-    frame_end = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_END)
-
-    frame_end.setValue(10)
-    frame_start.setValue(20)
-
-    assert frame_start.value() == 20
-    assert frame_end.value() == 20
-
-
-def test_frame_start_changed_signal_is_emitted(qtbot, inspector):
-    frame_start = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_START)
-
-    with qtbot.waitSignal(inspector.frame_start_changed) as blocker:
-        frame_start.setValue(10)
-
-    assert blocker.args == [10]
-
-
-def test_frame_end_cannot_be_lower_than_frame_start(inspector):
-    frame_start = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_START)
-    frame_end = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_END)
-
-    frame_start.setValue(10)
-    frame_end.setValue(5)
-
-    assert frame_start.value() == 5
-    assert frame_end.value() == 5
-
-
-def test_frame_end_changed_signal_is_emitted(qtbot, inspector):
-    frame_end = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_FRAME_END)
-
-    with qtbot.waitSignal(inspector.frame_end_changed) as blocker:
-        frame_end.setValue(10)
-
-    assert blocker.args == [10]
-
-
-def test_output_folder_changed_signal_is_emitted(qtbot, inspector, tmp_path):
-    output_folder = find_widget(inspector, QLineEdit, names.DETECTION_INSPECTOR_OUTPUT_FOLDER)
-
-    with qtbot.waitSignal(inspector.output_folder_changed) as blocker:
-        output_folder.setText(str(tmp_path))
-
-    assert blocker.args == [tmp_path]
-
-
-def test_browse_output_folder(monkeypatch, inspector, tmp_path):
-    output_folder = find_widget(inspector, QLineEdit, names.DETECTION_INSPECTOR_OUTPUT_FOLDER)
-    browse_button = find_widget(inspector, QPushButton, names.DETECTION_INSPECTOR_OUTPUT_BROWSE_BUTTON)
-
-    monkeypatch.setattr(
-        QFileDialog,
-        "getExistingDirectory",
-        lambda *args: str(tmp_path),
-    )
-
-    browse_button.click()
-
-    assert output_folder.text() == str(tmp_path)
 
 
 def test_detection_status_is_updated(inspector):
@@ -144,14 +61,33 @@ def test_find_blobs_clicked_signal_is_emitted(qtbot, inspector):
         find_blobs_button.click()
 
 
-def test_output_format_changed_signal_is_emitted(qtbot, inspector):
-    output_format = find_widget(inspector, QComboBox, names.DETECTION_INSPECTOR_OUTPUT_FORMAT)
-    output_type = list(OutputType)[1]
+def test_reset_button_emits_signal(qtbot, inspector):
+    reset_btn = find_widget(inspector, QPushButton, names.DETECTION_INSPECTOR_RESET_BUTTON)
+    assert reset_btn.text() == texts.BUTTON_RESET_DEFAULTS
 
-    with qtbot.waitSignal(inspector.output_format_changed) as blocker:
-        output_format.setCurrentIndex(1)
+    with qtbot.waitSignal(inspector.reset_requested):
+        reset_btn.click()
 
-    assert blocker.args == [output_type]
+
+def test_normalization_warning_hidden_by_default_and_red_when_disabled(inspector):
+    assert inspector._update_on_change_info.isHidden()
+    assert inspector._find_blob_button_info.isHidden()
+    assert DARK_COLORS.danger in inspector._update_on_change_info.styleSheet()
+    assert DARK_COLORS.danger in inspector._find_blob_button_info.styleSheet()
+
+    inspector.disable_update_on_change(True)
+    inspector.disable_find_blob(True)
+    assert not inspector._update_on_change_info.isHidden()
+    assert not inspector._find_blob_button_info.isHidden()
+
+    inspector.apply_theme(LIGHT_COLORS)
+    assert LIGHT_COLORS.danger in inspector._update_on_change_info.styleSheet()
+    assert LIGHT_COLORS.danger in inspector._find_blob_button_info.styleSheet()
+
+    inspector.disable_update_on_change(False)
+    inspector.disable_find_blob(False)
+    assert inspector._update_on_change_info.isHidden()
+    assert inspector._find_blob_button_info.isHidden()
 
 
 @pytest.mark.parametrize(
@@ -170,15 +106,6 @@ def test_checkbox_emits_signal(qtbot, inspector, object_name, signal_name):
         checkbox.setChecked(True)
 
     assert blocker.args == [True]
-
-
-def test_workers_changed_signal_is_emitted(qtbot, inspector):
-    workers = find_widget(inspector, QSpinBox, names.DETECTION_INSPECTOR_WORKERS)
-
-    with qtbot.waitSignal(inspector.workers_changed) as blocker:
-        workers.setValue(5)
-
-    assert blocker.args == [5]
 
 
 @pytest.mark.parametrize(
@@ -251,7 +178,7 @@ def test_blob_detection_inspector_set_params_blocks_signals_and_roundtrips(inspe
     inspector._diameter_z_equals_xy.setChecked(True)
     emitted.clear()
 
-    custom = BlobParams(
+    custom = DetectionConfig(
         diameter_xy_um=12.0,
         diameter_z_um=48.0,
         threshold=0.35,
@@ -270,7 +197,9 @@ def test_blob_detection_inspector_set_params_blocks_signals_and_roundtrips(inspe
     inspector.set_enabled_state(False)
     assert not inspector._diameter_xy.isEnabled()
     assert not inspector._find_blobs_button.isEnabled()
+    assert not inspector._reset_button.isEnabled()
 
     inspector.set_enabled_state(True)
     assert inspector._diameter_xy.isEnabled()
     assert inspector._find_blobs_button.isEnabled()
+    assert inspector._reset_button.isEnabled()

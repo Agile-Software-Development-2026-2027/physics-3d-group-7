@@ -7,7 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject
 
-from apkit4d.core.models import TrackingConfig
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -31,6 +31,16 @@ def _format_step_title(step: PipelineStep) -> str:
     if step == PipelineStep.ROI:
         return "ROI"
     return step.value.replace("_", " ").title()
+
+
+def format_duration(seconds: float) -> str:
+    """Format elapsed or estimated duration as MM:SS or HH:MM:SS."""
+    total_seconds = max(0, int(round(seconds)))
+    hours, rem = divmod(total_seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 class PipelineController(QObject):
@@ -60,10 +70,12 @@ class PipelineController(QObject):
         self._target_step: PipelineStep | None = None
         self._failure_stats: tuple[str, str] | None = None
         self._batch_message: tuple[str, str] | None = None
-        self._batch_runner: Callable[[], None] | None = None
+        self._progress_stats: tuple[str, str, int, int] | None = None
+        self._stage_runners: dict[PipelineStep, Callable[[], None]] = {}
 
         # 1. Connect Model events -> View
         self._model.step_status_changed.connect(self._on_step_status_changed)
+        self._model.step_params_changed.connect(self._on_model_step_params_changed)
         self._model.pipeline_reset.connect(self._on_pipeline_reset)
 
         # 2. Connect View events -> Controller / Model
@@ -75,6 +87,44 @@ class PipelineController(QObject):
 
         # Synchronize initial state
         self._sync_view()
+
+    def refresh_stage_gates(self) -> None:
+        """Re-evaluate stage play button enabled states against model prerequisites."""
+        self._sync_detection_gate()
+
+    def _will_execute_detection(self, target_step: PipelineStep) -> bool:
+        det_idx = PIPELINE_STEP_ORDER.index(PipelineStep.DETECTION)
+        target_idx = PIPELINE_STEP_ORDER.index(target_step)
+        if target_idx < det_idx:
+            return False
+        if any(self._model.is_step_dirty(step) for step in PIPELINE_STEP_ORDER[: det_idx + 1]):
+            return True
+        return self._model.get_status(PipelineStep.DETECTION) != StepStatus.COMPLETED
+
+    def _sync_detection_gate(self) -> None:
+        normalized = self._model.get_preproc_params().normalization_enabled
+        has_clean_detection = (
+            self._model.get_status(PipelineStep.DETECTION) == StepStatus.COMPLETED
+            and not self._model.is_step_dirty(PipelineStep.PREPROCESSING)
+            and not self._model.is_step_dirty(PipelineStep.ROI)
+        )
+        blocked = (not normalized) and (not has_clean_detection)
+
+        for step in (PipelineStep.DETECTION, PipelineStep.TRACKING, PipelineStep.BATCH):
+            play_btn = self._view.get_play_button(step)
+            if play_btn is None:
+                continue
+            if blocked:
+                play_btn.setEnabled(False)
+                play_btn.setToolTip(texts.DETECTION_REQUIRES_NORMALIZATION)
+            else:
+                play_btn.setToolTip(texts.TOOLTIP_PLAY_STAGE)
+                can_enable = (
+                    self._view.batch_inspector.isEnabled()
+                    if step == PipelineStep.BATCH
+                    else self._view.stages_enabled
+                )
+                play_btn.setEnabled(can_enable)
 
     @property
     def model(self) -> PipelineModel:
@@ -189,7 +239,28 @@ class PipelineController(QObject):
         Args:
             target_step: The target PipelineStep or step string.
         """
+        if isinstance(target_step, str):
+            try:
+                target_step = PipelineStep(target_step)
+            except ValueError:
+                return
+
+        if not self._model.get_preproc_params().normalization_enabled and self._will_execute_detection(
+            target_step
+        ):
+            if self._model.is_step_dirty(PipelineStep.PREPROCESSING):
+                self._model.invalidate_from(PipelineStep.DETECTION)
+            self._target_step = None
+            self._sync_detection_gate()
+            self.report_stage_failure(
+                texts.STATS_DETECTION_BLOCKED_SUMMARY,
+                texts.DETECTION_REQUIRES_NORMALIZATION,
+            )
+            return
+
+        self._failure_stats = None
         self._batch_message = None
+        self._progress_stats = None
         planned_steps = self.plan_up_to(target_step)
         if not planned_steps:
             return
@@ -207,26 +278,37 @@ class PipelineController(QObject):
     def reset_pipeline(self) -> None:
         """Reset all stages to IDLE and clear stats."""
         self._target_step = None
+        self._failure_stats = None
+        self._progress_stats = None
         self._model.reset_all()
 
     def _sync_view(self) -> None:
         """Synchronize the view with current model statuses and statistics."""
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, self._model.get_status(step))
+        self._sync_detection_gate()
         self._update_pipeline_stats()
 
     def _on_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
         """Handle status updates emitted by the model."""
         self._view.set_step_status(step, status)
-        if step == PipelineStep.BATCH and status == StepStatus.RUNNING and self._batch_runner is not None:
-            self._batch_runner()
+        self._sync_detection_gate()
+        if status == StepStatus.RUNNING:
+            self._failure_stats = None
+            self._progress_stats = None
+            runner = self._stage_runners.get(step)
+            if runner is not None:
+                runner()
 
     def _on_pipeline_reset(self) -> None:
         """Handle model reset event."""
         self._target_step = None
+        self._failure_stats = None
         self._batch_message = None
+        self._progress_stats = None
         for step in PIPELINE_STEP_ORDER:
             self._view.set_step_status(step, StepStatus.IDLE)
+        self._sync_detection_gate()
         self._update_pipeline_stats()
 
     def _on_view_param_changed(self, step_name: str, param_name: str, value: Any) -> None:
@@ -247,29 +329,108 @@ class PipelineController(QObject):
             return
 
         self._model.reset_step_params(step)
-
-        if step == PipelineStep.TRACKING:
-            config = TrackingConfig(**self._model.get_step_params(step))
-            self._view.set_tracking_params(config)
         self._update_pipeline_stats()
 
+    def _on_model_step_params_changed(self, step: PipelineStep) -> None:
+        """Keep stage inspector widgets synchronized with programmatic model parameter updates."""
+        if step == PipelineStep.PREPROCESSING:
+            self._sync_detection_gate()
+        elif step == PipelineStep.DETECTION:
+            blob_params = DetectionConfig(**self._model.get_step_params(step))
+            self._view.set_detection_params(blob_params)
+        elif step == PipelineStep.TRACKING:
+            config = TrackingConfig(**self._model.get_step_params(step))
+            self._view.set_tracking_params(config)
+
     def report_stage_failure(self, summary: str, details: str) -> None:
+        self._progress_stats = None
         self._failure_stats = (summary, details)
         self._update_pipeline_stats()
 
+    def report_stage_progress(
+        self,
+        step: PipelineStep,
+        *,
+        done: int = 0,
+        total: int = 0,
+        elapsed_seconds: float | None = None,
+        item_label: str = "items",
+    ) -> None:
+        """Report live progress, elapsed time, and ETA for a running stage."""
+        if self._model.get_status(step) != StepStatus.RUNNING:
+            return
+
+        step_title = _format_step_title(step)
+        completed_steps = [
+            _format_step_title(s)
+            for s in PIPELINE_STEP_ORDER
+            if self._model.get_status(s) == StepStatus.COMPLETED
+        ]
+        completed_str = ", ".join(completed_steps) if completed_steps else "None"
+        target_str = _format_step_title(self._target_step or step)
+        elapsed_str = format_duration(elapsed_seconds) if elapsed_seconds is not None else "00:00"
+
+        if total > 0:
+            clamped_done = max(0, min(done, total))
+            remaining = max(0, total - clamped_done)
+            pct = int(round(100 * clamped_done / total))
+            if remaining == 0:
+                eta_str = "00:00"
+            elif elapsed_seconds is not None and elapsed_seconds > 0 and clamped_done > 0:
+                eta_str = format_duration(elapsed_seconds * remaining / clamped_done)
+            else:
+                eta_str = "--:--"
+
+            summary = texts.STATS_WORKING_PROGRESS_SUMMARY.format(
+                step=step_title,
+                done=clamped_done,
+                total=total,
+                items=item_label,
+                pct=pct,
+            )
+            details = texts.STATS_WORKING_PROGRESS_DETAILS.format(
+                step=step_title,
+                done=clamped_done,
+                total=total,
+                items=item_label,
+                remaining=remaining,
+                elapsed=elapsed_str,
+                eta=eta_str,
+                target=target_str,
+                completed=completed_str,
+            )
+            self._progress_stats = (summary, details, clamped_done, total)
+        else:
+            summary = texts.STATS_WORKING_ELAPSED_SUMMARY.format(step=step_title, elapsed=elapsed_str)
+            details = texts.STATS_WORKING_INDETERMINATE_DETAILS.format(
+                step=step_title,
+                elapsed=elapsed_str,
+                target=target_str,
+                completed=completed_str,
+            )
+            self._progress_stats = (summary, details, 0, 0)
+
+        self._update_pipeline_stats()
+
+    def set_stage_runner(self, step: PipelineStep, runner: Callable[[], None]) -> None:
+        """Register the runner invoked whenever `step` transitions to RUNNING."""
+        self._stage_runners[step] = runner
+
     def set_batch_runner(self, runner: Callable[[], None]) -> None:
         """Register the export handler invoked only when Batch enters RUNNING."""
-        self._batch_runner = runner
+        self.set_stage_runner(PipelineStep.BATCH, runner)
 
     def report_batch(self, summary: str, details: str, status: StepStatus) -> None:
         """Report export through the authoritative pipeline model and shared status panel."""
         self._model.set_step_status(PipelineStep.BATCH, status)
         self._batch_message = (summary, details)
         if status != StepStatus.RUNNING:
+            self._progress_stats = None
             self._target_step = None
         self._update_pipeline_stats()
 
     def clear_batch_status(self) -> None:
+        self._progress_stats = None
         self._batch_message = None
         self._update_pipeline_stats()
 
@@ -280,13 +441,6 @@ class PipelineController(QObject):
         Shows what the pipeline is currently doing (if a step is running) or what
         has been completed, avoiding transient event logs or error messages.
         """
-        if self._batch_message is not None:
-            summary, details = self._batch_message
-            self._view.set_stats_summary(summary)
-            self._view.set_stats_details(details)
-            return
-        self._view.bottom_stats.progress.hide()
-
         running_step: PipelineStep | None = None
         completed_steps: list[PipelineStep] = []
 
@@ -297,8 +451,27 @@ class PipelineController(QObject):
             elif status == StepStatus.COMPLETED:
                 completed_steps.append(step)
 
-        # Active execution in progress: show what it is doing
+        if self._batch_message is not None:
+            summary, details = self._batch_message
+            self._view.set_stats_summary(summary)
+            self._view.set_stats_details(details)
+            if running_step == PipelineStep.BATCH and self._progress_stats is not None:
+                _, _, done, total = self._progress_stats
+                self._view.set_stats_progress(done, total)
+            elif running_step != PipelineStep.BATCH:
+                self._progress_stats = None
+                self._view.hide_stats_progress()
+            return
+
+        # Active execution in progress: show live telemetry or generic working summary
         if running_step is not None:
+            if self._progress_stats is not None:
+                summary, details, done, total = self._progress_stats
+                self._view.set_stats_summary(summary)
+                self._view.set_stats_details(details)
+                self._view.set_stats_progress(done, total)
+                return
+            self._view.hide_stats_progress()
             step_title = _format_step_title(running_step)
             self._view.set_stats_summary(texts.STATS_WORKING_SUMMARY.format(step=step_title))
             completed_str = (
@@ -314,6 +487,9 @@ class PipelineController(QObject):
                 )
             )
             return
+
+        self._progress_stats = None
+        self._view.hide_stats_progress()
 
         if self._failure_stats is not None:
             summary, details = self._failure_stats

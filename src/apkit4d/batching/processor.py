@@ -26,12 +26,11 @@ from apkit4d.batching.worker import (
     cap_workers,
     detect_frame,
 )
-from apkit4d.core.models import BatchConfig
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import table_path
 from apkit4d.pipeline.contracts import DetectionSink, SequenceDetectionResult
+from apkit4d.pipeline.frame_stages import coerce_roi
 from apkit4d.pipeline.sinks import InMemoryDetectionSink, StreamingDiskDetectionSink
 
 logger = logging.getLogger(__name__)
@@ -93,8 +92,8 @@ class BatchProcessor:
     def __init__(
         self,
         config: BatchConfig | None = None,
-        preproc_params: PreprocParams | None = None,
-        blob_params: BlobParams | None = None,
+        preproc_params: PreprocessingConfig | None = None,
+        blob_params: DetectionConfig | None = None,
     ) -> None:
         """Initialize the batch processor with configuration parameters.
 
@@ -104,8 +103,8 @@ class BatchProcessor:
             blob_params: Blob detection parameters. If None, defaults are used.
         """
         self.config = config or BatchConfig()
-        self.preproc_params = preproc_params or PreprocParams()
-        self.blob_params = blob_params or BlobParams()
+        self.preproc_params = preproc_params or PreprocessingConfig()
+        self.blob_params = blob_params or DetectionConfig()
 
     def _resolve_source(
         self,
@@ -192,8 +191,8 @@ class BatchProcessor:
             time_start = time.time()
             completed_frames = 0
 
-            pp_dict = self.preproc_params.to_dict()
-            bp_dict = self.blob_params.to_dict()
+            pp_dict = self.preproc_params.model_dump()
+            bp_dict = self.blob_params.model_dump()
 
             logger.info(
                 "Starting sequence detection (%d frames, workers=%d, sink=%s)",
@@ -247,6 +246,7 @@ class BatchProcessor:
 
             elapsed_seconds = time.time() - time_start
             info_dict = asdict(info) if is_dataclass(info) else info.__dict__
+            roi_used = coerce_roi(roi)  # saved with the results, so that opening them restores it
 
             metadata: dict[str, Any] = {
                 "czi": str(file_path),
@@ -257,6 +257,7 @@ class BatchProcessor:
                 "info": info_dict,
                 "preproc": pp_dict,
                 "blob": bp_dict,
+                "roi": roi_used.to_dict() if roi_used is not None else None,
                 "n_blobs": 0,
                 "format": fmt,
                 "formato": fmt,
@@ -348,8 +349,8 @@ def run_batch(
     czi: str | Path | CziSource,
     channel: int = 0,
     config: BatchConfig | None = None,
-    preproc_params: PreprocParams | None = None,
-    blob_params: BlobParams | None = None,
+    preproc_params: PreprocessingConfig | None = None,
+    blob_params: DetectionConfig | None = None,
     t0: int | None = None,
     t1: int | None = None,
     out_dir: str | Path | None = None,
@@ -388,8 +389,8 @@ def run_batch(
 def run(
     czi: str | Path | CziSource,
     channel: int = 0,
-    pp: PreprocParams | None = None,
-    bp: BlobParams | None = None,
+    pp: PreprocessingConfig | None = None,
+    bp: DetectionConfig | None = None,
     t0: int | None = None,
     t1: int | None = None,
     out_dir: str | Path = Path("data/processed"),

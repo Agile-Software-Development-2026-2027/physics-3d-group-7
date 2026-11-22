@@ -1,15 +1,14 @@
 import numpy as np
 import pytest
 
-from apkit4d.detection.preprocessing import BgMode, PreprocParams
+from apkit4d.core.models import BgMode, PreprocessingConfig
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.volume_controller import VolumeController
-from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepStatus
+from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.stages import StageInspectorView
-from apkit4d.gui.views.stages.preprocessing_section import PreprocessingSection
+from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
 
 
 class SignalCatcher:
@@ -40,7 +39,7 @@ def right_panel(qtbot):
 def test_preproc_defaults_match_preproc_params_dataclass_default(right_panel):
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
     params = section.get_preproc_params()
-    assert params == PreprocParams()
+    assert params == PreprocessingConfig()
 
 
 def test_widget_changes_emits_signal(right_panel: RightPanel, qtbot):
@@ -83,7 +82,7 @@ def test_set_params_without_emitting_signals(right_panel: RightPanel, qtbot):
     section = right_panel.get_section(PipelineStep.PREPROCESSING)
     catcher = SignalCatcher(right_panel)
 
-    new_params = PreprocParams(
+    new_params = PreprocessingConfig(
         denoise_xy_scale_um=1.1,
         denoise_z_scale_um=2.2,
         bg_mode=BgMode.WIDE_GAUSSIAN,
@@ -156,6 +155,7 @@ def test_clicking_suggest_window_populates_ui_and_updates_model(qtbot, qapp) -> 
     controller._volume_controller = vol_ctrl
 
     section = window.right_panel.get_section(PipelineStep.PREPROCESSING)
+    window.right_panel.set_stages_enabled(True)
     section.suggest_window_clicked.connect(controller._on_suggest_window_clicked)
     vol_ctrl.window_suggested.connect(controller._on_window_suggested)
 
@@ -177,28 +177,12 @@ def test_clicking_suggest_window_populates_ui_and_updates_model(qtbot, qapp) -> 
     assert params.highest_intensity == pytest.approx(hi)
 
 
-def test_preproc_complete_button_enabled_only_when_roi_completed(right_panel) -> None:
-    model = PipelineModel()
-    controller = PipelineController(model, right_panel)
-    section = right_panel.get_section(PipelineStep.PREPROCESSING)
-
-    assert not section.complete_btn.isEnabled()
-
-    model.set_step_status(PipelineStep.ROI, StepStatus.RUNNING)
-    assert not section.complete_btn.isEnabled()
-
-    controller.complete_stage(PipelineStep.ROI)
-    assert section.complete_btn.isEnabled()
-
-    controller.reset_pipeline()
-    assert not section.complete_btn.isEnabled()
-
-
 def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
-    section = PreprocessingSection()
+    section = PreprocessingInspector()
     qtbot.addWidget(section)
 
     assert isinstance(section, StageInspectorView)
+    assert not hasattr(section, "complete_btn")
 
     with qtbot.waitSignal(section.param_changed) as param_blocker:
         section.denoise_xy_box.setValue(3.5)
@@ -207,21 +191,16 @@ def test_preprocessing_section_standalone_without_right_panel(qtbot) -> None:
     with qtbot.waitSignal(section.reset_requested):
         section.reset_btn.click()
 
-    with qtbot.waitSignal(section.complete_requested):
-        section.complete_btn.click()
-
     section.set_enabled_state(False)
     assert not section.denoise_xy_box.isEnabled()
-    assert not section.complete_btn.isEnabled()
 
     section.set_enabled_state(True)
     assert section.denoise_xy_box.isEnabled()
-    assert section.complete_btn.isEnabled()
     assert not section.bg_percentile.isEnabled()  # BgMode.NONE keeps percentile disabled
 
 
 def test_set_lowest_and_highest_intensity_block_signals(qtbot) -> None:
-    section = PreprocessingSection()
+    section = PreprocessingInspector()
     qtbot.addWidget(section)
 
     emitted: list[tuple[str, object]] = []

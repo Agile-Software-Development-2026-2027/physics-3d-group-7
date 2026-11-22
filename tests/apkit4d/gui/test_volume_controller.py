@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from apkit4d.core.models import PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
 from apkit4d.gui.views.main_window import MainWindow
@@ -51,7 +51,7 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
 
     # Wait for frame 0 read and default preprocessing to complete
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
-    assert controller.preproc_params == PreprocParams()
+    assert controller.preproc_params == PreprocessingConfig()
     assert len(view.grids) == 1
     first_grid, reset_cam, force_update_1 = view.grids[0]
     assert reset_cam is True
@@ -59,7 +59,7 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     assert first_grid.n_points == 8 * 16 * 16
 
     # Apply preprocessing parameters with normalization enabled so reprocessing runs
-    params = PreprocParams(
+    params = PreprocessingConfig(
         normalization_enabled=True,
         lowest_intensity=50.0,
         highest_intensity=150.0,
@@ -74,7 +74,7 @@ def test_volume_controller_raw_and_preproc(qtbot) -> None:
     assert force_update_2 is True
 
     # Apply default PreprocParams (normalization_enabled=False) to reset preprocessing
-    default_params = PreprocParams()
+    default_params = PreprocessingConfig()
     controller.apply_preproc_params(default_params)
     assert controller.preproc_params == default_params
     qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
@@ -99,7 +99,7 @@ def test_volume_controller_preproc_failed(qtbot, monkeypatch) -> None:
 
     monkeypatch.setattr("apkit4d.gui.controllers.volume_controller.preprocess", broken_preprocess)
 
-    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
+    controller.apply_preproc_params(PreprocessingConfig(normalization_enabled=True))
     qtbot.waitUntil(lambda: "Preprocessing failed" in window.statusBar().currentMessage(), timeout=5000)
     wait_for_background_tasks(timeout_s=2.0)
 
@@ -131,7 +131,7 @@ def test_volume_controller_preproc_runs_on_roi(qtbot, monkeypatch) -> None:
     controller.set_roi(roi)
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
-    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
+    controller.apply_preproc_params(PreprocessingConfig(normalization_enabled=True))
     qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
 
     assert len(captured) >= 1
@@ -175,7 +175,7 @@ def test_set_roi_re_triggers_preprocessing(qtbot, monkeypatch) -> None:
     qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
 
     # Enable preprocessing first
-    controller.apply_preproc_params(PreprocParams(normalization_enabled=True))
+    controller.apply_preproc_params(PreprocessingConfig(normalization_enabled=True))
     qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
 
     captured: list[NDArray] = []
@@ -332,7 +332,7 @@ def test_suggest_intensity_window_uses_full_and_roi_volumes(qtbot) -> None:
     def test_apply_preproc_params_announces_a_new_image_on_the_same_crop(qtbot) -> None:
         controller, _, source, announced = open_recording(qtbot)
 
-        controller.apply_preproc_params(PreprocParams(lowest_intensity=50.0, highest_intensity=150.0))
+        controller.apply_preproc_params(PreprocessingConfig(lowest_intensity=50.0, highest_intensity=150.0))
         qtbot.waitUntil(lambda: len(announced) == 2, timeout=5000)
 
         assert announced[1].frame == announced[0].frame

@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QDoubleSpinBox, QPushButton, QWidget
+from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QWidget
 
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.gui.constants import names
+from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.roi_controller import RoiStageController
@@ -144,6 +144,23 @@ def test_cancel_after_spinbox_edit_preserves_previously_accepted_roi(qtbot) -> N
     assert h.playback_bar.isEnabled()
 
 
+def test_show_roi_crops_the_volume_and_fills_the_inspector_without_running_stage_1(qtbot) -> None:
+    # the ROI of saved results: the stage status is restored by whoever opens them
+    h = _make_harness(qtbot)
+    _accept_bounds(h, RegionOfInterest(x_min=5.0, x_max=60.0, y_min=5.0, y_max=60.0, z_min=0.0, z_max=30.0))
+    h.model.reset_all()
+    saved = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+
+    h.controller.show_roi(saved)
+
+    assert h.vol.roi == saved
+    assert h.inspector.get_roi() == saved
+    status = h.inspector.findChild(QLabel, names.ROI_INSPECTOR_STATUS_LABEL)
+    assert status is not None and status.text() != texts.INSPECTOR_STATUS_ROI_FULL
+    assert not h.controller.has_undo  # nothing to go back to: the ROI comes with the results
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+
+
 def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     h = _make_harness(qtbot)
     accepted_roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
@@ -228,3 +245,23 @@ def test_roi_actions_ignored_when_no_source_loaded(qtbot) -> None:
     assert h.roi_view.started == 0
     assert h.roi_view.previews == []
     assert isinstance(h.playback_bar, QWidget)
+
+
+def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
+    """Running Stage 1 without interactive box selection commits full volume or active crop."""
+    h = _make_harness(qtbot)
+    assert h.vol.roi is None
+
+    h.pipeline.run_up_to(PipelineStep.ROI)
+
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.vol.roi is None
+
+    crop = RegionOfInterest(x_min=5.0, x_max=45.0, y_min=5.0, y_max=35.0, z_min=2.0, z_max=18.0)
+    _accept_bounds(h, crop)
+    h.pipeline.reset_pipeline()
+    h.pipeline.run_up_to(PipelineStep.ROI)
+
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_step_params(PipelineStep.ROI) == crop.to_dict()

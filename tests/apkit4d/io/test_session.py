@@ -1,12 +1,14 @@
 """Tests for generalized precomputed session models and source adapters."""
 
+import copy
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import pytest
 
-from apkit4d.core.models import TrackingConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziInfo
 from apkit4d.io.mock import MockConfig, create_mock_source
 from apkit4d.io.session import (
@@ -64,7 +66,7 @@ def test_precomputed_session_effective_blobs_and_step_inference() -> None:
     roi_only = PrecomputedSession(roi=RegionOfInterest(0.0, 5.0, 0.0, 5.0, 0.0, 5.0))
     assert infer_completed_steps(roi_only) == ("roi",)
 
-    preproc_only = PrecomputedSession(preproc_params=PreprocParams())
+    preproc_only = PrecomputedSession(preproc_params=PreprocessingConfig())
     assert infer_completed_steps(preproc_only) == ("roi", "preprocessing")
 
     blobs_df = pd.DataFrame({"frame": [0], "x_um": [1.0], "y_um": [1.0], "z_um": [1.0]})
@@ -79,7 +81,7 @@ def test_precomputed_session_effective_blobs_and_step_inference() -> None:
 
     explicit = PrecomputedSession(
         tracking=tracking_res,
-        blob_params=BlobParams(),
+        blob_params=DetectionConfig(),
         completed_steps=("roi", "preprocessing"),
     )
     assert infer_completed_steps(explicit) == ("roi", "preprocessing")
@@ -96,6 +98,20 @@ def test_precomputed_frame_source_delegates_and_matches_protocol() -> None:
     assert int(wrapped.read(2)[0, 0, 0]) == 2
     wrapped.close()
     assert base.closed
+
+
+def test_precomputed_frame_source_delegates_the_other_attributes_of_the_source() -> None:
+    # detection reads `path` and `channel` of a CziSource when it runs again on a loaded recording
+    base = _DummyFrameSource()
+    base.path = Path("sample.czi")
+    base.channel = 1
+    wrapped = PrecomputedFrameSource(base, PrecomputedSession())
+
+    assert wrapped.path == Path("sample.czi")
+    assert wrapped.channel == 1
+    assert copy.copy(wrapped).channel == 1
+    with pytest.raises(AttributeError):
+        _ = wrapped.missing
 
 
 def test_mock_frame_source_satisfies_precomputed_source_protocol() -> None:

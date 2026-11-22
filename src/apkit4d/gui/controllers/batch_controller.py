@@ -1,22 +1,30 @@
 """Export completed pipeline data using the existing table writer."""
 
+import time
 from functools import partial
 from pathlib import Path
 
+import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
 from apkit4d.batching.export import save_batch_results
 from apkit4d.batching.processor import BatchResult
+from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.task_runner import TaskRunner
+from apkit4d.gui.controllers.trajectory_linking_controller import TrajectoryLinkingController
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 
 
 class BatchController(QObject):
-    """Save pipeline results when its Batch stage enters RUNNING."""
+    """Save pipeline results when its Batch stage enters RUNNING.
+
+    The blobs are always saved. The tracks are saved too, with their configuration, when the
+    Tracking stage is completed and `tracking` holds its result.
+    """
 
     progress_changed = Signal(int, int)
 
@@ -26,18 +34,22 @@ class BatchController(QObject):
         files: FileController,
         pipeline: PipelineController,
         parent: QObject | None = None,
+        *,
+        tracking: TrajectoryLinkingController | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window
         self._view = window.right_panel.batch_inspector
         self._pipeline = pipeline
+        self._tracking = tracking
         self._source: tuple[Path, int] | None = None
         self._task: int | None = None
+        self._batch_started_at: float = 0.0
         self._runner = TaskRunner(self)
         self._runner.succeeded.connect(self._succeeded)
         self._runner.failed.connect(self._failed)
         self.progress_changed.connect(self._progress)
-        pipeline.set_batch_runner(self.run)
+        pipeline.set_stage_runner(PipelineStep.BATCH, self.run)
         files.loaded.connect(self.set_source)
         files.closed.connect(self.clear_source)
         self._set_enabled()
@@ -45,6 +57,7 @@ class BatchController(QObject):
     def set_source(self, path: Path, source: FrameSource) -> None:
         self._pipeline.reset_pipeline()
         self._source = (path, getattr(source, "channel", 0)) if source.info.n_t > 0 else None
+        self._view.set_default_output_dir(str(path.parent))
         self._view.output_dir.setText(str(path.parent))
         for field in (self._view.first_frame, self._view.last_frame):
             field.setRange(1, max(1, source.info.n_t))
@@ -67,6 +80,7 @@ class BatchController(QObject):
         button = self._window.right_panel.get_play_button(PipelineStep.BATCH)
         if button is not None:
             button.setEnabled(enabled)
+        self._pipeline.refresh_stage_gates()
 
     def run(self) -> None:
         if (
@@ -92,6 +106,7 @@ class BatchController(QObject):
             last = self._view.last_frame.value() - 1
             if first > last:
                 raise ValueError("First frame cannot be greater than last frame.")
+            tracks, tracking_config = self._tracks_to_save()
             job = partial(
                 save_batch_results,
                 detections=detections,
@@ -101,25 +116,35 @@ class BatchController(QObject):
                 first=first,
                 last=last,
                 progress=self.progress_changed.emit,
+                tracks=tracks,
+                tracking_config=tracking_config,
             )
+            self._batch_started_at = time.monotonic()
             self._progress(0, len(detections))
             self._task = self._runner.run(job)
             self._set_enabled()
         except Exception as error:
             self._show_error(error)
 
+    def _tracks_to_save(self) -> tuple[pd.DataFrame | None, TrackingConfig | None]:
+        """The tracks of the Tracking stage and the configuration that linked them, if it is completed."""
+        result = self._tracking.result if self._tracking is not None else None
+        if result is None or self._pipeline.model.get_status(PipelineStep.TRACKING) != StepStatus.COMPLETED:
+            return None, None
+        return result.tracks, TrackingConfig(**self._pipeline.model.get_step_params(PipelineStep.TRACKING))
+
     def _progress(self, done: int, total: int) -> None:
-        stats = self._window.right_panel.bottom_stats
         if self._pipeline.model.get_status(PipelineStep.BATCH) != StepStatus.RUNNING:
             return
-        stats.progress.setRange(0, max(1, total))
-        stats.progress.setValue(done if total else 1)
-        stats.progress.show()
-        self._pipeline.report_batch(
-            texts.BATCH_PROGRESS.format(done=done, total=total),
-            texts.BATCH_WORKING,
-            StepStatus.RUNNING,
+        elapsed = time.monotonic() - self._batch_started_at if self._batch_started_at else 0.0
+        self._pipeline.report_stage_progress(
+            PipelineStep.BATCH,
+            done=done,
+            total=total,
+            elapsed_seconds=elapsed,
+            item_label="detections",
         )
+        self._window.right_panel.set_stats_progress(done, total)
 
     def _succeeded(self, task: int, result: object) -> None:
         if task != self._task:

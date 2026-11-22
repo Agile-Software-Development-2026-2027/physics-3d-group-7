@@ -3,8 +3,6 @@ Texts of the blob detection stage (3).
 """
 
 # blob detection inspector
-INSPECTOR_LABEL_FRAME_RANGE: str = "Frame range"
-INSPECTOR_TOOLTIP_FRAME_RANGE: str = "The frames range used by batch and linking (0-based, inclusive)."
 INSPECTOR_SECTION_DETECTION_PARAMETERS: str = "Detection parameters"
 INSPECTOR_LABEL_DIAMETER_XY: str = "Diameter XY (µm)"
 INSPECTOR_TOOLTIP_DIAMETER_XY: str = "Expected cell diameter in X and Y."
@@ -43,21 +41,12 @@ INSPECTOR_TOOLTIP_FIND_BLOBS: str = (
     "Nothing is saved to file."
 )
 INSPECTOR_STATUS_NO_BLOBS: str = "No blobs detected"
-INSPECTOR_SECTION_BATCH_PROCESSING: str = "Batch Processing"
-INSPECTOR_PLACEHOLDER_OUTPUT_FOLDER: str = "Choose output folder"
-INSPECTOR_DIALOG_OUTPUT_FOLDER: str = "Choose output folder"
-INSPECTOR_LABEL_OUTPUT_FOLDER: str = "Output folder"
-INSPECTOR_LABEL_WORKERS: str = "Workers"
-INSPECTOR_LABEL_FORMAT: str = "Format"
-INSPECTOR_BUTTON_RUN_BATCH: str = "Run batch t₀..t₁"
-INSPECTOR_TOOLTIP_RUN_BATCH: str = (
-    "Run detection on every frame from t0 to t1,\n "
-    "using the current ROI and detection parameters.\n "
-    "Runs in a separate process."
-)
 INSPECTOR_STATUS_DETECTING = "detecting blobs..."
 INSPECTOR_STATUS_NO_BLOBS_FOUND = "frame {frame}: no blobs found"
 INSPECTOR_STATUS_BLOBS_FOUND = "frame {frame}: {count} blobs (median volume {volume:.0f} µm³)"
 INSPECTOR_STATUS_DETECTION_FAILED = "detection failed: {reason}"
 INSPECTOR_BUTTON_DISABLED_INFO = "\u24d8 Normalize the volume to enable this button."
 INSPECTOR_CHECKBOX_DISABLED_INFO = "\u24d8 Normalize the volume to enable this checkbox."
+DETECTION_REQUIRES_NORMALIZATION = (
+    "Enable intensity normalization in Preprocessing before running blob detection."
+)

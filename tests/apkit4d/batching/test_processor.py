@@ -17,9 +17,8 @@ from apkit4d.batching.processor import (
     run_batch,
     stem_of,
 )
-from apkit4d.core.models import BatchConfig
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.io.czi import CziInfo, CziSource
 
 
@@ -79,8 +78,8 @@ class TestBatchProcessor:
         """Verify BatchProcessor sequential execution end-to-end."""
         out_dir = tmp_path / "processed"
         config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
-        bp = BlobParams(threshold=0.05, min_volume_um3=1.0)
-        pp = PreprocParams()
+        bp = DetectionConfig(threshold=0.05, min_volume_um3=1.0)
+        pp = PreprocessingConfig()
 
         progress_calls = []
 
@@ -121,6 +120,21 @@ class TestBatchProcessor:
         assert "info" in meta
         assert "preproc" in meta
         assert "blob" in meta
+
+    def test_the_roi_used_is_saved_with_the_results(self, mock_source: MagicMock, tmp_path: Path) -> None:
+        """The ROI given to the detection is in the metadata, so that opening the results restores it."""
+        processor = BatchProcessor(
+            config=BatchConfig(workers=1),
+            blob_params=DetectionConfig(threshold=0.05, min_volume_um3=1.0),
+        )
+        roi = RegionOfInterest(x_min=2.0, x_max=15.0, y_min=2.0, y_max=15.0, z_min=1.0, z_max=8.0)
+
+        cropped = processor.process(mock_source, t0=0, t1=0, out_dir=tmp_path / "cropped", roi=roi)
+        full = processor.process(mock_source, t0=0, t1=0, out_dir=tmp_path / "full")
+
+        assert cropped.metadata["roi"] == roi.to_dict()
+        assert json.loads(cropped.params_path.read_text())["roi"] == roi.to_dict()
+        assert full.metadata["roi"] is None
 
     def test_batch_processor_path_input(
         self, mock_czi_file: Path, mock_source: MagicMock, tmp_path: Path
@@ -215,8 +229,8 @@ class TestBatchProcessor:
         config = BatchConfig(workers=1, chunk_size=2, output_format="csv")
         processor = BatchProcessor(
             config=config,
-            preproc_params=PreprocParams(),
-            blob_params=BlobParams(threshold=0.05, min_volume_um3=1.0),
+            preproc_params=PreprocessingConfig(),
+            blob_params=DetectionConfig(threshold=0.05, min_volume_um3=1.0),
         )
 
         result = processor.process_sequence(mock_source, t0=0, t1=1)

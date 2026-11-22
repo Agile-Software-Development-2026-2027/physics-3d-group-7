@@ -33,10 +33,12 @@ class MainWindow(QMainWindow):
 
     Signals:
         file_opened: Emitted with the path of a .czi file once it has been accepted.
+        results_opened: Emitted with the path of the json of saved results chosen by the user.
         video_export_requested: Emitted when the user requests a video export.
     """
 
     file_opened = Signal(Path)
+    results_opened = Signal(Path)
     video_export_requested = Signal()
 
     def __init__(self) -> None:
@@ -130,6 +132,21 @@ class MainWindow(QMainWindow):
         self.file_opened.emit(path)
         return True
 
+    def choose_recording(self, name: str) -> Path | None:
+        """
+        Ask the user where the recording `name` is, when saved results cannot find it.
+
+        Args:
+            name: File name of the recording.
+
+        Returns:
+            The chosen file, or None if the user cancels.
+        """
+        path, _ = QFileDialog.getOpenFileName(
+            self, texts.FIND_RECORDING_TITLE.format(name=name), "", texts.FILE_DIALOG_FILTER
+        )
+        return Path(path) if path else None
+
     def _build_columns(self) -> None:
         splitter = GripSplitter(Qt.Orientation.Horizontal)
         splitter.setObjectName(names.COLUMNS_SPLITTER)
@@ -148,6 +165,13 @@ class MainWindow(QMainWindow):
         menu = self.menuBar().addMenu(texts.MENU_FILE)
         menu.setObjectName(names.FILE_MENU)
         self._add_action(menu, names.OPEN_ACTION, texts.ACTION_OPEN, shortcuts.OPEN, self._choose_file)
+        self._add_action(
+            menu,
+            names.OPEN_RESULTS_ACTION,
+            texts.ACTION_OPEN_RESULTS,
+            shortcuts.OPEN_RESULTS,
+            self._choose_results,
+        )
         self._add_action(
             menu,
             names.EXPORT_VIDEO_ACTION,
@@ -216,6 +240,13 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, texts.FILE_DIALOG_TITLE, "", texts.FILE_DIALOG_FILTER)
         if path:
             self.open_file(Path(path))
+
+    def _choose_results(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, texts.RESULTS_DIALOG_TITLE, "", texts.RESULTS_DIALOG_FILTER
+        )
+        if path:
+            self.results_opened.emit(Path(path))
 
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:

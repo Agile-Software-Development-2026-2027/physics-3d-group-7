@@ -653,6 +653,14 @@ class TestViewportRoiDragSelection:
         assert viewport.accept_roi_selection() is None
         assert len(accepted_rois) == 0
 
+        # Starting selection then accepting before drawing anything must leave mode INACTIVE
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+        assert viewport.accept_roi_selection() is None
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert len(accepted_rois) == 0
+        started_calls.clear()
+
         viewport.start_roi_selection()
         assert len(started_calls) == 1
 
