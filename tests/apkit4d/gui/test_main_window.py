@@ -6,8 +6,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QWidget
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui import app as gui_app
 from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, names, shortcuts, texts
@@ -178,7 +177,7 @@ def test_main_controller_apply_precomputed_session_supports_generic_session(qtbo
     )
     session = PrecomputedSession(
         tracking=TrackingResult(tracks=tracks, metadata={"num_tracks_retained": 1}),
-        blob_params=BlobParams(threshold=0.25),
+        blob_params=DetectionConfig(threshold=0.25),
         tracking_config=TrackingConfig(min_len=2),
     )
 

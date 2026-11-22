@@ -9,9 +9,7 @@ from typing import Any, assert_never
 import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
 
 
 class StepStatus(StrEnum):
@@ -250,13 +248,13 @@ class PipelineModel(QObject):
         """Return a copy of the configuration dictionary for `step`."""
         return dict(self._params[step])
 
-    def get_preproc_params(self) -> PreprocParams:
-        """Return the PreprocParams dataclass instance for the preprocessing step."""
-        return PreprocParams.from_dict(self._params[PipelineStep.PREPROCESSING])
+    def get_preproc_params(self) -> PreprocessingConfig:
+        """Return the PreprocessingConfig dataclass instance for the preprocessing step."""
+        return PreprocessingConfig(**self._params[PipelineStep.PREPROCESSING])
 
-    def set_preproc_params(self, params: PreprocParams) -> None:
-        """Update preprocessing parameters from a PreprocParams instance."""
-        self.update_step_params(PipelineStep.PREPROCESSING, **params.to_dict())
+    def set_preproc_params(self, params: PreprocessingConfig) -> None:
+        """Update preprocessing parameters from a PreprocessingConfig instance."""
+        self.update_step_params(PipelineStep.PREPROCESSING, **params.model_dump())
 
     def plan_execution(
         self,
@@ -319,12 +317,12 @@ class PipelineModel(QObject):
             case PipelineStep.ROI:
                 return {}  # TODO add default params
             case PipelineStep.PREPROCESSING:
-                return PreprocParams().to_dict()
+                return PreprocessingConfig().model_dump()
             case PipelineStep.DETECTION:
-                return BlobParams().to_dict()
-            case PipelineStep.BATCH:
-                return {}  # TODO add default params
+                return DetectionConfig().model_dump()
             case PipelineStep.TRACKING:
                 return TrackingConfig().model_dump()
+            case PipelineStep.BATCH:
+                return {}  # TODO add default params
             case _:
                 assert_never(step)

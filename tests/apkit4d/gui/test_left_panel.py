@@ -52,6 +52,7 @@ def test_open_section_is_tall_enough_for_its_content(panel) -> None:
         (names.OUTLINE_BOX, texts.BOX_OUTLINE),
         (names.TRAJECTORY_COLOR_MODE_BOX, texts.BOX_TRAJECTORY_COLOR_MODE),
         (names.TRAJECTORY_COLORMAP_BOX, texts.BOX_TRAJECTORY_COLORMAP),
+        (names.TRAJECTORY_TAIL_BOX, texts.BOX_TRAJECTORY_TAIL),
     ],
 )
 def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> None:
@@ -60,10 +61,10 @@ def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> No
 
 
 def test_box_properties_give_the_boxes_of_the_section(panel) -> None:
-    assert panel.colormap_box.objectName() == names.COLORMAP_BOX
-    assert panel.opacity_box.objectName() == names.OPACITY_BOX
-    assert panel.background_box.objectName() == names.BACKGROUND_BOX
-    assert panel.outline_box.objectName() == names.OUTLINE_BOX
+    assert panel.appearance_section.findChild(QWidget, names.COLORMAP_BOX) is not None
+    assert panel.appearance_section.findChild(QWidget, names.OPACITY_BOX) is not None
+    assert panel.appearance_section.findChild(QWidget, names.BACKGROUND_BOX) is not None
+    assert panel.appearance_section.findChild(QWidget, names.OUTLINE_BOX) is not None
 
 
 def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:
@@ -94,10 +95,13 @@ def test_main_controller_keeps_the_left_panel_on_the_active_theme(qtbot, qapp) -
 
 
 def test_each_box_holds_its_control(panel) -> None:
-    assert panel.colormap_box.findChild(QComboBox, names.COLORMAP_COMBO) is not None
-    assert panel.opacity_box.findChild(FrameSlider, names.OPACITY_SLIDER) is not None
-    assert panel.background_box.findChild(ColorButton, names.BACKGROUND_BUTTON) is not None
-    assert panel.outline_box.findChild(ColorButton, names.OUTLINE_BUTTON) is not None
+    assert panel.appearance_section.findChild(QComboBox, names.COLORMAP_COMBO) is not None
+    assert panel.appearance_section.findChild(FrameSlider, names.OPACITY_SLIDER) is not None
+    assert panel.appearance_section.findChild(ColorButton, names.BACKGROUND_BUTTON) is not None
+    assert panel.appearance_section.findChild(ColorButton, names.OUTLINE_BUTTON) is not None
+    assert panel.appearance_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX) is not None
+    assert panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO) is not None
+    assert panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO) is not None
 
 
 def test_colormap_combo_offers_the_colormaps_and_starts_on_the_first(panel) -> None:
@@ -170,7 +174,7 @@ def test_set_colors_shows_them_on_the_buttons(panel) -> None:
 def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, qtbot) -> None:
     traj_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
     blobs_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
-    tail_spin = panel.layers_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
+    tail_spin = panel.appearance_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
     mode_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
     cmap_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
 

@@ -2,7 +2,7 @@
 
 Summary
 
-1. Anisothropic Gaussian smoothing at the scale of the single blob
+1. Anisotropic Gaussian smoothing at the scale of the single blob
 2. Scale-normalized -LoG response along each axis: maximum closer to the center
    of an object, almost 0 in the flat background
 3. The seeds are the local maxima above the `threshold`. They have a
@@ -21,7 +21,6 @@ Something is _anisotropic_ if it has properties that depend on the direction of
 measurement. In this case, voxels are elongated along the Z axis w.r.t. X and Y.
 """
 
-from dataclasses import asdict, dataclass, fields
 from typing import Final, cast
 
 import numpy as np
@@ -30,6 +29,7 @@ from scipy import ndimage
 from skimage.segmentation import watershed
 
 from apkit4d.core.image import Image
+from apkit4d.core.models import DetectionConfig
 
 SQRT_3: Final[np.float64] = np.sqrt(3)
 
@@ -52,44 +52,7 @@ DETECTION_COLUMNS: Final[list[str]] = [
 ]
 
 
-@dataclass
-class BlobParams:
-    """User specified configuration for blob finding"""
-
-    LOG_THRESHOLD_MIN: float = 0.0
-    LOG_THRESHOLD_MAX: float = 5.0
-
-    diameter_xy_um: float = 15.0
-    diameter_z_um: float = 70.0  # structures are usually elongated on the Z axis
-
-    # -LoG response threshold over the preprocessed volume in [0, 1]
-    threshold: float = 0.1
-
-    # Minimum tolerated distance between the seeds, expressed as a fraction
-    # of the diameter. Below 1.0 the cell breaks down in more cells in the
-    # direction of Z. (misurato sul file LF4D 10x: a 0.6 il 32% dei blob ha un
-    # vicino a meno di 8 µm in XY, a 1.0 il 5%)
-    split: float = 1.0
-
-    # Boundary of a segmented (via watershedding) region, expressed as a fraction of the peak
-    grow_frac: float = 0.3
-
-    # Min volume of a blob. Blobs with volume under this constraint are filtered out.
-    min_volume_um3: float = 200.0
-
-    # Max volume of a blob. Blobs with volume above this constraint are filtered out.
-    max_volume_um3: float = 1e6
-
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d):
-        names = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in (d or {}).items() if k in names})
-
-
-def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[float, float, float]:
+def _sigmas(p: DetectionConfig, voxel_dims: tuple[float, float, float]) -> tuple[float, float, float]:
     """Returns the filter scales to use in the LoG.
 
     Scales the standard deviations σ for each axis (z, y, x), converting from
@@ -110,7 +73,7 @@ def _sigmas(p: BlobParams, voxel_dims: tuple[float, float, float]) -> tuple[floa
 
 def log_response(
     img: Image[np.float32],
-    p: BlobParams,
+    p: DetectionConfig,
     voxel_dim: tuple[float, float, float],
 ) -> tuple[Image[np.float32], Image[np.float32]]:
     """Computes the opposite of the Laplacian of the Gaussian (-LoG) response
@@ -180,7 +143,7 @@ def _ellipsoid(radii: tuple[float, float, float]) -> Image[np.bool_]:
 
 def find_seeds(
     response: Image[np.float32],
-    p: BlobParams,
+    p: DetectionConfig,
     voxel_dim: tuple[float, float, float],
     threshold: float | None = None,
 ) -> np.ndarray[tuple[int, int], np.dtype[np.int64]]:
@@ -211,7 +174,7 @@ def find_seeds(
 
 
 def watershed_from_seeds(
-    smoothed: Image[np.float32], seeds: np.ndarray[tuple[int, int], np.dtype[np.int64]], p: BlobParams
+    smoothed: Image[np.float32], seeds: np.ndarray[tuple[int, int], np.dtype[np.int64]], p: DetectionConfig
 ) -> Image[np.int32]:
     """Flood the Gaussian smoothed image from the seeds.
 
@@ -323,12 +286,12 @@ def stats_by_label(
         "mean": sum_of_weights / safe_n,
         "z_extent": np.where(n > 0, zmax - zmin + 1, 0),
         "max": max_by_lab,
-    }
+    }  # pyright: ignore[reportReturnType]
 
 
 def find_blobs(
     image: Image[np.float32],
-    p: BlobParams,
+    p: DetectionConfig,
     voxel_dim: tuple[float, float, float],
     intensity=None,
     frame: int = 0,

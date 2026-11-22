@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QSizePolicy, QSpinBox
 from pytestqt.qtbot import QtBot
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -401,5 +401,5 @@ def test_detection_reset_restores_model_and_inspector_defaults(qtbot) -> None:
     reset_btn = find_widget(inspector, QPushButton, names.DETECTION_INSPECTOR_RESET_BUTTON)
     reset_btn.click()
 
-    assert model.get_step_params(PipelineStep.DETECTION) == BlobParams().to_dict()
-    assert inspector.get_params() == BlobParams()
+    assert model.get_step_params(PipelineStep.DETECTION) == DetectionConfig().model_dump()
+    assert inspector.get_params() == DetectionConfig()

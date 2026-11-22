@@ -7,8 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject
 
-from apkit4d.core.models import TrackingConfig
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -337,7 +336,7 @@ class PipelineController(QObject):
         if step == PipelineStep.PREPROCESSING:
             self._sync_detection_gate()
         elif step == PipelineStep.DETECTION:
-            blob_params = BlobParams.from_dict(self._model.get_step_params(step))
+            blob_params = DetectionConfig(**self._model.get_step_params(step))
             self._view.set_detection_params(blob_params)
         elif step == PipelineStep.TRACKING:
             config = TrackingConfig(**self._model.get_step_params(step))

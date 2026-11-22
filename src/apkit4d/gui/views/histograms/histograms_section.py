@@ -76,36 +76,6 @@ class HistogramsSection(AccordionSection):
 
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
 
-    def set_histogram(self, index: int, widget: QWidget) -> None:
-        """
-        Set or replace one of the 3 histogram slots (index 0, 1, or 2).
-
-        Args:
-            index: Slot index (0, 1, or 2).
-            widget: Histogram widget to install.
-        """
-
-        if index < 0 or index > 2:
-            raise IndexError("Histogram index must be 0, 1, or 2.")
-
-        existing = self._histograms[index]
-        if existing is not None:
-            self.content_layout.removeWidget(existing)
-            existing.setParent(None)
-
-        self._histograms[index] = widget
-        if index == 0 and isinstance(widget, RoiIntensityHistogram):
-            self._roi_histogram = widget
-        elif index == 1 and isinstance(widget, PreprocessedIntensityHistogram):
-            self._preproc_histogram = widget
-        elif index == 2 and isinstance(widget, SeedResponseHistogram):
-            self.seed_response_histogram = widget
-
-        if isinstance(widget, CollapsibleHistogram):
-            widget.set_expanded(self.is_expanded())
-
-        self.add_widget(widget)
-
     def apply_theme(self, colors: ThemeColors) -> None:
         """
         Apply theme colors to header, content area, and contained histograms.

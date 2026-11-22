@@ -14,9 +14,8 @@ from typing import Any, Final
 import pandas as pd
 import psutil
 
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
-from apkit4d.detection.blob_detection import BlobParams
-from apkit4d.detection.preprocessing import PreprocParams
 from apkit4d.io.czi import CziSource
 from apkit4d.pipeline.frame_stages import (
     coerce_blob_params,
@@ -70,8 +69,8 @@ def cap_workers(
 def detect_frame(
     src: CziSource,
     t: int,
-    pp: PreprocParams | dict[str, Any] | None = None,
-    bp: BlobParams | dict[str, Any] | None = None,
+    pp: PreprocessingConfig | dict[str, Any] | None = None,
+    bp: DetectionConfig | dict[str, Any] | None = None,
     roi: RegionOfInterest | dict[str, Any] | Any | None = None,
     include_time: bool = False,
 ) -> pd.DataFrame:
@@ -82,8 +81,8 @@ def detect_frame(
     Args:
         src: CziSource instance providing frame access.
         t: Zero-based frame timepoint index.
-        pp: Preprocessing parameters (PreprocParams or dict).
-        bp: Blob detection parameters (BlobParams or dict).
+        pp: Preprocessing parameters (PreprocessingConfig or dict).
+        bp: Blob detection parameters (DetectionConfig or dict).
         roi: Optional RegionOfInterest (world coordinates, micrometers) or dictionary
             specifying ROI bounds. None processes the whole volume.
         include_time: If True, inserts timestamp 't_s' at column index 1.
@@ -115,8 +114,8 @@ def detect_frame(
 def _detect_frames_worker(
     czi_path: str | Path,
     channel: int,
-    pp: PreprocParams | dict[str, Any] | None = None,
-    bp: BlobParams | dict[str, Any] | None = None,
+    pp: PreprocessingConfig | dict[str, Any] | None = None,
+    bp: DetectionConfig | dict[str, Any] | None = None,
     frames: list[int] | None = None,
     roi: RegionOfInterest | dict[str, Any] | Any | None = None,
     *,
@@ -126,14 +125,15 @@ def _detect_frames_worker(
     """Execute blob detection across a chunk of frames inside a worker process.
 
     Each worker instantiates its own CziSource since native file handles cannot be
-    safely shared across processes. Parameter dataclasses (PreprocParams, BlobParams,
-    RegionOfInterest) are pickled directly across processes by ProcessPoolExecutor.
+    safely shared across processes. Parameter dataclasses (PreprocessingConfig,
+    DetectionConfig, RegionOfInterest) are pickled directly across processes b
+    ProcessPoolExecutor.
 
     Args:
         czi_path: Path to CZI microscopy acquisition file.
         channel: Channel index to process.
-        pp: Preprocessing configuration (PreprocParams or dict).
-        bp: Blob detection configuration (BlobParams or dict).
+        pp: Preprocessing configuration (PreprocessingConfig or dict).
+        bp: Blob detection configuration (DetectionConfig or dict).
         frames: List of frame indices to process.
         roi: Optional RegionOfInterest bounds specification or dict.
         pp_dict: Backward-compatible alias for pp.

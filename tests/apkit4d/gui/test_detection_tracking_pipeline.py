@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-from apkit4d.detection.blob_detection import BlobParams
+from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.trajectory_detection import DetectionData
@@ -69,7 +69,7 @@ def test_detection_feeds_tracking_without_recalculation(qtbot, qapp, monkeypatch
 
     assert len(calls) == 1
     assert calls[0][0] is source
-    assert calls[0][2] == BlobParams()
+    assert calls[0][2] == DetectionConfig()
     assert calls[0][3] is None
 
     pd.testing.assert_frame_equal(
@@ -234,7 +234,7 @@ def test_detection_restarts_when_parameters_change(qtbot, qapp, monkeypatch):
         timeout=10000,
     )
 
-    assert thresholds == [BlobParams().threshold, 0.6]
+    assert thresholds == [DetectionConfig().threshold, 0.6]
     assert controller.tracking_result.metadata["num_detections"] == 8
 
 
