@@ -1,9 +1,10 @@
 """
 Look of the application: the colors of the themes, Qt palette builder, and QSS component stylers.
 
-    themes  the `Theme` enum, `ThemeColors`, `StatusColors`, and color palettes
-    apply   builds the Qt palette of a theme and applies it to the application
-    style   QSS stylesheet generators and styler classes for all GUI components
+    themes   the `Theme` enum, `ThemeColors`, `StatusColors`, and color palettes
+    tokens   sizes, fonts and color mixes shared by every component (design tokens)
+    apply    builds the Qt palette of a theme and applies it to the application
+    style    QSS stylesheet generators and styler classes for all GUI components
 
 This package centralizes how the application looks and is styled. Which theme is active is
 decided by the `ThemeController`.
