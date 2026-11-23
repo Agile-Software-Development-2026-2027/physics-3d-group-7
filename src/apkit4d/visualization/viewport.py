@@ -695,7 +695,7 @@ class Viewport(QWidget):
         if self._blobs_poly is not None and "blobs" in self.plotter.actors:
             # i can't use np.copyto here because the number of points can change
             # shallow copy substitues the pointers to the data
-            self._blobs_poly.shallow_copy(poly)
+            self._blobs_poly.shallow_copy(display_poly)
             self._blobs_poly.Modified()
             self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
             self._request_render()
