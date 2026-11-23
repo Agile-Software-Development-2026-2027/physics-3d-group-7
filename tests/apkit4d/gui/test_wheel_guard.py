@@ -30,6 +30,7 @@ def _send_wheel(
         modifiers,
         Qt.ScrollPhase.NoScrollPhase,
         False,
+        Qt.MouseEventSource.MouseEventSynthesizedBySystem,
     )
     QCoreApplication.sendEvent(target, event)
 
