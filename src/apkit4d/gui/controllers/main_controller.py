@@ -14,12 +14,14 @@ from typing import Protocol, cast
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
 from apkit4d.gui.controllers.blob_detection_controller import BlobDetectionController, BlobView
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource, SourceOpener
 from apkit4d.gui.controllers.histogram_controller import HistogramController
+from apkit4d.gui.controllers.multi_file_controller import MultiFileController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.roi_controller import RoiStageController
@@ -196,6 +198,13 @@ class MainController(QObject):
             self.pipeline_controller,
             self,
             tracking=self._tracking_controller,
+        )
+        self._multi_file_controller = MultiFileController(
+            window,
+            self._file_controller,
+            self._pipeline_model,
+            self._get_current_roi,
+            self,
         )
         self._video_export_controller = VideoExportController(
             playback_controller=self._playback_controller,
@@ -396,3 +405,8 @@ class MainController(QObject):
     def _on_window_suggested(self, lo: float, hi: float) -> None:
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
             cast(PreprocessingInspector, preproc_sec).set_intensity_window(lo, hi)
+
+    def _get_current_roi(self) -> RegionOfInterest | None:
+        if self._volume_controller is None:
+            return None
+        return self._volume_controller.roi
