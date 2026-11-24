@@ -13,6 +13,7 @@ from PySide6.QtGui import QPalette, QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLayout, QVBoxLayout, QWidget
 
 from apkit4d.gui.constants import appearance, names, playback, texts
+from apkit4d.gui.theme import tokens
 from apkit4d.gui.views.playback.frame_counter import FrameCounter
 from apkit4d.gui.views.widgets.divider import Divider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
@@ -113,7 +114,7 @@ class PlaybackBar(QWidget):
         self._step_caption = self._caption(texts.LABEL_STEP)
 
         row = QHBoxLayout()
-        row.setSpacing(appearance.BAR_ITEMS_SPACING)
+        row.setSpacing(tokens.SPACING)
         for button in (self._previous_button, self._play_button, self._next_button):
             row.addWidget(button)
         row.addSpacing(appearance.COUNTER_SPACING)
@@ -129,7 +130,7 @@ class PlaybackBar(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(*appearance.BAR_MARGINS)
-        layout.setSpacing(appearance.BAR_ROWS_SPACING)
+        layout.setSpacing(tokens.ROW_SPACING)
         layout.addWidget(self._slider)
         layout.addLayout(row)
         self._row = row
@@ -246,9 +247,9 @@ class PlaybackBar(QWidget):
 
     @staticmethod
     def _add_divider(row: QHBoxLayout) -> None:
-        row.addSpacing(appearance.GROUP_SPACING)
+        row.addSpacing(tokens.GROUP_SPACING)
         row.addWidget(Divider())
-        row.addSpacing(appearance.GROUP_SPACING)
+        row.addSpacing(tokens.GROUP_SPACING)
 
     @staticmethod
     def _make_button(

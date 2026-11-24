@@ -3,6 +3,7 @@ Look of the application: the colors of the themes, Qt palette builder, and QSS c
 
     themes   the `Theme` enum, `ThemeColors`, `StatusColors`, and color palettes
     tokens   sizes, fonts and color mixes shared by every component (design tokens)
+    colors   shades derived from the palette of the active theme with the mixes of `tokens`
     apply    builds the Qt palette of a theme and applies it to the application
     style    QSS stylesheet generators and styler classes for all GUI components
 

@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QHideEvent, QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QSlider, QStyle, QWidget
 
 from apkit4d.gui.constants import appearance, texts
+from apkit4d.gui.theme import tokens
 from apkit4d.gui.theme.colors import mix
 from apkit4d.gui.views.widgets.frame_bubble import make_bubble_font, paint_bubble
 
@@ -62,7 +63,7 @@ class FrameSlider(QSlider):
         x = self._position_of(self.value())
         radius = groove / 2
 
-        groove_color = mix(window, ink, appearance.GROOVE_MIX if enabled else appearance.DISABLED_GROOVE_MIX)
+        groove_color = mix(window, ink, tokens.GROOVE_MIX if enabled else tokens.DISABLED_GROOVE_MIX)
         painter.setBrush(groove_color)
         painter.drawRoundedRect(QRectF(pad, top, self.width() - 2 * pad, groove), radius, radius)
         if enabled:
@@ -71,7 +72,7 @@ class FrameSlider(QSlider):
         if self._hover is not None and enabled:
             self._paint_marker(painter, self._position_of(self._hover), ink)
 
-        ring = accent if enabled else mix(window, ink, appearance.DISABLED_RING_MIX)
+        ring = accent if enabled else mix(window, ink, tokens.DISABLED_RING_MIX)
         painter.setPen(QPen(ring, appearance.SLIDER_HANDLE_RING))
         painter.setBrush(Qt.GlobalColor.white if enabled else window)
         painter.drawEllipse(

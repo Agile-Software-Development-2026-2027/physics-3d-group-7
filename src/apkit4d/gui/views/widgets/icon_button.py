@@ -8,8 +8,8 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QPushButton, QWidget
 
-from apkit4d.gui.constants import appearance
-from apkit4d.gui.theme.colors import focus_pen, mix, plain_button_colors
+from apkit4d.gui.theme import tokens
+from apkit4d.gui.theme.colors import TRANSPARENT, focus_pen, mix, plain_button_colors
 from apkit4d.gui.views.widgets.icons import Icon, paint_icon
 
 ColorRole = QPalette.ColorRole
@@ -76,9 +76,9 @@ class IconButton(QPushButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         background, border, icon_color = self._colors()
         focused = self.hasFocus()
-        inset = appearance.FOCUS_RING_WIDTH / 2 if focused else 0.5  # keeps the thick ring inside the widget
+        inset = tokens.FOCUS_RING_WIDTH / 2 if focused else 0.5  # keeps the thick ring inside the widget
         shape = QRectF(self.rect()).adjusted(inset, inset, -inset, -inset)
-        radius = shape.width() / 2 if self._primary else appearance.BUTTON_RADIUS
+        radius = shape.width() / 2 if self._primary else tokens.BUTTON_RADIUS
         painter.setBrush(background)
         painter.setPen(focus_pen(self.palette(), primary=self._primary) if focused else border)
         painter.drawRoundedRect(shape, radius, radius)
@@ -101,12 +101,11 @@ class IconButton(QPushButton):
         window = palette.color(ColorRole.Window)
         ink = palette.color(ColorRole.WindowText)
         accent = palette.color(ColorRole.Highlight)
-        none = QColor(0, 0, 0, 0)
         if not self.isEnabled():
             disabled_ink = palette.color(ColorGroup.Disabled, ColorRole.ButtonText)
-            return mix(window, ink, appearance.DISABLED_BORDER_MIX), none, disabled_ink
+            return mix(window, ink, tokens.DISABLED_BORDER_MIX), TRANSPARENT, disabled_ink
         if self.isDown():
-            accent = accent.darker(appearance.ACCENT_PRESSED_DARKER)
+            accent = accent.darker(tokens.ACCENT_PRESSED_DARKER)
         elif self.underMouse():
-            accent = mix(accent, QColor("white"), appearance.ACCENT_HOVER_MIX)
-        return accent, none, palette.color(ColorRole.HighlightedText)
+            accent = mix(accent, QColor("white"), tokens.ACCENT_HOVER_MIX)
+        return accent, TRANSPARENT, palette.color(ColorRole.HighlightedText)

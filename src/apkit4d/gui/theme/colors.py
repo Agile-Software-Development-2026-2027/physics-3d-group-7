@@ -1,13 +1,20 @@
 """
-Helpers to derive colors from the palette, so that the widgets follow the theme.
+Shades derived from the palette of the active theme, so that the components follow the theme.
+
+The themes define a few base colors (window, text, button, accent, ...). Every other shade, such as
+the border of a control or its background while the mouse is over it, is a mix of those colors with
+the proportions in `theme.tokens`. Painting a component with these functions keeps it consistent
+with the playback bar in every theme.
 """
 
 from PySide6.QtGui import QColor, QPalette, QPen
 
-from apkit4d.gui.constants import appearance
+from apkit4d.gui.theme import tokens
 
 ColorRole = QPalette.ColorRole
 ColorGroup = QPalette.ColorGroup
+
+TRANSPARENT: QColor = QColor(0, 0, 0, 0)
 
 
 def mix(first: QColor, second: QColor, amount: float) -> QColor:
@@ -42,17 +49,16 @@ def plain_button_colors(
     window = palette.color(ColorRole.Window)
     ink = palette.color(ColorRole.WindowText)
     button = palette.color(ColorRole.Button)
-    none = QColor(0, 0, 0, 0)
     if not enabled:
-        border = none if flat else mix(window, ink, appearance.DISABLED_BORDER_MIX)
-        return none, border, palette.color(ColorGroup.Disabled, ColorRole.ButtonText)
-    border = mix(window, ink, appearance.BORDER_MIX)
-    background = none if flat else button
+        border = TRANSPARENT if flat else mix(window, ink, tokens.DISABLED_BORDER_MIX)
+        return TRANSPARENT, border, palette.color(ColorGroup.Disabled, ColorRole.ButtonText)
+    border = mix(window, ink, tokens.BORDER_MIX)
+    background = TRANSPARENT if flat else button
     if down:
         background = border
     elif hovered:
-        background = mix(button, ink, appearance.HOVER_MIX)
-    return background, none if flat else border, ink
+        background = mix(button, ink, tokens.HOVER_MIX)
+    return background, TRANSPARENT if flat else border, ink
 
 
 def focus_pen(palette: QPalette, *, primary: bool = False) -> QPen:
@@ -64,5 +70,5 @@ def focus_pen(palette: QPalette, *, primary: bool = False) -> QPen:
         primary: True for the button of the main action, whose ring is lighter to stand out.
     """
     accent = palette.color(ColorRole.Highlight)
-    color = mix(accent, QColor("white"), appearance.FOCUS_RING_LIGHTEN) if primary else accent
-    return QPen(color, appearance.FOCUS_RING_WIDTH)
+    color = mix(accent, QColor("white"), tokens.FOCUS_RING_LIGHTEN) if primary else accent
+    return QPen(color, tokens.FOCUS_RING_WIDTH)
