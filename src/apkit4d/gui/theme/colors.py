@@ -61,6 +61,31 @@ def plain_button_colors(
     return background, TRANSPARENT if flat else border, ink
 
 
+def primary_button_colors(
+    palette: QPalette, *, enabled: bool, down: bool, hovered: bool
+) -> tuple[QColor, QColor, QColor]:
+    """
+    Background, border and ink colors of the button of the main action, filled with the accent color.
+
+    Args:
+        palette: Palette of the button.
+        enabled: False if the button is disabled.
+        down: True while the button is pressed.
+        hovered: True while the mouse is over the button.
+    """
+    if not enabled:
+        window = palette.color(ColorRole.Window)
+        ink = palette.color(ColorRole.WindowText)
+        disabled_ink = palette.color(ColorGroup.Disabled, ColorRole.ButtonText)
+        return mix(window, ink, tokens.DISABLED_BORDER_MIX), TRANSPARENT, disabled_ink
+    accent = palette.color(ColorRole.Highlight)
+    if down:
+        accent = accent.darker(tokens.ACCENT_PRESSED_DARKER)
+    elif hovered:
+        accent = mix(accent, QColor("white"), tokens.ACCENT_HOVER_MIX)
+    return accent, TRANSPARENT, palette.color(ColorRole.HighlightedText)
+
+
 def focus_pen(palette: QPalette, *, primary: bool = False) -> QPen:
     """
     Pen that draws the ring around the widget that has the keyboard focus.

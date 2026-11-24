@@ -5,15 +5,12 @@ Round or rounded-square button that shows an icon, painted with the colors of th
 from typing import override
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette
+from PySide6.QtGui import QColor, QPainter, QPaintEvent
 from PySide6.QtWidgets import QPushButton, QWidget
 
 from apkit4d.gui.theme import tokens
-from apkit4d.gui.theme.colors import TRANSPARENT, focus_pen, mix, plain_button_colors
+from apkit4d.gui.theme.colors import focus_pen, plain_button_colors, primary_button_colors
 from apkit4d.gui.views.widgets.icons import Icon, paint_icon
-
-ColorRole = QPalette.ColorRole
-ColorGroup = QPalette.ColorGroup
 
 
 class IconButton(QPushButton):
@@ -89,23 +86,9 @@ class IconButton(QPushButton):
 
     def _colors(self) -> tuple[QColor, QColor, QColor]:
         """Background, border and icon colors for the state of the button."""
-        palette = self.palette()
-        if not self._primary:
-            return plain_button_colors(
-                palette,
-                enabled=self.isEnabled(),
-                down=self.isDown(),
-                hovered=self.underMouse(),
-                flat=self._flat,
-            )
-        window = palette.color(ColorRole.Window)
-        ink = palette.color(ColorRole.WindowText)
-        accent = palette.color(ColorRole.Highlight)
-        if not self.isEnabled():
-            disabled_ink = palette.color(ColorGroup.Disabled, ColorRole.ButtonText)
-            return mix(window, ink, tokens.DISABLED_BORDER_MIX), TRANSPARENT, disabled_ink
-        if self.isDown():
-            accent = accent.darker(tokens.ACCENT_PRESSED_DARKER)
-        elif self.underMouse():
-            accent = mix(accent, QColor("white"), tokens.ACCENT_HOVER_MIX)
-        return accent, TRANSPARENT, palette.color(ColorRole.HighlightedText)
+        enabled, down, hovered = self.isEnabled(), self.isDown(), self.underMouse()
+        if self._primary:
+            return primary_button_colors(self.palette(), enabled=enabled, down=down, hovered=hovered)
+        return plain_button_colors(
+            self.palette(), enabled=enabled, down=down, hovered=hovered, flat=self._flat
+        )
