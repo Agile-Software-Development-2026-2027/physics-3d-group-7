@@ -8,7 +8,13 @@ An application for visualizing and analyzing 4D (3D space + time) microscopy rec
 
 First, clone this repository with `git clone https://github.com/Agile-Software-Development-2026-2027/physics-3d-group-7.git`. Make sure to run the following commands in the cloned repository.
 
-The app can be run with [uv](https://docs.astral.sh/uv/getting-started/installation/), via the command `uv run apkit4d`, or with standard Python:
+The **recommended way** to run the app is with [uv](https://docs.astral.sh/uv/getting-started/installation/), via the command:
+
+```bash
+uv run apkit4d
+```
+
+Alternatively, it is possible to run it with standard Python:
 
 ```bash
 python -m venv .venv # create a Python virtual environment
@@ -34,6 +40,16 @@ Commands:
 
 > [!TIP]
 > Use `--help` with a subcommand to show what it accepts, e.g. `python -m apkit4d pipeline --help`.
+
+### How to update the app
+
+To get the latest changes run
+
+```bash
+git pull
+```
+
+and restart the app.
 
 ## How we work
 
