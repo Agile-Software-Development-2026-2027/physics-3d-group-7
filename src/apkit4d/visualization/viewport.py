@@ -14,6 +14,14 @@ from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
 
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.fps_counter import FpsCounter
+from apkit4d.visualization.vis_sub_roi import (
+    DEFAULT_OUTSIDE_OPACITY,
+    VisSubRoiState,
+    apply_vis_sub_roi_to_trajectories,
+    build_sub_roi_blobs_polydata,
+    clamp_outside_opacity,
+    world_bounds_to_normalized_tex_coords,
+)
 
 """
     in this file we define the viewport class, that is the widget that will be placed 
@@ -65,6 +73,40 @@ class Viewport(QWidget):
     roi_accepted = Signal(object)
     roi_cancelled = Signal()
 
+    """ 
+        the idea is to use a GLSL shader, that is if you do not know a small program run on GPU
+        during the rendering, for each voxel of the volume that the GPU is rendering, the
+        shader will check if the voxel is inside the sub-ROI, 
+        and if it is not it will change its opacity
+
+
+        VTK generates the shader code for the volume rendering, and we can add our own code to it
+        using the hooks that VTK provides. the one we use is VTK::ComputeLighting::Exit, 
+        so the code we write will be added there.
+
+        VTK::ComputeLighting::Exit is a hook that is called after the lighting of the voxel 
+        is computed, allowing us to modify the final color of the voxel.
+
+        the code we add is in the _VIS_SUB_ROI_SHADER_SNIPPET variable, and it is very simple:
+        -we check if the sub-roi is active
+        -compute the limits of the sub-roi in the texture coordinates of the volume using mix()
+        -we check if the voxel is inside the sub-roi (g_dataPos is the position of the voxel)
+        -apply the outside opacity to the final color if it is not inside the sub-roi
+    """
+
+    _VIS_SUB_ROI_SHADER_HOOK: str = "//VTK::ComputeLighting::Exit"
+    _VIS_SUB_ROI_SHADER_SNIPPET: str = """if (u_visRoiEnabled == 1) {
+    vec3 roiTexMin = mix(in_texMin[0], in_texMax[0], u_visRoiMin);
+    vec3 roiTexMax = mix(in_texMin[0], in_texMax[0], u_visRoiMax);
+    bool insideRoi = all(greaterThanEqual(g_dataPos, roiTexMin)) &&
+                    all(lessThanEqual(g_dataPos, roiTexMax));
+    if (!insideRoi) {
+        finalColor.a *= u_outsideOpacity;
+    }
+    }
+    //VTK::ComputeLighting::Exit
+    """
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -76,6 +118,9 @@ class Viewport(QWidget):
         self._blobs_poly: pv.PolyData | None = None
         self._blobs_visible: bool = True
         self._trajectories_poly: pv.PolyData | None = None
+        self._blobs_source_poly: pv.PolyData | None = None
+        self._trajectories_source_poly: pv.PolyData | None = None
+        self._trajectories_line_width: float = 2.5
 
         # Set the margins to 0 so that we use the entire space
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -123,6 +168,13 @@ class Viewport(QWidget):
         self._text_color: str = DEFAULT_TEXT_COLOR
         # opacity unit distance that PyVista gives to the volume, set_volume_opacity scales it
         self._base_opacity_unit_distance: float = 1.0
+
+        # visualization-only Sub-ROI state (does not modify volume data or DATA ROI)
+        self._vis_sub_roi_state: VisSubRoiState = VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )
 
         # they are used in the zoom acceleration function
         self.last_zoom_time: float = 0.0
@@ -301,6 +353,7 @@ class Viewport(QWidget):
         # the new volume and its scalar bar get the opacity and the text color chosen by the user
         self._base_opacity_unit_distance = actor.prop.opacity_unit_distance
         self._apply_volume_opacity(actor)
+        self._configure_volume_sub_roi_shader(actor)
         self._paint_text()
 
         # with this we can see the cube borders
@@ -315,6 +368,12 @@ class Viewport(QWidget):
         # store the center and bounds
         self.volume_center = np.array(self._volume_grid.center, dtype=np.float64)
         self.volume_bounds = self._volume_grid.bounds
+
+        # Re-sync uniforms and polygonal display layers now that
+        # self._volume_grid.bounds is updated for the new grid.
+        self._sync_volume_sub_roi_uniforms(actor)
+        self._sync_blobs_sub_roi()
+        self._sync_trajectories_sub_roi()
 
         # i think setting max and min zoom only the first time we show the volume or when we reset
         # should work, that kinda depends on how we are going to handle future ROIs
@@ -441,6 +500,132 @@ class Viewport(QWidget):
         """
         actor.prop.opacity_unit_distance = self._base_opacity_unit_distance / self._volume_opacity  # pyright: ignore[reportAttributeAccessIssue]
 
+    @property
+    def vis_sub_roi_state(self) -> VisSubRoiState:
+        """Current visualization-only Sub-ROI state for the volume actor."""
+        return self._vis_sub_roi_state
+
+    def _configure_volume_sub_roi_shader(self, actor: pv.Actor) -> None:
+        """Attach the code GLSL we wrote to the shader"""
+        # we get the property
+        shader_prop = getattr(actor, "GetShaderProperty", lambda: None)()
+        if shader_prop is not None and hasattr(shader_prop, "AddFragmentShaderReplacement"):
+            # we clear the previous shader code, if any, and add the new one
+            shader_prop.ClearFragmentShaderReplacement(self._VIS_SUB_ROI_SHADER_HOOK, False)
+            """
+            AddFragmentShaderReplacement arguments:
+            - hook: the hook where we want to add our code
+            - before: if True, the code is added before the hook, if False, after
+            - code: the code we want to add
+            - replace: if True, the code replaces the hook, if False, it is added to it
+            """
+            shader_prop.AddFragmentShaderReplacement(
+                self._VIS_SUB_ROI_SHADER_HOOK,
+                False,
+                self._VIS_SUB_ROI_SHADER_SNIPPET,
+                False,
+            )
+        # sync after GLSL code is added
+        self._sync_volume_sub_roi_uniforms(actor)
+
+    def _sync_volume_sub_roi_uniforms(self, actor: pv.Actor | None = None) -> None:
+        """Transfer the current Sub-ROI state to the GLSL shader."""
+        # take the actor
+        vol_actor = actor if actor is not None else self.plotter.actors.get("volume")
+        if vol_actor is None:
+            return
+
+        # get the shader property and its uniforms
+        shader_prop = getattr(vol_actor, "GetShaderProperty", lambda: None)()
+        uniforms = (
+            shader_prop.GetFragmentCustomUniforms()
+            if shader_prop is not None and hasattr(shader_prop, "GetFragmentCustomUniforms")
+            else None
+        )
+        if uniforms is None:
+            return
+
+        # guarantee that the Sub-ROI bounds are clamped to the volume grid bounds
+        grid_bounds = self._volume_grid.bounds if self._volume_grid is not None else None
+        effective = (
+            self._vis_sub_roi_state.with_clamped_bounds(grid_bounds)
+            if grid_bounds is not None
+            else self._vis_sub_roi_state
+        )
+
+        # check if sub-roi is active
+        active = bool(effective.enabled and effective.bounds is not None and grid_bounds is not None)
+        # convert the bounds in shader coordinates
+        if active and effective.bounds is not None and grid_bounds is not None:
+            u_min, u_max = world_bounds_to_normalized_tex_coords(effective.bounds, grid_bounds)
+        else:
+            # if not active we assign the bounds of the full volume so that the shader
+            # get always valid values, even if they are not used
+            u_min = (0.0, 0.0, 0.0)
+            u_max = (1.0, 1.0, 1.0)
+
+        # here there is the actual transfer
+        uniforms.SetUniformi("u_visRoiEnabled", 1 if active else 0)
+        uniforms.SetUniform3f("u_visRoiMin", [float(u_min[0]), float(u_min[1]), float(u_min[2])])
+        uniforms.SetUniform3f("u_visRoiMax", [float(u_max[0]), float(u_max[1]), float(u_max[2])])
+        uniforms.SetUniformf("u_outsideOpacity", float(effective.outside_opacity))
+
+    def _effective_vis_sub_roi_state(self) -> VisSubRoiState:
+        """Return current VisSubRoiState with bounds clamped to the displayed volume grid."""
+        if self._volume_grid is not None:
+            return self._vis_sub_roi_state.with_clamped_bounds(self._volume_grid.bounds)
+        return self._vis_sub_roi_state
+
+    def set_vis_sub_roi_state(self, state: VisSubRoiState) -> None:
+        """Apply a `VisSubRoiState` across volume, blobs, and trajectories without mutating data."""
+        grid_bounds = self._volume_grid.bounds if self._volume_grid is not None else None
+        clamped = state.with_clamped_bounds(grid_bounds) if grid_bounds is not None else state
+        self._vis_sub_roi_state = clamped
+        self._sync_volume_sub_roi_uniforms()
+        self._sync_blobs_sub_roi()
+        self._sync_trajectories_sub_roi()
+        self._request_render()
+
+    def set_vis_sub_roi_enabled(self, enabled: bool) -> None:
+        """Enable or disable the volume Sub-ROI effect while preserving bounds and opacity."""
+        self.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=bool(enabled),
+                bounds=self._vis_sub_roi_state.bounds,
+                outside_opacity=self._vis_sub_roi_state.outside_opacity,
+            )
+        )
+
+    def set_vis_sub_roi_bounds(self, bounds: Bounds6D | None) -> None:
+        """Set world-space Sub-ROI bounds for volume attenuation without modifying volume data."""
+        self.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=self._vis_sub_roi_state.enabled,
+                bounds=bounds,
+                outside_opacity=self._vis_sub_roi_state.outside_opacity,
+            )
+        )
+
+    def set_vis_sub_roi_outside_opacity(self, outside_opacity: float) -> None:
+        """Update outside opacity in `[0.0, 1.0]` while preserving bounds and enabled state."""
+        self.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=self._vis_sub_roi_state.enabled,
+                bounds=self._vis_sub_roi_state.bounds,
+                outside_opacity=clamp_outside_opacity(outside_opacity),
+            )
+        )
+
+    def clear_vis_sub_roi(self) -> None:
+        """Clear Sub-ROI bounds and disable attenuation while preserving `outside_opacity`."""
+        self.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=False,
+                bounds=None,
+                outside_opacity=self._vis_sub_roi_state.outside_opacity,
+            )
+        )
+
     def _paint_text(self) -> None:
         """
         This function paints the text of the scalar bar and of the axes with the text color.
@@ -463,6 +648,19 @@ class Viewport(QWidget):
             ):
                 caption.GetCaptionTextProperty().SetColor(rgb)
 
+    def _sync_blobs_sub_roi(self) -> None:
+        """Rebuild display RGBA for blobs from immutable source copy without recreating actor."""
+        if self._blobs_source_poly is None or self._blobs_poly is None or "blobs" not in self.plotter.actors:
+            return
+
+        display_poly = build_sub_roi_blobs_polydata(
+            self._blobs_source_poly,
+            self._effective_vis_sub_roi_state(),
+        )
+        self._blobs_poly.shallow_copy(display_poly)
+        self._blobs_poly.Modified()
+        self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
+
     def show_blobs(self, poly: pv.PolyData) -> None:
         """
         This function is used to visualize the real blobs after the blob detection
@@ -477,30 +675,43 @@ class Viewport(QWidget):
 
         # remove past blobs if the new poly is empty, and return
         if poly is None or poly.n_points == 0:
+            self._blobs_source_poly = None
             if "blobs" in self.plotter.actors:
                 self.plotter.remove_actor("blobs", render=False)
                 self._blobs_poly = None
                 self._request_render()
+            else:
+                self._blobs_poly = None
             return
+
+        # Keep an immutable deep copy of caller data so display RGBA updates never mutate source data
+        self._blobs_source_poly = poly.copy(deep=True)
+        display_poly = build_sub_roi_blobs_polydata(
+            self._blobs_source_poly,
+            self._effective_vis_sub_roi_state(),
+        )
 
         # if the blobs are already in the plotter we just update them
         if self._blobs_poly is not None and "blobs" in self.plotter.actors:
             # i can't use np.copyto here because the number of points can change
             # shallow copy substitues the pointers to the data
-            self._blobs_poly.shallow_copy(poly)
+            self._blobs_poly.shallow_copy(display_poly)
             self._blobs_poly.Modified()
             self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
             self._request_render()
             return
 
-        # shallow copy gives me an error in the test cause of NoneType here so i use copy
-        self._blobs_poly = poly.copy()
+        # copy the display polydata to the internal variable, so that we can update it later without
+        # changing the source polydata, that is immutable
+        self._blobs_poly = display_poly
         # here we add the dectected blobs in the plotter
         actor = self.plotter.add_mesh(
             self._blobs_poly,
-            color="red",
+            scalars="rgba",
+            rgba=True,
             point_size=10.0,
             render_points_as_spheres=True,
+            show_scalar_bar=False,
             name="blobs",
             render=False,
         )
@@ -514,6 +725,24 @@ class Viewport(QWidget):
             self.plotter.actors["blobs"].SetVisibility(self._blobs_visible)
             self._request_render()
 
+    def _sync_trajectories_sub_roi(self) -> None:
+        """Rebuild display trajectory geometry from immutable source copy without recreating actor."""
+        if (
+            self._trajectories_source_poly is None
+            or self._trajectories_poly is None
+            or "tracks_highlighted" not in self.plotter.actors
+        ):
+            return
+
+        display_poly = apply_vis_sub_roi_to_trajectories(
+            self._trajectories_source_poly,
+            self._effective_vis_sub_roi_state(),
+        )
+        self._trajectories_poly.shallow_copy(display_poly)
+        self._trajectories_poly.Modified()
+        actor = self.plotter.actors["tracks_highlighted"]
+        actor.GetProperty().SetLineWidth(self._trajectories_line_width)
+
     def show_trajectories(
         self,
         highlighted: pv.PolyData | None,
@@ -525,20 +754,28 @@ class Viewport(QWidget):
             self.clear_trajectories()
             return
 
+        self._trajectories_source_poly = highlighted.copy(deep=True)
+        self._trajectories_line_width = float(line_width)
+        display_poly = apply_vis_sub_roi_to_trajectories(
+            self._trajectories_source_poly,
+            self._effective_vis_sub_roi_state(),
+        )
+
         if self._trajectories_poly is not None and "tracks_highlighted" in self.plotter.actors:
-            self._trajectories_poly.shallow_copy(highlighted)
+            self._trajectories_poly.shallow_copy(display_poly)
             self._trajectories_poly.Modified()
             actor = self.plotter.actors["tracks_highlighted"]
-            actor.GetProperty().SetLineWidth(float(line_width))
+            actor.GetProperty().SetLineWidth(self._trajectories_line_width)
             self._request_render()
             return
 
-        self._trajectories_poly = highlighted.copy()
+        self._trajectories_poly = display_poly
         self.plotter.add_mesh(
             self._trajectories_poly,
-            scalars="rgb",
-            rgb=True,
-            line_width=float(line_width),
+            scalars="rgba",
+            rgba=True,
+            line_width=self._trajectories_line_width,
+            show_scalar_bar=False,
             name="tracks_highlighted",
             render=False,
         )
@@ -546,6 +783,7 @@ class Viewport(QWidget):
 
     def clear_trajectories(self) -> None:
         """Remove rendered trajectory polyline actors from the 3D scene."""
+        self._trajectories_source_poly = None
         if "tracks_highlighted" in self.plotter.actors:
             self.plotter.remove_actor("tracks_highlighted", render=False)
             self._trajectories_poly = None
@@ -563,12 +801,19 @@ class Viewport(QWidget):
             None
         """
         self._volume_grid = None
+        self._blobs_source_poly = None
+        self._trajectories_source_poly = None
         self._blobs_poly = None
         self._trajectories_poly = None
         self.volume_center = None
         self.volume_bounds = None
         self.min_zoom_dist = 0.0
         self.max_zoom_dist = float("inf")
+        self._vis_sub_roi_state = VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )
         self._disable_roi_box_widget()
         self.plotter.clear()
         # the reset_camera of the renderer as in show_volume, so the view is drawn only once, below
