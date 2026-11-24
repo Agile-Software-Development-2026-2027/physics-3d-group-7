@@ -50,10 +50,12 @@ class FileController(QObject):
     Signals:
         loaded: Emitted with the path and the recording once a file has been opened.
         closed: Emitted when a file is closed
+        open_failed: Emitted with the path when the latest background open fails.
     """
 
     loaded = Signal(Path, object)
     closed = Signal()
+    open_failed = Signal(Path)
 
     def __init__(
         self, window: MainWindow, open_source: SourceOpener = CziSource, parent: QObject | None = None
@@ -141,6 +143,7 @@ class FileController(QObject):
     def _on_failed(self, task_id: int, error: Exception) -> None:
         if task_id != self._latest_task:
             return
+        self.open_failed.emit(self._latest_path)
         reason = str(error) or type(error).__name__
         self._window.set_status(texts.STATUS_OPEN_FAILED.format(name=self._latest_path.name, reason=reason))
 
