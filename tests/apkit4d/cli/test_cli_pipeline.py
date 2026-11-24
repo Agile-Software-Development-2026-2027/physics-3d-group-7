@@ -10,7 +10,7 @@ from click._utils import UNSET
 from click.testing import CliRunner
 
 from apkit4d.batching.export import save_batch_results
-from apkit4d.cli.cli import cli
+from apkit4d.cli import cli
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.io.table import read_table
 from tests.apkit4d.cli.helper import get_argument, get_option, is_param_defined

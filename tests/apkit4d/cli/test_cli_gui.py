@@ -6,7 +6,7 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from apkit4d.cli.cli import cli
+from apkit4d.cli import cli
 from tests.apkit4d.cli.helper import get_argument, get_option, is_param_defined
 
 GUI = cli.commands["gui"]
