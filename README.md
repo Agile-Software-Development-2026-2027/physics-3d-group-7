@@ -2,6 +2,55 @@
 
 An application for visualizing and analyzing 4D (3D space + time) microscopy recordings of swimming algae taken in the Zeiss [`.czi`](https://www.zeiss.com/microscopy/en/products/software/zeiss-zen/czi-image-file-format.html) format. The microorganisms are detected in 3D, their trajectories tracked across frames in order to perform a motility analysis and to extract metrics.
 
+<!-- TODO: put a fancy screenshot of the app here -->
+
+## Getting started
+
+First, clone this repository with `git clone https://github.com/Agile-Software-Development-2026-2027/physics-3d-group-7.git`. Make sure to run the following commands in the cloned repository.
+
+The **recommended way** to run the app is with [uv](https://docs.astral.sh/uv/getting-started/installation/), via the command:
+
+```bash
+uv run apkit4d
+```
+
+Alternatively, it is possible to run it with standard Python:
+
+```bash
+python -m venv .venv # create a Python virtual environment
+source .venv/bin/activate # activate the venv
+python -m pip install --upgrade pip # install pip itself
+python -m pip install . # install the project's dependencies
+python -m apkit4d # run the app
+# execute 'deactivate` to leave the venv
+```
+
+Running the app will show its usage:
+
+```
+Usage: apkit4d [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  gui       Open the ApKit4D window.
+  pipeline  Analyse a recording without the GUI: detect the blobs and...
+```
+
+> [!TIP]
+> Use `--help` with a subcommand to show what it accepts, e.g. `python -m apkit4d pipeline --help`.
+
+### How to update the app
+
+To get the latest changes run
+
+```bash
+git pull
+```
+
+and restart the app.
+
 ## How we work
 
 - `main` is protected: nobody can push to it, every change goes through a pull request.
