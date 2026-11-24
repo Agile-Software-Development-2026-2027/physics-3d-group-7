@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPaintEvent, Q
 from PySide6.QtWidgets import QAbstractSpinBox, QDoubleSpinBox, QHBoxLayout, QWidget
 
 from apkit4d.gui.constants import appearance, texts
-from apkit4d.gui.views.widgets.colors import focus_pen, plain_button_colors
+from apkit4d.gui.theme.colors import focus_pen, plain_button_colors
 from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard

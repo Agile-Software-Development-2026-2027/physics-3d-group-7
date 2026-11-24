@@ -9,7 +9,7 @@ from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QPainter, QPaintEv
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from apkit4d.gui.constants import appearance, names, texts
-from apkit4d.gui.views.widgets.colors import mix
+from apkit4d.gui.theme.colors import mix
 
 ColorRole = QPalette.ColorRole
 ColorGroup = QPalette.ColorGroup

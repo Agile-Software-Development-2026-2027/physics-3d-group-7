@@ -9,7 +9,7 @@ from PySide6.QtGui import QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import appearance
-from apkit4d.gui.views.widgets.colors import mix
+from apkit4d.gui.theme.colors import mix
 
 ColorRole = QPalette.ColorRole
 

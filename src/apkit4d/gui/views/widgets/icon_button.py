@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QPushButton, QWidget
 
 from apkit4d.gui.constants import appearance
-from apkit4d.gui.views.widgets.colors import focus_pen, mix, plain_button_colors
+from apkit4d.gui.theme.colors import focus_pen, mix, plain_button_colors
 from apkit4d.gui.views.widgets.icons import Icon, paint_icon
 
 ColorRole = QPalette.ColorRole

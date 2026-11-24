@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QHideEvent, QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QSlider, QStyle, QWidget
 
 from apkit4d.gui.constants import appearance, texts
-from apkit4d.gui.views.widgets.colors import mix
+from apkit4d.gui.theme.colors import mix
 from apkit4d.gui.views.widgets.frame_bubble import make_bubble_font, paint_bubble
 
 ColorRole = QPalette.ColorRole

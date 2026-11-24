@@ -9,7 +9,7 @@ from PySide6.QtGui import QFontMetrics, QPainter, QPaintEvent
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from apkit4d.gui.constants import appearance
-from apkit4d.gui.views.widgets.colors import focus_pen, plain_button_colors
+from apkit4d.gui.theme.colors import focus_pen, plain_button_colors
 from apkit4d.gui.views.widgets.icons import Icon, paint_icon
 
 
