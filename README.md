@@ -22,16 +22,14 @@ python -m apkit4d # run the app
 Running the app will show its usage:
 
 ```
-Usage: python -m apkit4d [OPTIONS] COMMAND [ARGS]...
+Usage: apkit4d [OPTIONS] COMMAND [ARGS]...
 
 Options:
   --help  Show this message and exit.
 
 Commands:
-  batch     Detect blobs on a range of frames of a CZI file, without the...
   gui       Open the ApKit4D window.
-  link      Link the blobs found by `batch` into tracks.
-  pipeline  Execute an analysis pipeline defined in a JSON file.
+  pipeline  Analyse a recording without the GUI: detect the blobs and...
 ```
 
 > [!TIP]
