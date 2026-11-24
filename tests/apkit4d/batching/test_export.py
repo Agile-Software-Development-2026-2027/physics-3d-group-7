@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from apkit4d.batching.export import save_batch_results
+from apkit4d.batching.export import save_batch_results, save_tracks
 from apkit4d.core.models import TrackingConfig
 from apkit4d.io.table import read_table
 
@@ -54,3 +54,17 @@ def test_a_failed_tracks_table_is_not_left_behind(tmp_path, monkeypatch):
     with pytest.raises(OSError, match="disk full"):
         export(tmp_path, fmt="parquet", tracks=TRACKS)
     assert not (tmp_path / "sample_tracks.parquet").exists()
+
+
+def test_tracks_linked_later_are_saved_next_to_the_blobs_and_named_in_the_json(tmp_path):
+    result, _ = export(tmp_path)
+
+    tracks_path = save_tracks(result.params_path, TRACKS, TrackingConfig(min_len=3), "csv")
+
+    assert tracks_path == tmp_path / "sample_tracks.csv"
+    saved = json.loads(result.params_path.read_text())
+    assert saved["tracks_table"] == "sample_tracks.csv"
+    assert saved["tracking"]["min_len"] == 3
+    assert read_table(tracks_path)["track_id"].tolist() == [0, 0, 1, 1]
+    with pytest.raises(ValueError, match="xlsx"):
+        save_tracks(result.params_path, TRACKS, TrackingConfig(), "xlsx")
