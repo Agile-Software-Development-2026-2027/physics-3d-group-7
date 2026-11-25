@@ -199,13 +199,6 @@ class MainController(QObject):
             self,
             tracking=self._tracking_controller,
         )
-        self._multi_file_controller = MultiFileController(
-            window,
-            self._file_controller,
-            self._pipeline_model,
-            self._get_current_roi,
-            self,
-        )
         self._video_export_controller = VideoExportController(
             playback_controller=self._playback_controller,
             view=view,
@@ -224,6 +217,14 @@ class MainController(QObject):
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
         self._file_controller.loaded.connect(self._on_file_loaded)
         self._file_controller.closed.connect(self._on_file_closed)
+        self._multi_file_controller = MultiFileController(
+            window,
+            self._file_controller,
+            self._pipeline_model,
+            self._get_current_roi,
+            self,
+            show_roi=self._roi_controller.show_roi,
+        )
 
     @property
     def file_controller(self) -> FileController:
