@@ -3,6 +3,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -15,7 +16,6 @@ from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
-from apkit4d.gui.views.widgets.labeled_row import labeled_row
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 __all__ = ["AppearanceSection"]
@@ -37,9 +37,16 @@ class AppearanceSection(AccordionSection):
         super().__init__(texts.SECTION_APPEARANCE, parent=parent)
         self.setObjectName(names.APPEARANCE_SECTION)
 
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(10)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
         theme_button = QPushButton(texts.BUTTON_THEME)
         theme_button.setObjectName(names.THEME_BUTTON)
         theme_button.clicked.connect(self.theme_switch_requested)
+        form.addRow(theme_button)
 
         self._colormap_combo = QComboBox()
         self._colormap_combo.setObjectName(names.COLORMAP_COMBO)
@@ -72,11 +79,10 @@ class AppearanceSection(AccordionSection):
         self._outline_button.setObjectName(names.OUTLINE_BUTTON)
         self._outline_button.color_chosen.connect(self.outline_chosen)
 
-        self.add_widget(theme_button)
-        self.add_widget(labeled_row(texts.BOX_COLORMAP, self._colormap_combo, names.COLORMAP_BOX))
-        self.add_widget(labeled_row(texts.BOX_OPACITY, opacity_row, names.OPACITY_BOX))
-        self.add_widget(labeled_row(texts.BOX_BACKGROUND, self._background_button, names.BACKGROUND_BOX))
-        self.add_widget(labeled_row(texts.BOX_OUTLINE, self._outline_button, names.OUTLINE_BOX))
+        self._add_field(form, texts.BOX_COLORMAP, self._colormap_combo, names.COLORMAP_BOX)
+        self._add_field(form, texts.BOX_OPACITY, opacity_row, names.OPACITY_BOX)
+        self._add_field(form, texts.BOX_BACKGROUND, self._background_button, names.BACKGROUND_BOX)
+        self._add_field(form, texts.BOX_OUTLINE, self._outline_button, names.OUTLINE_BOX)
 
         self._trajectory_tail_spinbox = QSpinBox()
         self._trajectory_tail_spinbox.setObjectName(names.TRAJECTORY_TAIL_SPINBOX)
@@ -98,28 +104,26 @@ class AppearanceSection(AccordionSection):
         self._trajectory_colormap_combo.addItems(list(view_style.TRAJECTORY_COLORMAPS))
         self._trajectory_colormap_combo.currentTextChanged.connect(self.trajectory_colormap_changed)
 
-        self.add_widget(
-            labeled_row(
-                texts.BOX_TRAJECTORY_COLOR_MODE,
-                self._trajectory_color_mode_combo,
-                names.TRAJECTORY_COLOR_MODE_BOX,
-            )
+        self._add_field(
+            form,
+            texts.BOX_TRAJECTORY_COLOR_MODE,
+            self._trajectory_color_mode_combo,
+            names.TRAJECTORY_COLOR_MODE_BOX,
         )
-        self.add_widget(
-            labeled_row(
-                texts.BOX_TRAJECTORY_COLORMAP,
-                self._trajectory_colormap_combo,
-                names.TRAJECTORY_COLORMAP_BOX,
-            )
+        self._add_field(
+            form,
+            texts.BOX_TRAJECTORY_COLORMAP,
+            self._trajectory_colormap_combo,
+            names.TRAJECTORY_COLORMAP_BOX,
         )
-        self.add_widget(
-            labeled_row(
-                texts.BOX_TRAJECTORY_TAIL,
-                self._trajectory_tail_spinbox,
-                names.TRAJECTORY_TAIL_BOX,
-            )
+        self._add_field(
+            form,
+            texts.BOX_TRAJECTORY_TAIL,
+            self._trajectory_tail_spinbox,
+            names.TRAJECTORY_TAIL_BOX,
         )
 
+        self.add_widget(form_widget)
         self.apply_theme(THEME_COLORS[DEFAULT_THEME])
 
     @property
@@ -163,3 +167,9 @@ class AppearanceSection(AccordionSection):
         mode = self.trajectory_color_mode
         self._trajectory_colormap_combo.setEnabled(mode == TrajectoryColorMode.SPEED)
         self.trajectory_color_mode_changed.emit(mode)
+
+    @staticmethod
+    def _add_field(form: QFormLayout, label_text: str, widget: QWidget, object_name: str) -> None:
+        label = QLabel(label_text)
+        label.setObjectName(object_name)
+        form.addRow(label, widget)

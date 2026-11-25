@@ -5,7 +5,15 @@ Unit tests for LeftPanel.
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QSpinBox, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+)
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
@@ -57,16 +65,15 @@ def test_open_section_is_tall_enough_for_its_content(panel) -> None:
         (names.TRAJECTORY_TAIL_BOX, texts.BOX_TRAJECTORY_TAIL),
     ],
 )
-def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> None:
-    box = panel.appearance_section.findChild(QWidget, name)
-    assert box.findChild(QLabel).text() == title
+def test_appearance_section_has_a_form_label_for_each_setting(panel, name, title) -> None:
+    label = panel.appearance_section.findChild(QLabel, name)
+    assert label.text() == title
 
 
-def test_box_properties_give_the_boxes_of_the_section(panel) -> None:
-    assert panel.appearance_section.findChild(QWidget, names.COLORMAP_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.OPACITY_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.BACKGROUND_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.OUTLINE_BOX) is not None
+def test_appearance_section_uses_one_form_layout(panel) -> None:
+    layouts = panel.appearance_section.findChildren(QFormLayout)
+    assert len(layouts) == 1
+    assert layouts[0].rowCount() == 8
 
 
 def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:
