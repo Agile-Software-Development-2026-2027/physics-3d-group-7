@@ -76,13 +76,13 @@ class AppearanceController(QObject):
         self._background: str | None = None  # chosen by the user, None while it follows the theme
         self._outline: str | None = None  # chosen by the user, None while it follows the background
 
-        panel.colormap_chosen.connect(view.set_colormap)
-        panel.opacity_changed.connect(view.set_volume_opacity)
-        panel.background_chosen.connect(self.set_background)
-        panel.outline_chosen.connect(self.set_outline_color)
+        panel.appearance_section.colormap_chosen.connect(view.set_colormap)
+        panel.appearance_section.opacity_changed.connect(view.set_volume_opacity)
+        panel.appearance_section.background_chosen.connect(self.set_background)
+        panel.appearance_section.outline_chosen.connect(self.set_outline_color)
 
-        view.set_colormap(panel.colormap)
-        view.set_volume_opacity(panel.volume_opacity)
+        view.set_colormap(panel.appearance_section.colormap)
+        view.set_volume_opacity(panel.appearance_section.volume_opacity)
         self._apply_colors()
 
     def set_theme(self, theme: Theme) -> None:

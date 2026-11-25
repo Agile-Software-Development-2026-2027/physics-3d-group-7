@@ -158,7 +158,7 @@ class MainController(QObject):
         if self._appearance_controller is not None:
             self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
 
-        window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
+        window.left_panel.appearance_section.theme_switch_requested.connect(self._theme_controller.toggle)
         self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
         window.right_panel.set_theme(self._theme_controller.theme)
         self._theme_controller.theme_changed.connect(window.left_panel.set_theme)
