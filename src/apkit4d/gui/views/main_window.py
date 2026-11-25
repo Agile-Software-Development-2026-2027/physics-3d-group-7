@@ -112,11 +112,12 @@ class MainWindow(QMainWindow):
 
     def set_current_file(self, path: Path | None) -> None:
         """
-        Show the name of the open file in the title of the window.
+        Show the name of the open file and update file-dependent actions.
 
         Args:
             path: The open file, or None to show only the name of the application.
         """
+        self._export_video_action.setEnabled(path is not None)
         if path is None:
             self.setWindowTitle(application.APP_NAME)
         else:
@@ -191,13 +192,14 @@ class MainWindow(QMainWindow):
             shortcuts.OPEN_RESULTS,
             self._choose_results,
         )
-        self._add_action(
+        self._export_video_action = self._add_action(
             menu,
             names.EXPORT_VIDEO_ACTION,
             texts.ACTION_EXPORT_VIDEO,
             shortcuts.EXPORT_VIDEO,
             self.video_export_requested.emit,
         )
+        self._export_video_action.setEnabled(False)
         menu.addSeparator()
         self._add_action(menu, names.QUIT_ACTION, texts.ACTION_QUIT, shortcuts.QUIT, self.close)
 
