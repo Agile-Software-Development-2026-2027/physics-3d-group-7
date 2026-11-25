@@ -10,6 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPalette, QPolygonF
 
 from apkit4d.gui.constants import appearance
+from apkit4d.gui.theme import tokens
 
 ColorRole = QPalette.ColorRole
 
@@ -22,7 +23,7 @@ def make_bubble_font(base: QFont) -> QFont:
         base: The font of the widget, which gives the family.
     """
     font = QFont(base)
-    font.setPointSizeF(appearance.BUBBLE_FONT_POINTS)
+    font.setPointSizeF(tokens.SMALL_FONT_POINTS)
     font.setWeight(QFont.Weight.DemiBold)
     return font
 
@@ -60,10 +61,10 @@ def paint_bubble(
     body = QRectF(left, top, width, appearance.BUBBLE_HEIGHT)
 
     painter.setBrush(palette.color(ColorRole.WindowText))
-    painter.drawRoundedRect(body, appearance.BUBBLE_RADIUS, appearance.BUBBLE_RADIUS)
+    painter.drawRoundedRect(body, tokens.SMALL_RADIUS, tokens.SMALL_RADIUS)
 
     half = appearance.BUBBLE_POINTER_WIDTH / 2
-    margin = appearance.BUBBLE_RADIUS + half
+    margin = tokens.SMALL_RADIUS + half
     x = min(max(tip.x(), body.left() + margin), body.right() - margin)
     base = body.bottom() - 0.5  # overlaps the body, so that there is no seam
     painter.drawPolygon(QPolygonF([QPointF(x - half, base), QPointF(x + half, base), QPointF(x, tip.y())]))
