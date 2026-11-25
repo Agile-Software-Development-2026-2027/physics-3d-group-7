@@ -31,6 +31,8 @@ from apkit4d.gui.theme import (
 )
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 
+_NO_HEIGHT_LIMIT: int = 16777215  # the largest height of a widget in Qt (QWIDGETSIZE_MAX)
+
 __all__ = ["AccordionSection"]
 
 
@@ -103,6 +105,7 @@ class AccordionSection(QWidget):
 
         self.anim_group = QParallelAnimationGroup(self)
         self.anim_group.addAnimation(self.toggle_animation)
+        self.anim_group.finished.connect(self._release_height)
 
         # Connect the click signal
         self.toggle_button.clicked.connect(self.on_toggle)
@@ -284,6 +287,7 @@ class AccordionSection(QWidget):
             target_height = content_height if expanded else 0
             self.anim_group.stop()
             self.content_area.setMaximumHeight(target_height)
+            self._release_height()
 
     def on_toggle(self, checked: bool) -> None:
         """
@@ -296,13 +300,24 @@ class AccordionSection(QWidget):
         self._update_header_style()
 
         content_height = self.content_area.sizeHint().height()
-        start_height = self.content_area.maximumHeight()
+        start_height = self.content_area.height()  # the limit is removed while the section is open
         end_height = content_height if checked else 0
 
         self.anim_group.stop()
         self.toggle_animation.setStartValue(start_height)
         self.toggle_animation.setEndValue(end_height)
         self.anim_group.start()
+
+    def _release_height(self) -> None:
+        """
+        Let an expanded section follow the height of its content.
+
+        The animation needs a fixed height to move from and to. Once the section is open the limit is
+        removed, so that the section grows or shrinks when its content changes, for example when a
+        control appears or when the stylesheet of the theme changes the height of the controls.
+        """
+        if self.toggle_button.isChecked():
+            self.content_area.setMaximumHeight(_NO_HEIGHT_LIMIT)
 
     def apply_theme(self, colors: ThemeColors) -> None:
         """
