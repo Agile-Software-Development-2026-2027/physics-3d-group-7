@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from apkit4d.gui.constants import names, texts, view_style
 from apkit4d.gui.theme.themes import THEME_COLORS, Theme
+from apkit4d.gui.views.display.vis_sub_roi_section import VisSubRoiSection
 from apkit4d.gui.views.histograms.histograms_section import HistogramsSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
 from apkit4d.gui.views.widgets.accordion import AccordionSection
@@ -174,6 +175,7 @@ class LeftPanel(SidePanel):
         self._layers_section.add_widget(self._show_trajectories_checkbox)
         self._layers_section.add_widget(self._show_blobs_checkbox)
 
+        self._vis_sub_roi_section = VisSubRoiSection()
         self._histograms_section = HistogramsSection()
 
         content = QWidget()
@@ -182,6 +184,7 @@ class LeftPanel(SidePanel):
         content_layout.setSpacing(6)
         content_layout.addWidget(self._appearance_section)
         content_layout.addWidget(self._layers_section)
+        content_layout.addWidget(self._vis_sub_roi_section)
         content_layout.addWidget(self._histograms_section)
         content_layout.addStretch()  # keeps the sections at the top
 
@@ -201,6 +204,11 @@ class LeftPanel(SidePanel):
     def layers_section(self) -> AccordionSection:
         """Section with the layers of the 3D view."""
         return self._layers_section
+
+    @property
+    def vis_sub_roi_section(self) -> VisSubRoiSection:
+        """Section with the Visualization Sub-ROI controls."""
+        return self._vis_sub_roi_section
 
     @property
     def histograms_section(self) -> HistogramsSection:
@@ -271,6 +279,7 @@ class LeftPanel(SidePanel):
         self._scroll_area.apply_theme(colors)
         self._appearance_section.apply_theme(colors)
         self._layers_section.apply_theme(colors)
+        self._vis_sub_roi_section.apply_theme(colors)
         self._histograms_section.apply_theme(colors)
 
     def _on_opacity_moved(self, percent: int) -> None:
