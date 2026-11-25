@@ -80,6 +80,7 @@ class AccordionSection(QWidget):
         # Header Button (Toggles collapse)
         self.toggle_button = QPushButton(self.header_frame)
         self.toggle_button.setObjectName(names.ACCORDION_TOGGLE_BUTTON)
+        self.toggle_button.setFlat(True)  # part of the header: the global stylesheet of the buttons skips it
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(False)
         self._update_toggle_button_text(False)
@@ -170,6 +171,7 @@ class AccordionSection(QWidget):
         """
         btn = QPushButton(text, self.header_frame)
         btn.setObjectName(object_name or names.PLAY_STAGE_BUTTON)
+        btn.setFlat(True)  # part of the header: the global stylesheet of the buttons skips it
         btn.setToolTip(tooltip)
         btn.setFixedSize(26, 26)
         if callback is not None:
