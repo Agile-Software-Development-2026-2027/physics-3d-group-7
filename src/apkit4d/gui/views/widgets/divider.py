@@ -9,7 +9,8 @@ from PySide6.QtGui import QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import appearance
-from apkit4d.gui.views.widgets.colors import mix
+from apkit4d.gui.theme import tokens
+from apkit4d.gui.theme.colors import mix
 
 ColorRole = QPalette.ColorRole
 
@@ -29,9 +30,7 @@ class Divider(QWidget):
     @override
     def paintEvent(self, _event: QPaintEvent) -> None:
         palette = self.palette()
-        color = mix(
-            palette.color(ColorRole.Window), palette.color(ColorRole.WindowText), appearance.BORDER_MIX
-        )
+        color = mix(palette.color(ColorRole.Window), palette.color(ColorRole.WindowText), tokens.BORDER_MIX)
         painter = QPainter(self)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
