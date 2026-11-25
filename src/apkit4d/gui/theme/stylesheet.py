@@ -16,6 +16,10 @@ What is left out, on purpose:
     - number fields with arrows (`QSpinBox`, `QDoubleSpinBox`): they keep the look of Qt until they
       become `NumberStepper`, which has the - and + buttons of the playback bar.
 
+The open list of a drop-down list is drawn below the field, as a list (`combobox-popup: 0`) and not
+as a menu over the field: only in this way Qt draws its items with the stylesheet, as rounded rows
+with the hover shade of the buttons.
+
 A stylesheet can draw an arrow only from an image: the arrow of the drop-down lists is a small SVG
 file, written once for each color in the temporary folder of the system.
 """
@@ -39,6 +43,9 @@ _RING_EXTRA: int = tokens.FOCUS_RING_WIDTH - BORDER_WIDTH
 # the token
 _CONTENT_HEIGHT: int = tokens.CONTROL_HEIGHT - 2 * tokens.FOCUS_RING_WIDTH
 _ARROW_AREA: int = 24  # width of the area of the arrow of a drop-down list
+# around the items of the open list: with the padding of the items, the texts of the list start where
+# the text of the closed field starts
+_LIST_PADDING: int = tokens.SPACING // 2
 _ARROW_FOLDER: Path = Path(tempfile.gettempdir()) / "apkit4d"
 # a chevron with the stroke of the icons of the playback bar, in their square of 20 units
 _ARROW_SVG: str = (
@@ -125,12 +132,16 @@ def _fields(palette: QPalette) -> str:
     accent = _css(palette.color(ColorRole.Highlight))
     accent_text = _css(palette.color(ColorRole.HighlightedText))
     _, border, ink = plain_button_colors(palette, enabled=True, down=False, hovered=False)
+    hovered, _, _ = plain_button_colors(palette, enabled=True, down=False, hovered=True)
     return (
         _control(_FIELDS, palette, tokens.SPACING)
         + f"""
 {_selectors(_FIELDS)} {{
     selection-background-color: {accent};
     selection-color: {accent_text};
+}}
+.QComboBox {{
+    combobox-popup: 0;
 }}
 .QComboBox::drop-down {{
     subcontrol-origin: padding;
@@ -150,8 +161,17 @@ def _fields(palette: QPalette) -> str:
     background-color: {_css(palette.color(ColorRole.Base))};
     color: {_css(ink)};
     border: {BORDER_WIDTH}px solid {_css(border)};
-    selection-background-color: {accent};
-    selection-color: {accent_text};
+    padding: {_LIST_PADDING}px;
+    outline: 0px;
+}}
+.QComboBox QAbstractItemView::item {{
+    min-height: {_CONTENT_HEIGHT}px;
+    padding: 0px {tokens.SPACING - _LIST_PADDING}px;
+    border-radius: {tokens.SMALL_RADIUS}px;
+}}
+.QComboBox QAbstractItemView::item:selected {{
+    background-color: {_css(hovered)};
+    color: {_css(ink)};
 }}
 """
     )

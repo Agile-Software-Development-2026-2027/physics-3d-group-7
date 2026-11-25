@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QComboBox, QPushButton
+from PySide6.QtWidgets import QComboBox, QPushButton, QStyledItemDelegate
 
 from apkit4d.gui.theme import tokens
 from apkit4d.gui.theme.apply import apply_theme, build_palette
@@ -70,3 +70,17 @@ def test_flat_buttons_and_painted_buttons_are_left_alone(qapp, qtbot) -> None:
     assert flat.minimumHeight() == 0
     assert flat.sizeHint().height() < tokens.CONTROL_HEIGHT
     assert painted.size().height() == 44
+
+
+def test_open_drop_down_list_shows_every_item(qapp, qtbot) -> None:
+    apply_theme(qapp, Theme.DARK)
+    combo = QComboBox()
+    combo.addItems(["None", "Gaussian", "Percentile", "Rolling ball"])
+    qtbot.addWidget(combo)
+    combo.show()
+    combo.showPopup()
+    view = combo.view()
+    last = view.visualRect(view.model().index(combo.count() - 1, 0))
+    assert isinstance(combo.itemDelegate(), QStyledItemDelegate)  # it draws the items with the stylesheet
+    assert last.bottom() <= view.viewport().height()  # the border of the list does not hide the last item
+    combo.hidePopup()
