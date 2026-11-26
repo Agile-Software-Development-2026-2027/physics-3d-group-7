@@ -12,6 +12,7 @@ from apkit4d.gui.constants.texts.detection import *  # noqa: F403
 from apkit4d.gui.constants.texts.histograms import *  # noqa: F403
 from apkit4d.gui.constants.texts.left_panel import *  # noqa: F403
 from apkit4d.gui.constants.texts.main_window import *  # noqa: F403
+from apkit4d.gui.constants.texts.multi_file import *  # noqa: F403
 from apkit4d.gui.constants.texts.playback import *  # noqa: F403
 from apkit4d.gui.constants.texts.preprocessing import *  # noqa: F403
 from apkit4d.gui.constants.texts.right_panel import *  # noqa: F403
