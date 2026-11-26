@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         file_opened: Emitted with the path of a .czi file once it has been accepted.
         results_opened: Emitted with the path of the json of saved results chosen by the user.
         video_export_requested: Emitted when the user requests a video export.
+        performance_settings_requested: Emitted when the user requests performance settings.
     """
 
     files_selected = Signal(list)
@@ -46,6 +47,7 @@ class MainWindow(QMainWindow):
     results_opened = Signal(Path)
     video_export_requested = Signal()
     show_volume_toggled = Signal(bool)
+    performance_settings_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -76,6 +78,7 @@ class MainWindow(QMainWindow):
         self._build_file_menu()
         self._build_view_menu()
         self._build_layers_menu()
+        self._build_settings_menu()
         self._build_status_bar()
 
     @property
@@ -260,6 +263,18 @@ class MainWindow(QMainWindow):
         self._show_trajectories_action.setEnabled(False)
         self._show_trajectories_action.toggled.connect(self.left_panel.show_trajectories_toggled)
         menu.addAction(self._show_trajectories_action)
+
+    def _build_settings_menu(self) -> None:
+        menu = self.menuBar().addMenu(texts.MENU_SETTINGS)
+        menu.setObjectName(names.SETTINGS_MENU)
+
+        self._add_action(
+            menu,
+            names.PERFORMANCE_ACTION,
+            texts.ACTION_PERFORMANCE,
+            None,
+            self.performance_settings_requested.emit,
+        )
 
     def _build_status_bar(self) -> None:
         status_bar = self.statusBar()

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
@@ -37,6 +37,7 @@ from apkit4d.gui.controllers.video_export_controller import (
 )
 from apkit4d.gui.controllers.vis_sub_roi_controller import VisSubRoiController
 from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeView
+from apkit4d.gui.models.frame_loading_config import FrameLoadingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -45,6 +46,9 @@ from apkit4d.gui.models.pipeline_model import (
 )
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
+from apkit4d.gui.views.widgets.dialogs.performance_settings_dialog import (
+    PerformanceSettingsDialog,
+)
 from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
@@ -80,6 +84,7 @@ class MainController(QObject):
     ) -> None:
         super().__init__(parent)
         self._window = window
+        self._frame_loading_config = FrameLoadingConfig()
         self._file_controller = FileController(window, open_source, self)
         self._playback_controller = PlaybackController(window.playback_bar, self)
         self._theme_controller = ThemeController(app, self)
@@ -230,6 +235,8 @@ class MainController(QObject):
         )
         window.video_export_requested.connect(self._show_video_export_dialog)
 
+        window.performance_settings_requested.connect(self._show_performance_settings_dialog)
+
         self._has_precomputed_session = False
         self._window.right_panel.set_stages_enabled(False)
         self._pipeline_controller.set_stage_runner(
@@ -311,6 +318,16 @@ class MainController(QObject):
     def _show_video_export_dialog(self) -> None:
         dialog = VideoExportDialog(self._video_export_controller, self._window)
         dialog.exec()
+
+    def _show_performance_settings_dialog(self) -> None:
+        """Open the performance settings dialog."""
+        dialog = PerformanceSettingsDialog(
+            self._frame_loading_config,
+            self._window,
+        )
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._frame_loading_config = dialog.config()
 
     @property
     def trajectory_controller(self) -> TrajectoryController | None:
