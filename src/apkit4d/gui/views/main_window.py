@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
 
         self._build_columns()
         self.multi_file_panel = MultiFilePanel()
-        self._multi_file_dock = QDockWidget("Multi-file processing", self)
+        self._multi_file_dock = QDockWidget(texts.MULTI_FILE_TITLE, self)
         self._multi_file_dock.setObjectName("multiFileDock")
         self._multi_file_dock.setWidget(self.multi_file_panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._multi_file_dock)
@@ -188,10 +188,10 @@ class MainWindow(QMainWindow):
         menu.setObjectName(names.FILE_MENU)
         self._add_action(menu, names.OPEN_ACTION, texts.ACTION_OPEN, shortcuts.OPEN, self._choose_file)
         self.open_files_action = self._add_action(
-            menu, "openFilesAction", "Open files…", None, self._choose_files
+            menu, "openFilesAction", texts.MULTI_FILE_OPEN_ACTION, None, self._choose_files
         )
         self.add_files_action = self._add_action(
-            menu, "addFilesAction", "Add files…", None, self._choose_additional_files
+            menu, "addFilesAction", texts.MULTI_FILE_ADD_ACTION, None, self._choose_additional_files
         )
         self.add_files_action.setEnabled(False)
         self._add_action(
@@ -295,12 +295,12 @@ class MainWindow(QMainWindow):
         return paths
 
     def _choose_files(self) -> None:
-        paths = self._choose_recordings("Open files")
+        paths = self._choose_recordings(texts.MULTI_FILE_OPEN_DIALOG)
         if paths:
             self.files_selected.emit(paths)
 
     def _choose_additional_files(self) -> None:
-        paths = self._choose_recordings("Add files")
+        paths = self._choose_recordings(texts.MULTI_FILE_ADD_DIALOG)
         if paths:
             self.files_added.emit(paths)
 
