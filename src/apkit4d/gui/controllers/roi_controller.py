@@ -1,17 +1,19 @@
 """Controller orchestrating the Stage 1 Region of Interest (ROI) workflow."""
 
 import logging
+from pathlib import Path
 
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QWidget
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
 from apkit4d.gui.constants import texts
-from apkit4d.gui.controllers.file_controller import FileController
+from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
 from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
+from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ class RoiStageController(QObject):
         pipeline_controller: PipelineController,
         playback_controller: PlaybackController,
         file_controller: FileController,
-        playback_bar: QWidget | None = None,
+        playback_bar: PlaybackBar | None = None,
         view: object | None = None,
         parent: QObject | None = None,
     ) -> None:
@@ -56,9 +58,11 @@ class RoiStageController(QObject):
         if self._volume_controller is not None:
             active_roi = self._volume_controller.roi
             if active_roi is not None:
-                self._pipeline_model.update_step_params(PipelineStep.ROI, **active_roi.to_dict())
-            elif self._pipeline_model.get_step_params(PipelineStep.ROI):
-                self._pipeline_model.reset_step_params(PipelineStep.ROI)
+                self._pipeline_model.set_roi_params(
+                    self._pipeline_model.get_roi_params().with_region(active_roi)
+                )
+            elif self._pipeline_model.get_roi_params().region is None:
+                self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_region(None))
 
         self._unlock_playback_after_roi()
         self._pipeline_controller.complete_stage(PipelineStep.ROI)
@@ -89,6 +93,9 @@ class RoiStageController(QObject):
         if self._inspector is None:
             return
 
+        self._file_controller.loaded.connect(self._on_source_loaded)
+        self._file_controller.closed.connect(self._on_source_closed)
+
         if self._volume_controller is not None:
             self._volume_controller.volume_bounds_changed.connect(self._on_volume_bounds_changed)
 
@@ -98,9 +105,22 @@ class RoiStageController(QObject):
         self._inspector.reset_roi_clicked.connect(self._on_reset_roi)
         self._inspector.bounds_edited.connect(self._on_inspector_bounds_edited)
         self._inspector.undo_roi_clicked.connect(self._on_undo_roi)
+        self._inspector.selected_frames_changed.connect(self._on_selected_frames_changed)
 
         if self._roi_view is not None:
             self._roi_view.roi_updated.connect(self._on_viewport_roi_updated)
+
+    def _on_selected_frames_changed(self, frame_range: FrameRange | None):
+        roi_params = self._pipeline_model.get_roi_params()
+
+        self._pipeline_model.set_roi_params(roi_params.with_frame_range(frame_range))
+        self._playback_controller.set_frame_range(frame_range)
+
+        if roi_params.frame_range is not None and frame_range is not None:
+            if not roi_params.frame_range.contains(frame_range):
+                self._pipeline_model.invalidate_from(PipelineStep.ROI)
+        elif roi_params.frame_range != frame_range:
+            self._pipeline_model.invalidate_from(PipelineStep.ROI)
 
     def _on_volume_bounds_changed(self, bounds: Bounds6D) -> None:
         """Initialize ROI bounds and clear undo history when a new recording loads."""
@@ -173,7 +193,8 @@ class RoiStageController(QObject):
             self._volume_controller.set_roi(roi)
 
         self._apply_roi_to_inspector(roi)
-        self._pipeline_model.update_step_params(PipelineStep.ROI, **roi.to_dict())
+        self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_region(roi))
+
         self._pipeline_controller.complete_stage(PipelineStep.ROI)
         self._unlock_playback_after_roi()
         logger.debug("Accepted ROI bounds: %s", roi.bounds)
@@ -198,7 +219,8 @@ class RoiStageController(QObject):
 
         self._roi_history.clear()
         self._restore_inspector_to_roi(None)
-        self._sync_model_reset_to_full()
+        self._reset_frame_range_to_full()
+        self._sync_model_reset_region_to_full()
         self._unlock_playback_after_roi()
         logger.debug("Reset ROI to full volume and invalidated downstream stages")
 
@@ -217,17 +239,29 @@ class RoiStageController(QObject):
 
         self._restore_inspector_to_roi(prev_roi)
         if prev_roi is not None:
-            self._pipeline_model.update_step_params(PipelineStep.ROI, **prev_roi.to_dict())
+            self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_region(prev_roi))
             self._pipeline_model.invalidate_subsequent(PipelineStep.ROI)
         else:
-            self._sync_model_reset_to_full()
+            self._sync_model_reset_region_to_full()
 
         self._unlock_playback_after_roi()
         logger.debug("Undid ROI change; restored prev_roi=%s", prev_roi)
 
-    def _sync_model_reset_to_full(self) -> None:
+    def _reset_frame_range_to_full(self) -> None:
+        source = self._file_controller.source
+
+        if self._inspector is not None and source is not None:
+            self._inspector.frames_selector.set_frame_range(FrameRange.full(source.info.n_t), True)
+
+        roi_params = self._pipeline_model.get_roi_params()
+        self._pipeline_model.set_roi_params(roi_params.with_frame_range(None))
+
+        if roi_params.frame_range is not None:  # they are the previous params because the class is freezed
+            self._pipeline_model.invalidate_from(PipelineStep.ROI)
+
+    def _sync_model_reset_region_to_full(self) -> None:
         """Reset ROI parameters in PipelineModel and invalidate ROI and downstream stages."""
-        self._pipeline_model.reset_step_params(PipelineStep.ROI)
+        self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_region(None))
         self._pipeline_model.invalidate_from(PipelineStep.ROI)
 
     def _apply_roi_to_inspector(self, roi: RegionOfInterest) -> None:
@@ -263,3 +297,12 @@ class RoiStageController(QObject):
             if self._full_volume_bounds is not None:
                 self._inspector.set_roi_bounds(self._full_volume_bounds)
             self._inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
+
+    def _on_source_loaded(self, _path: Path, source: FrameSource) -> None:
+        self._reset_frame_range_to_full()
+
+    def _on_source_closed(self) -> None:
+        self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_frame_range(None))
+
+        if inspector := self._inspector:
+            inspector.frames_selector.set_frame_range(None, True)

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-from apkit4d.core.models import DetectionConfig
+from apkit4d.core.models import DetectionConfig, RoiConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.trajectory_detection import DetectionData
@@ -38,6 +38,8 @@ def _detections():
             "z_um": [0.0] * 8,
             "y_um": [0.0] * 8,
             "x_um": [float(i) for i in range(8)],
+            "t0": None,
+            "t1": None,
         }
     )
 
@@ -70,7 +72,7 @@ def test_detection_feeds_tracking_without_recalculation(qtbot, qapp, monkeypatch
     assert len(calls) == 1
     assert calls[0][0] is source
     assert calls[0][2] == DetectionConfig()
-    assert calls[0][3] is None
+    assert calls[0][3] == RoiConfig()
 
     pd.testing.assert_frame_equal(
         controller.pipeline_model.batch_results[0],

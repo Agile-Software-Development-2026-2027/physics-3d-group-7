@@ -9,7 +9,7 @@ from typing import Any, assert_never
 import pandas as pd
 from PySide6.QtCore import QObject, Signal
 
-from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig, TrackingConfig
 
 
 class StepStatus(StrEnum):
@@ -248,6 +248,14 @@ class PipelineModel(QObject):
         """Return a copy of the configuration dictionary for `step`."""
         return dict(self._params[step])
 
+    def get_roi_params(self) -> RoiConfig:
+        """Return the RoiConfig instance for the ROI step: the region to crop and the frames."""
+        return RoiConfig.model_validate(self._params[PipelineStep.ROI])
+
+    def set_roi_params(self, params: RoiConfig) -> None:
+        """Update the ROI parameters from a RoiConfig instance."""
+        self.update_step_params(PipelineStep.ROI, **params.model_dump())
+
     def get_preproc_params(self) -> PreprocessingConfig:
         """Return the PreprocessingConfig dataclass instance for the preprocessing step."""
         return PreprocessingConfig(**self._params[PipelineStep.PREPROCESSING])
@@ -315,7 +323,7 @@ class PipelineModel(QObject):
 
         match step:
             case PipelineStep.ROI:
-                return {}  # TODO add default params
+                return RoiConfig().model_dump()
             case PipelineStep.PREPROCESSING:
                 return PreprocessingConfig().model_dump()
             case PipelineStep.DETECTION:

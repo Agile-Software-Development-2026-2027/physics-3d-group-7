@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from apkit4d.batching.processor import BatchProcessor
-from apkit4d.core.models import DetectionConfig, PreprocessingConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig
 from apkit4d.gui.controllers.trajectory_detection import detect_sequence
 from apkit4d.io.czi import CziInfo, CziSource
 from apkit4d.pipeline.contracts import SequenceDetectionResult
@@ -27,13 +27,25 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
         }
     )
 
-    def fake_process_sequence(self, czi, *, out_dir, roi, progress_callback, sink):
+    def fake_process_sequence(
+        self,
+        czi,
+        *,
+        out_dir,
+        roi,
+        progress_callback,
+        sink,
+        t0,
+        t1,
+    ):
         assert czi == czi_path
         assert self.config.workers == 1
         assert out_dir is None
         assert roi is None
         assert progress_callback is None
         assert sink is None
+        assert t0 is None
+        assert t1 is None
 
         return SequenceDetectionResult(
             detections=expected,
@@ -50,6 +62,7 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
         czi_path,
         PreprocessingConfig(),
         DetectionConfig(),
+        RoiConfig(),
     )
 
     pd.testing.assert_frame_equal(result.detections, expected)
@@ -60,7 +73,7 @@ def test_detect_sequence_returns_detections(tmp_path: Path, monkeypatch: pytest.
 def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Return an empty table when no blobs are found."""
 
-    def fake_process_sequence(self, czi, *, out_dir, roi, progress_callback, sink):
+    def fake_process_sequence(self, czi, *, out_dir, roi, progress_callback, sink, t0, t1):
         return SequenceDetectionResult(
             detections=None,
             table_path=None,
@@ -72,11 +85,7 @@ def test_detect_sequence_handles_empty_detections(tmp_path: Path, monkeypatch: p
 
     monkeypatch.setattr(BatchProcessor, "process_sequence", fake_process_sequence)
 
-    result = detect_sequence(
-        tmp_path / "sample.czi",
-        PreprocessingConfig(),
-        DetectionConfig(),
-    )
+    result = detect_sequence(tmp_path / "sample.czi", PreprocessingConfig(), DetectionConfig(), RoiConfig())
 
     assert result.detections.empty
     assert list(result.detections.columns) == ["frame", "z_um", "y_um", "x_um"]
@@ -110,6 +119,7 @@ def test_detect_sequence_reuses_open_czi_source_without_disk_io(tmp_path: Path) 
         source,
         PreprocessingConfig(),
         DetectionConfig(threshold=0.05, min_volume_um3=1.0),
+        RoiConfig(),
     )
 
     assert list(tmp_path.iterdir()) == []
@@ -146,6 +156,7 @@ def test_detect_sequence_falls_back_to_disk_sink_when_out_dir_provided(tmp_path:
         source,
         PreprocessingConfig(),
         DetectionConfig(threshold=0.05, min_volume_um3=1.0),
+        RoiConfig(),
         out_dir=out_dir,
     )
 

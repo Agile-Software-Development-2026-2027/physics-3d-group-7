@@ -9,6 +9,7 @@ of the playback: the step, that is how many frames are skipped at every move, an
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.gui.constants import playback
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 
@@ -36,6 +37,8 @@ class PlaybackController(QObject):
 
     def __init__(self, bar: PlaybackBar, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self._frame_range: FrameRange | None = None
+
         self._bar = bar
         self._frame = 0
         self._frame_count = 0
@@ -99,15 +102,13 @@ class PlaybackController(QObject):
             self.set_playing(False)
 
     def go_to_frame(self, frame: int) -> None:
-        """
-        Go to `frame`, limited to the first and the last frame.
+        """Go to frame, limited to the selected frame range."""
+        frame = min(max(frame, self._first_frame), self._last_frame)
 
-        Args:
-            frame: Index of the wanted frame.
-        """
-        frame = min(max(frame, 0), self._last_frame)
         if frame == self._frame:
+            self._bar.set_frame(frame)
             return
+
         self._frame = frame
         self._bar.set_frame(frame)
         self.frame_changed.emit(frame)
@@ -125,23 +126,19 @@ class PlaybackController(QObject):
         self.set_playing(not self.is_playing)
 
     def set_playing(self, playing: bool) -> None:
-        """
-        Start or stop the playback. Starting is ignored if there is only one frame or none.
+        playing = playing and self._last_frame > self._first_frame
 
-        Starting from the last frame goes back to the first one, as video players do.
-
-        Args:
-            playing: True to start, False to stop.
-        """
-        playing = playing and self._frame_count > 1
         if playing == self.is_playing:
             return
+
         if playing:
             if self._frame >= self._last_frame:
-                self.go_to_frame(0)
+                self.go_to_frame(self._first_frame)
+
             self._timer.start()
         else:
             self._timer.stop()
+
         self._bar.set_playing(playing)
 
     def set_step(self, step: int) -> None:
@@ -180,12 +177,27 @@ class PlaybackController(QObject):
             self.speed_changed.emit(speed)
 
     @property
+    def _first_frame(self) -> int:
+        if self._frame_range is None:
+            return 0
+
+        return max(self._frame_range.start, 0)
+
+    @property
     def _last_frame(self) -> int:
-        return max(self._frame_count - 1, 0)
+        last_recording_frame = max(self._frame_count - 1, 0)
+
+        if self._frame_range is None:
+            return last_recording_frame
+
+        return min(self._frame_range.end, last_recording_frame)
 
     @property
     def _max_step(self) -> int:
-        return max(self._frame_count - 1, playback.MIN_STEP)
+        return max(
+            self._last_frame - self._first_frame,
+            playback.MIN_STEP,
+        )
 
     def _interval_ms(self) -> int:
         return max(1, round(1000 / self._speed))
@@ -195,3 +207,13 @@ class PlaybackController(QObject):
             self.set_playing(False)
         else:
             self.next_frame()
+
+    def set_frame_range(self, frame_range: FrameRange | None) -> None:
+        self._frame_range = frame_range
+        self._bar.set_frame_range(frame_range)
+
+        self.set_step(self._step)
+        self.go_to_frame(self._frame)
+
+        if self._last_frame <= self._first_frame:
+            self.set_playing(False)

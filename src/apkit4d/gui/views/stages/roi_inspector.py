@@ -12,8 +12,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
 from apkit4d.gui.constants import names, texts
+from apkit4d.gui.views.widgets.frames_selector import FramesSelector
 from apkit4d.gui.views.widgets.v_separator import VSeparator
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
@@ -29,6 +31,7 @@ class RoiInspector(QWidget):
         cancel_roi_clicked: Emitted when the user cancels the ROI selection/preview.
         reset_roi_clicked: Emitted when the user resets the ROI to the full volume.
         bounds_edited: Emitted with a `RegionOfInterest` when spinboxes are edited manually.
+        selected_frames_changed: Emitted when the frame range is changed
     """
 
     select_roi_clicked = Signal()
@@ -37,6 +40,7 @@ class RoiInspector(QWidget):
     reset_roi_clicked = Signal()
     bounds_edited = Signal(object)
     undo_roi_clicked = Signal()
+    selected_frames_changed = Signal(object)  # FrameRange | None
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -146,12 +150,10 @@ class RoiInspector(QWidget):
         save_layout.setContentsMargins(0, 0, 0, 0)
         save_layout.setSpacing(8)
 
-        self.min_frame = self._create_spinbox(names.ROI_INSPECTOR_MIN_FRAME)
-        self.max_frame = self._create_spinbox(names.ROI_INSPECTOR_MAX_FRAME)
-        save_layout.addWidget(QLabel("Save ROI for frames:"))
-        save_layout.addWidget(self.min_frame)
-        save_layout.addWidget(QLabel("to"))
-        save_layout.addWidget(self.max_frame)
+        save_layout.addWidget(QLabel(texts.INSPECTOR_LABEL_SELECT_FRAMES))
+        self.frames_selector = FramesSelector(FrameRange(0, 0))
+        self.frames_selector.selected_frames_changed.connect(self.selected_frames_changed.emit)
+        save_layout.addWidget(self.frames_selector)
 
         form.addRow(save_widget)
 
@@ -268,11 +270,10 @@ class RoiInspector(QWidget):
             self._z_max,
             self._select_btn,
             self._reset_btn,
-            self.min_frame,
-            self.max_frame,
             self.save_button,
         ):
             widget.setEnabled(enabled)
         self._accept_btn.setEnabled(enabled and self._editing_mode)
         self._cancel_btn.setEnabled(enabled and self._editing_mode)
         self._undo_btn.setEnabled(enabled and self._has_undo)
+        self.frames_selector.disable(not enabled)

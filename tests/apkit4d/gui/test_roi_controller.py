@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QWidget
 
+from apkit4d.core.frame_range import FrameRange
+from apkit4d.core.models import RoiConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -101,6 +103,7 @@ def _make_harness(qtbot, *, with_source: bool = True):
         model=pipeline_model,
         pipeline=pipeline_controller,
         playback_bar=playback_bar,
+        playback=playback_controller,
         file_controller=file_controller,
     )
 
@@ -167,8 +170,13 @@ def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     _accept_bounds(h, accepted_roi)
     h.pipeline.complete_stage(PipelineStep.PREPROCESSING)
 
-    assert h.model.get_step_params(PipelineStep.ROI) == accepted_roi.to_dict()
+    assert h.model.get_roi_params().region == accepted_roi
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+
+    assert h.model.get_roi_params().frame_range == selected_range
 
     reset_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_RESET_BUTTON)
     assert reset_btn is not None
@@ -179,9 +187,10 @@ def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     assert h.inspector.get_roi() == RegionOfInterest(
         x_min=0.0, x_max=100.0, y_min=0.0, y_max=80.0, z_min=0.0, z_max=40.0
     )
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params() == RoiConfig()
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+    assert h.model.get_roi_params().frame_range is None
 
 
 def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None:
@@ -200,7 +209,7 @@ def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None
     # First undo restores roi_1 and invalidates downstream stages
     undo_btn.click()
     assert h.vol.roi == roi_1
-    assert h.model.get_step_params(PipelineStep.ROI) == roi_1.to_dict()
+    assert h.model.get_roi_params().region == roi_1
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
     assert h.controller.has_undo
 
@@ -208,7 +217,7 @@ def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None
     undo_btn.click()
     assert h.vol.roi is None
     assert not h.controller.has_undo
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params().region is None
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
 
 
@@ -231,7 +240,7 @@ def test_select_roi_and_viewport_update_workflow(qtbot) -> None:
     accept_btn.click()
 
     assert h.vol.roi == drawn_roi
-    assert h.model.get_step_params(PipelineStep.ROI) == drawn_roi.to_dict()
+    assert h.model.get_roi_params().region == drawn_roi
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
     assert h.playback_bar.isEnabled()
 
@@ -255,7 +264,7 @@ def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
     h.pipeline.run_up_to(PipelineStep.ROI)
 
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params().region is None
     assert h.vol.roi is None
 
     crop = RegionOfInterest(x_min=5.0, x_max=45.0, y_min=5.0, y_max=35.0, z_min=2.0, z_max=18.0)
@@ -264,4 +273,79 @@ def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
     h.pipeline.run_up_to(PipelineStep.ROI)
 
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
-    assert h.model.get_step_params(PipelineStep.ROI) == crop.to_dict()
+    assert h.model.get_roi_params().region == crop
+
+
+def test_selected_frames_are_propagated_to_model_and_playback(qtbot, monkeypatch):
+    h = _make_harness(qtbot)
+    selected_range = FrameRange(1, 3)
+
+    set_frame_range = MagicMock()
+    monkeypatch.setattr(h.playback, "set_frame_range", set_frame_range)
+
+    with qtbot.waitSignal(h.inspector.selected_frames_changed) as changed:
+        h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+
+    assert changed.args == [selected_range]
+    assert h.model.get_roi_params().frame_range == selected_range
+
+    set_frame_range.assert_called_once_with(selected_range)
+
+
+def test_frame_range_update_preserves_existing_roi(qtbot) -> None:
+    h = _make_harness(qtbot)
+
+    accepted_roi = RegionOfInterest(
+        x_min=10.0,
+        x_max=50.0,
+        y_min=10.0,
+        y_max=40.0,
+        z_min=5.0,
+        z_max=25.0,
+    )
+    _accept_bounds(h, accepted_roi)
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+
+    params = h.model.get_roi_params()
+
+    assert params.region == accepted_roi
+    assert params.frame_range == selected_range
+
+
+def test_accepting_roi_preserves_selected_frame_range(qtbot) -> None:
+    h = _make_harness(qtbot)
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+
+    accepted_roi = RegionOfInterest(
+        x_min=10.0,
+        x_max=50.0,
+        y_min=10.0,
+        y_max=40.0,
+        z_min=5.0,
+        z_max=25.0,
+    )
+    _accept_bounds(h, accepted_roi)
+
+    params = h.model.get_roi_params()
+
+    assert params.region == accepted_roi
+    assert params.frame_range == selected_range
+
+
+def test_set_enabled_state_updates_frames_selector(qtbot, monkeypatch) -> None:
+    h = _make_harness(qtbot)
+
+    disable = MagicMock()
+    monkeypatch.setattr(h.inspector.frames_selector, "disable", disable)
+
+    h.inspector.set_enabled_state(False)
+    h.inspector.set_enabled_state(True)
+
+    assert [call.args for call in disable.call_args_list] == [
+        (True,),
+        (False,),
+    ]

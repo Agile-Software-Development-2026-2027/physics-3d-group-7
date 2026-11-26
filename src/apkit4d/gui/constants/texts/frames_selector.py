@@ -1,5 +1,5 @@
 """
-Texts of the frame range selector widget.
+Texts of the frames selector widget.
 """
 
 START_FRAME_LABEL: str = "from"
