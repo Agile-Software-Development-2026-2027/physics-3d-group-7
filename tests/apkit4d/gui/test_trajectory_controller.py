@@ -3,11 +3,12 @@
 import pandas as pd
 import pytest
 import pyvista as pv
-from PySide6.QtWidgets import QCheckBox, QComboBox, QSpinBox
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QComboBox, QSpinBox
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.trajectory_controller import TrajectoryController
-from apkit4d.gui.views.panels.left_panel import LeftPanel
+from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
 
 
@@ -47,15 +48,16 @@ def _sample_tracks() -> pd.DataFrame:
 
 @pytest.fixture
 def setup(qtbot):
-    panel = LeftPanel()
-    qtbot.addWidget(panel)
+    window = MainWindow()
+    qtbot.addWidget(window)
     view = _FakeTrajectoryView()
-    controller = TrajectoryController(panel, view)
-    return panel, view, controller
+    controller = TrajectoryController(window, view)
+    return window, view, controller
 
 
 def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(setup) -> None:
-    panel, view, controller = setup
+    window, view, controller = setup
+    panel = window.left_panel
     assert view.blobs_visible == [True]
 
     controller.set_trajectories(_sample_tracks(), dt_s=0.1, current_frame=0)
@@ -83,10 +85,11 @@ def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(se
     assert controller.config.colormap == cmap_combo.currentText()
 
     # Toggling trajectory visibility clears/restores trajectories; toggling blobs updates view
-    traj_cb = panel.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
-    blobs_cb = panel.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
+    traj_cb = window.findChild(QAction, names.SHOW_TRAJECTORIES_ACTION)
+    blobs_cb = window.findChild(QAction, names.SHOW_BLOBS_ACTION)
 
     cleared_before = view.cleared_count
+    assert traj_cb is not None
     traj_cb.setChecked(False)
     assert view.cleared_count == cleared_before + 1
 
@@ -97,6 +100,7 @@ def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(se
     traj_cb.setChecked(True)
     assert view.trajectories[-1][0].n_points == 2
 
+    assert blobs_cb is not None
     blobs_cb.setChecked(False)
     assert view.blobs_visible[-1] is False
 

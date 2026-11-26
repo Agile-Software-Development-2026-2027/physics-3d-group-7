@@ -97,6 +97,7 @@ class BlobDetectionController(QObject):
     params_changed = Signal(str, float)
     seeds_response_changed = Signal(object)  # NDArray, or None when there is nothing to show
     detection_progress = Signal(int, int)
+    detection_completed = Signal()
 
     def __init__(
         self,
@@ -291,6 +292,8 @@ class BlobDetectionController(QObject):
                 self._start_detection_if_needed()
         else:
             self._detection_generation += 1
+            if status == StepStatus.COMPLETED:
+                self.detection_completed.emit()
 
     def _on_detection_pipeline_reset(self) -> None:
         self._detection_generation += 1

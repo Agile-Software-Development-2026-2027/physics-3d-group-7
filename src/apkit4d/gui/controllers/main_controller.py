@@ -130,6 +130,8 @@ class MainController(QObject):
                 file_controller=self._file_controller,
                 volume_controller=self._volume_controller,
             )
+            if self._volume_controller is not None:
+                self._blob_controller.detection_completed.connect(self._on_detection_completed)
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
             self._blob_controller.params_changed.connect(
@@ -411,6 +413,9 @@ class MainController(QObject):
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error
+
+    def _on_detection_completed(self) -> None:
+        self._window.set_volume_visible(False)
 
     def _commit_preprocessing_stage(self) -> None:
         """Auto-commit the active preprocessing configuration and complete Stage 2."""

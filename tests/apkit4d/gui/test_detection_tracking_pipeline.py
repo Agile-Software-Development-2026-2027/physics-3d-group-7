@@ -6,9 +6,10 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
+from PySide6.QtGui import QAction
 
 from apkit4d.core.models import DetectionConfig
-from apkit4d.gui.constants import texts
+from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.trajectory_detection import DetectionData
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
@@ -262,6 +263,7 @@ def test_stage_3_completion_displays_blobs_across_frames_in_3d_view(qtbot, qapp,
     source.read.return_value = np.zeros((4, 6, 6), dtype=np.uint16)
 
     controller.file_controller._source = source
+    window.set_current_file(Path("sample.czi"))
     controller.playback_controller.set_frame_count(3)
     assert controller.volume_controller is not None
     controller.volume_controller.set_source(Path("sample.czi"), source)
@@ -293,6 +295,10 @@ def test_stage_3_completion_displays_blobs_across_frames_in_3d_view(qtbot, qapp,
     )
     assert view.show_blobs.called
     assert view.show_blobs.call_args.args[0].n_points == 1
+    volume_action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
+    assert volume_action is not None
+    assert not volume_action.isChecked()
+    view.set_volume_visible.assert_called_with(False)
 
     seed_hist = window.left_panel.histograms_section.seed_response_histogram
     assert np.allclose(seed_hist.seeds_response, [0.25])

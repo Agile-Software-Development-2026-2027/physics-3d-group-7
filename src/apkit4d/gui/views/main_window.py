@@ -113,6 +113,10 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(message)
 
+    def set_volume_visible(self, visible: bool) -> None:
+        """Set the volume layer action, which updates visibility through its toggled signal."""
+        self._show_volume_action.setChecked(visible)
+
     def set_current_file(self, path: Path | None) -> None:
         """
         Show the name of the open file and update file-dependent actions.
