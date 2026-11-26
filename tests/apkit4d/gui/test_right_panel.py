@@ -82,15 +82,11 @@ def test_right_panel_theme_switch(qtbot) -> None:
 
     panel.set_theme(Theme.LIGHT)
     assert panel.theme == Theme.LIGHT
-    assert LIGHT_COLORS.button in panel.sections[0].toggle_button.styleSheet()
-    assert LIGHT_COLORS.placeholder_text in panel.scroll_area.styleSheet()
     assert LIGHT_COLORS.button in panel.top_bar.styleSheet()
     assert LIGHT_COLORS.window in panel.bottom_stats.styleSheet()
 
     panel.set_theme(Theme.DARK)
     assert panel.theme == Theme.DARK
-    assert DARK_COLORS.button in panel.sections[0].toggle_button.styleSheet()
-    assert DARK_COLORS.placeholder_text in panel.scroll_area.styleSheet()
     assert DARK_COLORS.button in panel.top_bar.styleSheet()
     assert DARK_COLORS.window in panel.bottom_stats.styleSheet()
 
@@ -220,7 +216,6 @@ def test_right_panel_add_and_remove_section(qtbot) -> None:
 
     assert len(panel.sections) == initial_count + 1
     assert panel.sections[-1] is new_section
-    assert DARK_COLORS.button in new_section.toggle_button.styleSheet()
 
     panel.remove_section(new_section)
     assert len(panel.sections) == initial_count

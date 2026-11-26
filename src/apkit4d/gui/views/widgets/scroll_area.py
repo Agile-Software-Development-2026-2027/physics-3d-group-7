@@ -11,12 +11,6 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names
-from apkit4d.gui.theme import (
-    DEFAULT_THEME,
-    THEME_COLORS,
-    ScrollAreaStyler,
-    ThemeColors,
-)
 
 __all__ = ["ModernScrollArea"]
 
@@ -33,14 +27,4 @@ class ModernScrollArea(QScrollArea):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setObjectName(names.MODERN_SCROLL_AREA)
-        self.apply_theme(THEME_COLORS[DEFAULT_THEME])
-
-    def apply_theme(self, colors: ThemeColors) -> None:
-        """
-        Update scrollbar styles to match the given theme colors.
-
-        Args:
-            colors: Colors of the active theme.
-        """
-        ScrollAreaStyler.apply(self, colors)
+        self.setObjectName(names.MODERN_SCROLL_AREA)  # the stylesheet of the theme removes its background

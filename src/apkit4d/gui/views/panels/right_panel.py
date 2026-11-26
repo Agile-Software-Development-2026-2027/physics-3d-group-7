@@ -459,7 +459,6 @@ class RightPanel(SidePanel):
     def apply_theme(self, colors: ThemeColors) -> None:
         """Apply theme colors to all components."""
         self._style_top_bar(colors)
-        self.scroll_area.apply_theme(colors)
         for section in self._sections:
             section.apply_theme(colors)
         self._bottom_stats.apply_theme(colors)
