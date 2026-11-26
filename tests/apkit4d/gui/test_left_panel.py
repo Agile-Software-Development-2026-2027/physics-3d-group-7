@@ -204,3 +204,19 @@ def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, 
     with qtbot.waitSignal(panel.show_blobs_toggled, timeout=1000) as blocker:
         blobs_cb.setChecked(False)
     assert blocker.args == [False]
+
+
+def test_left_panel_includes_collapsed_vis_sub_roi_section(panel) -> None:
+    section = panel.findChild(AccordionSection, names.VIS_SUB_ROI_SECTION)
+    assert section is panel.vis_sub_roi_section
+    assert section.title == texts.SECTION_VIS_SUB_ROI
+    assert not section.is_expanded()
+    assert section.outside_opacity == pytest.approx(0.01)
+
+
+def test_set_theme_paints_vis_sub_roi_section(panel) -> None:
+    panel.set_theme(Theme.LIGHT)
+    assert LIGHT_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
+
+    panel.set_theme(Theme.DARK)
+    assert DARK_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()

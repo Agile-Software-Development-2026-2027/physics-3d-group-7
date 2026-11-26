@@ -8,8 +8,8 @@ from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QFontMetrics, QPainter, QPaintEvent
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
-from apkit4d.gui.constants import appearance
-from apkit4d.gui.views.widgets.colors import focus_pen, plain_button_colors
+from apkit4d.gui.theme import tokens
+from apkit4d.gui.theme.colors import focus_pen, plain_button_colors
 from apkit4d.gui.views.widgets.icons import Icon, paint_icon
 
 
@@ -30,7 +30,7 @@ class LabeledButton(QPushButton):
     def __init__(self, icon: Icon, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self._icon = icon
-        self.setFixedHeight(appearance.ACTION_BUTTON_HEIGHT)
+        self.setFixedHeight(tokens.CONTROL_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # the focus ring is for the keyboard, not for the mouse
 
@@ -49,10 +49,10 @@ class LabeledButton(QPushButton):
     @override
     def sizeHint(self) -> QSize:
         if self._compact:
-            return QSize(appearance.ACTION_BUTTON_HEIGHT, appearance.ACTION_BUTTON_HEIGHT)
+            return QSize(tokens.CONTROL_HEIGHT, tokens.CONTROL_HEIGHT)
         text_width = QFontMetrics(self.font()).horizontalAdvance(self.text())
-        content = appearance.ACTION_ICON_SIZE + appearance.ACTION_ICON_GAP + text_width
-        return QSize(2 * appearance.ACTION_BUTTON_PADDING + content, appearance.ACTION_BUTTON_HEIGHT)
+        content = tokens.ICON_SIZE + tokens.ICON_GAP + text_width
+        return QSize(2 * tokens.CONTROL_PADDING + content, tokens.CONTROL_HEIGHT)
 
     @override
     def minimumSizeHint(self) -> QSize:
@@ -68,18 +68,18 @@ class LabeledButton(QPushButton):
             palette, enabled=self.isEnabled(), down=self.isDown(), hovered=self.underMouse()
         )
         focused = self.hasFocus()
-        inset = appearance.FOCUS_RING_WIDTH / 2 if focused else 0.5  # keeps the thick ring inside the widget
+        inset = tokens.FOCUS_RING_WIDTH / 2 if focused else 0.5  # keeps the thick ring inside the widget
         shape = QRectF(self.rect()).adjusted(inset, inset, -inset, -inset)
         painter.setBrush(background)
         painter.setPen(focus_pen(palette) if focused else border)
-        painter.drawRoundedRect(shape, appearance.BUTTON_RADIUS, appearance.BUTTON_RADIUS)
+        painter.drawRoundedRect(shape, tokens.BUTTON_RADIUS, tokens.BUTTON_RADIUS)
 
-        side = appearance.ACTION_ICON_SIZE
-        left = (self.width() - side) / 2 if self._compact else appearance.ACTION_BUTTON_PADDING
+        side = tokens.ICON_SIZE
+        left = (self.width() - side) / 2 if self._compact else tokens.CONTROL_PADDING
         paint_icon(painter, self._icon, QRectF(left, (self.height() - side) / 2, side, side), ink)
         if self._compact:
             return
-        text_left = left + side + appearance.ACTION_ICON_GAP
+        text_left = left + side + tokens.ICON_GAP
         painter.setPen(ink)
         painter.drawText(
             QRectF(text_left, 0, self.width() - text_left, self.height()),

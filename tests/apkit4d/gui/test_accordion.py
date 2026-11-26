@@ -257,3 +257,28 @@ def test_accordion_section_configurable_header_actions(qtbot) -> None:
     # Clear right widget
     section.set_right_widget(None)
     assert section.right_widget is None
+
+
+def test_expanded_section_follows_the_height_of_its_content(qtbot) -> None:
+    section = AccordionSection("Growing")
+    qtbot.addWidget(section)
+    section.add_widget(QLabel("First row"))
+    section.set_expanded(True, animate=False)
+    section.show()
+    height = section.content_area.sizeHint().height()
+
+    section.add_widget(QLabel("Second row"))  # added after the section is open
+    qtbot.waitUntil(lambda: section.content_area.height() > height)
+
+    section.set_expanded(False, animate=False)
+    assert section.content_area.maximumHeight() == 0
+
+
+def test_animated_expansion_releases_the_height_at_the_end(qtbot) -> None:
+    section = AccordionSection("Animated")
+    qtbot.addWidget(section)
+    section.add_widget(QLabel("Content"))
+    section.show()
+    with qtbot.waitSignal(section.anim_group.finished):
+        section.set_expanded(True, animate=True)
+    assert section.content_area.maximumHeight() > section.content_area.sizeHint().height()

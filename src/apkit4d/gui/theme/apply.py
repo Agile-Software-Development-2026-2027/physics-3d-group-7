@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
 from apkit4d.gui.constants import application
+from apkit4d.gui.theme.stylesheet import build_stylesheet
 from apkit4d.gui.theme.themes import THEME_COLORS, Theme, ThemeColors
 
 ColorRole = QPalette.ColorRole
@@ -56,4 +57,6 @@ def apply_theme(app: QApplication, theme: Theme) -> None:
         theme: Theme to apply.
     """
     app.setStyle(application.QT_STYLE)  # changing the style resets the palette, so it comes first
-    app.setPalette(build_palette(THEME_COLORS[theme]))
+    palette = build_palette(THEME_COLORS[theme])
+    app.setPalette(palette)
+    app.setStyleSheet(build_stylesheet(palette))  # the standard controls get the look of the playback bar

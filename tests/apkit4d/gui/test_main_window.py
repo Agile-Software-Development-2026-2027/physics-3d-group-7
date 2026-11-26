@@ -112,6 +112,26 @@ def test_run_with_mock_opens_mock_source(qapp, monkeypatch):  # pyright: ignore[
     fake_window.open_file.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("name", "opened_as_results"), [("sample.czi", False), ("sample_blobs_params.json", True)]
+)
+def test_run_opens_a_recording_or_saved_results(qapp, monkeypatch, tmp_path, name, opened_as_results):  # pyright: ignore[reportUnusedParameter]
+    fake_window = MagicMock()
+    monkeypatch.setattr(gui_app, "MainWindow", lambda: fake_window)
+    monkeypatch.setattr(gui_app, "Viewport", MagicMock)
+    monkeypatch.setattr(gui_app, "MainController", lambda *_args, **_kwargs: MagicMock())
+    monkeypatch.setattr(QApplication, "exec", lambda *_: 0)
+    path = tmp_path / name
+
+    assert run(path) == 0
+    if opened_as_results:
+        fake_window.results_opened.emit.assert_called_once_with(path)
+        fake_window.open_file.assert_not_called()
+    else:
+        fake_window.open_file.assert_called_once_with(path)
+        fake_window.results_opened.emit.assert_not_called()
+
+
 def test_main_controller_open_mock_loads_source_and_playback(qtbot, qapp, window):
     view = MagicMock()
     controller = MainController(window, qapp, window, view=view)
