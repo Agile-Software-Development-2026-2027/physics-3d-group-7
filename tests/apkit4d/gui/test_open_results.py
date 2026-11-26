@@ -208,7 +208,9 @@ def test_saved_results_fill_the_pipeline_and_the_view(qtbot, qapp, window, saved
 
     for step in (PipelineStep.ROI, PipelineStep.PREPROCESSING, PipelineStep.DETECTION):
         assert controller.pipeline_model.get_status(step) == StepStatus.COMPLETED
-    assert controller.pipeline_model.get_step_params(PipelineStep.ROI) == ROI.to_dict()
+    roi_params = controller.pipeline_model.get_roi_params()
+    assert roi_params.region == ROI
+    assert roi_params.frame_range is None
     assert controller.volume_controller is not None and controller.volume_controller.roi == ROI
     assert controller.pipeline_model.get_step_params(PipelineStep.DETECTION)["threshold"] == 0.25
     assert controller.pipeline_model.get_step_params(PipelineStep.TRACKING)["min_len"] == 2

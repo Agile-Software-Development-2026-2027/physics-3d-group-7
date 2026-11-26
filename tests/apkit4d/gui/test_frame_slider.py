@@ -50,3 +50,46 @@ def test_without_preview_the_slider_keeps_no_room_and_ignores_the_mouse(qtbot) -
 
     assert slider.height() == appearance.SLIDER_HEIGHT
     assert hovering == before
+
+
+def test_marked_range_is_drawn(qtbot) -> None:
+    slider = make_slider(qtbot)
+    slider.show()
+    before = slider.grab().toImage()
+
+    slider.set_marked_range((20, 60))
+
+    assert slider.grab().toImage() != before
+
+
+def test_marked_range_can_be_removed(qtbot) -> None:
+    slider = make_slider(qtbot)
+    slider.show()
+    before = slider.grab().toImage()
+    slider.set_marked_range((20, 60))
+
+    slider.set_marked_range(None)
+
+    assert slider.grab().toImage() == before
+
+
+def test_marked_range_moves_with_the_frames(qtbot) -> None:
+    slider = make_slider(qtbot)
+    slider.show()
+    slider.set_marked_range((20, 60))
+    first = slider.grab().toImage()
+
+    slider.set_marked_range((30, 70))
+
+    assert slider.grab().toImage() != first
+
+
+def test_marked_range_is_not_drawn_while_the_slider_is_disabled(qtbot) -> None:
+    slider = make_slider(qtbot)
+    slider.show()
+    slider.setEnabled(False)
+    before = slider.grab().toImage()
+
+    slider.set_marked_range((20, 60))
+
+    assert slider.grab().toImage() == before

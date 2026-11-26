@@ -8,8 +8,7 @@ from typing import Any
 import pandas as pd
 
 from apkit4d.batching.processor import BatchProcessor
-from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig
-from apkit4d.core.roi import RegionOfInterest
+from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig, RoiConfig
 from apkit4d.gui.constants import texts
 from apkit4d.io.czi import CziSource
 from apkit4d.io.table import read_table
@@ -27,7 +26,7 @@ def detect_sequence(
     czi: str | Path | CziSource,
     preproc_params: PreprocessingConfig,
     blob_params: DetectionConfig,
-    roi: RegionOfInterest | None = None,
+    roi_params: RoiConfig,
     *,
     workers: int = 1,
     out_dir: str | Path | None = None,
@@ -64,9 +63,11 @@ def detect_sequence(
     result = processor.process_sequence(
         czi,
         out_dir=out_dir,
-        roi=roi,
+        roi=roi_params.region,
         progress_callback=progress_callback,
         sink=sink,
+        t0=roi_params.frame_range.start if roi_params.frame_range is not None else None,
+        t1=roi_params.frame_range.end if roi_params.frame_range is not None else None,
     )
     if result.detections is not None:
         detections = result.detections
