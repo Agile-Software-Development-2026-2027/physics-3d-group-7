@@ -22,15 +22,25 @@ with the hover shade of the buttons.
 
 A stylesheet can draw an arrow only from an image: the arrow of the drop-down lists is a small SVG
 file, written once for each color in the temporary folder of the system.
+
+The components of the application that have their own look (the sections of the side panels, the
+bars of the right panel, the scroll bars) are styled here too, by their object names, so that every
+color and size of the interface is in one place. A part that changes look with its state, such as the
+header of a section that is running, gets that state as a property (`set_style_property`), which the
+rules read as `[status="running"]`.
 """
 
 import tempfile
 from pathlib import Path
 
 from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QWidget
 
+from apkit4d.gui.constants import names
+from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.theme import tokens
 from apkit4d.gui.theme.colors import mix, plain_button_colors
+from apkit4d.gui.theme.themes import STATUS_THEME_COLORS, THEME_COLORS, Theme
 
 ColorRole = QPalette.ColorRole
 ColorGroup = QPalette.ColorGroup
@@ -53,6 +63,9 @@ _ARROW_SVG: str = (
     '<path d="M6 8 L10 12 L14 8" fill="none" stroke="{color}" stroke-width="1.8" '
     'stroke-linecap="round" stroke-linejoin="round"/></svg>'
 )
+
+_SCROLL_BAR_WIDTH: int = tokens.SPACING
+_MIN_SCROLL_HANDLE: int = 3 * tokens.SPACING  # shortest length of the handle of a scroll bar
 
 _BUTTONS: tuple[str, ...] = ('.QPushButton[flat="false"]', "ColorButton")
 _FIELDS: tuple[str, ...] = (".QComboBox", ".QLineEdit")
@@ -78,6 +91,34 @@ def _arrow_image(color: QColor) -> str:
         _ARROW_FOLDER.mkdir(parents=True, exist_ok=True)
         path.write_text(_ARROW_SVG.format(color=color.name()), encoding="utf-8")
     return path.as_posix()
+
+
+def _veil(color: QColor, amount: float) -> QColor:
+    """
+    `color` made transparent, so that over any background it gives `mix(background, color, amount)`.
+
+    The headers of the sections change background with their status: a veil shades all of them in the
+    same way, as the mixes of `theme.tokens` shade the controls.
+    """
+    veil = QColor(color)
+    veil.setAlphaF(amount)
+    return veil
+
+
+def set_style_property(widget: QWidget, name: str, value: object) -> None:
+    """
+    Set a property that the stylesheet reads, such as the status of a section, and restyle the widget.
+
+    Qt reads the properties only when it styles a widget, so the widget is styled again.
+
+    Args:
+        widget: Widget to restyle.
+        name: Name of the property, as the stylesheet reads it (`[name="value"]`).
+        value: New value of the property.
+    """
+    widget.setProperty(name, value)
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
 
 
 def _selectors(widgets: tuple[str, ...], state: str = "") -> str:
@@ -223,14 +264,161 @@ QToolTip {{
 """
 
 
-def build_stylesheet(palette: QPalette) -> str:
+def _scroll_bars(palette: QPalette) -> str:
+    """Slim scroll bars without arrows, whose handle takes the accent color under the mouse."""
+    return f"""
+QScrollArea#{names.MODERN_SCROLL_AREA} {{
+    background-color: transparent;
+    border: none;
+}}
+QScrollBar {{
+    background: transparent;
+    border: none;
+    margin: 0px;
+}}
+QScrollBar:vertical {{ width: {_SCROLL_BAR_WIDTH}px; }}
+QScrollBar:horizontal {{ height: {_SCROLL_BAR_WIDTH}px; }}
+QScrollBar::handle {{
+    background-color: {_css(palette.color(ColorRole.PlaceholderText))};
+    border-radius: {_SCROLL_BAR_WIDTH // 2}px;
+}}
+QScrollBar::handle:vertical {{ min-height: {_MIN_SCROLL_HANDLE}px; }}
+QScrollBar::handle:horizontal {{ min-width: {_MIN_SCROLL_HANDLE}px; }}
+QScrollBar::handle:hover {{ background-color: {_css(palette.color(ColorRole.Highlight))}; }}
+QScrollBar::handle:pressed {{ background-color: {_css(palette.color(ColorRole.Link))}; }}
+QScrollBar::add-line, QScrollBar::sub-line {{
+    background: none;
+    border: none;
+    width: 0px;
+    height: 0px;
+}}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
+"""
+
+
+def _sections(palette: QPalette, theme: Theme) -> str:
     """
-    Build the stylesheet of the whole application for the palette of a theme.
+    Collapsible sections of the side panels: a header as high as a control, then the content.
+
+    The header takes the background of the status of its step (`[status="running"]`, ...), and loses
+    its lower corners while the section is open (`[expanded="true"]`), to join the content.
+    """
+    window = palette.color(ColorRole.Window)
+    ink = palette.color(ColorRole.WindowText)
+    border = _css(mix(window, ink, tokens.BORDER_MIX))
+    header = f"QFrame#{names.ACCORDION_HEADER_FRAME}"
+    toggle = f"QPushButton#{names.ACCORDION_TOGGLE_BUTTON}"
+    # small buttons inside a header, such as the play button of a step
+    actions = (f"QPushButton#{names.PLAY_STAGE_BUTTON}", f"QPushButton#{names.BOTTOM_STATS_TOGGLE_BUTTON}")
+    content = f"QFrame#{names.ACCORDION_CONTENT_AREA}"
+    inner_radius = tokens.BUTTON_RADIUS - BORDER_WIDTH  # the toggle button sits inside the border
+    rules = f"""
+{header} {{
+    background-color: {_css(palette.color(ColorRole.Button))};
+    border: {BORDER_WIDTH}px solid {border};
+    border-radius: {tokens.BUTTON_RADIUS}px;
+}}
+{header}[expanded="true"] {{
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}}
+{toggle} {{
+    background-color: transparent;
+    color: {_css(palette.color(ColorRole.ButtonText))};
+    border: none;
+    border-top-left-radius: {inner_radius}px;
+    border-bottom-left-radius: {inner_radius}px;
+    padding: 0px {tokens.SPACING}px;
+    min-height: {tokens.CONTROL_HEIGHT - 2 * BORDER_WIDTH}px;
+    text-align: left;
+    font-weight: bold;
+}}
+{toggle}:hover {{ background-color: {_css(_veil(ink, tokens.HOVER_MIX))}; }}
+{toggle}:checked {{ border-bottom-left-radius: 0px; }}
+{_selectors(actions)} {{
+    background-color: transparent;
+    color: {_css(palette.color(ColorRole.ButtonText))};
+    border: {BORDER_WIDTH}px solid transparent;
+    border-radius: {tokens.SMALL_RADIUS}px;
+    padding: 0px;
+    font-weight: bold;
+}}
+{_selectors(actions, ":hover")} {{
+    background-color: {_css(_veil(ink, tokens.HOVER_MIX))};
+    border-color: {_css(_veil(ink, tokens.BORDER_MIX))};
+}}
+{_selectors(actions, ":pressed")} {{
+    background-color: {_css(_veil(ink, tokens.BORDER_MIX))};
+}}
+{content} {{
+    background-color: {THEME_COLORS[theme].raised_base};
+    border: {BORDER_WIDTH}px solid {border};
+    border-top: none;
+    border-bottom-left-radius: {tokens.BUTTON_RADIUS}px;
+    border-bottom-right-radius: {tokens.BUTTON_RADIUS}px;
+}}
+{content} QLabel {{
+    background-color: transparent;
+    color: {_css(palette.color(ColorRole.Text))};
+    border: none;
+}}
+"""
+    statuses = STATUS_THEME_COLORS[theme]
+    for status, background, text in (
+        (StepStatus.PENDING, statuses.pending_bg, statuses.pending_text),
+        (StepStatus.RUNNING, statuses.running_bg, statuses.running_text),
+        (StepStatus.COMPLETED, statuses.completed_bg, statuses.completed_text),
+    ):
+        state = f'[status="{status.value}"]'
+        rules += f"""
+{header}{state} {{ background-color: {background}; }}
+{toggle}{state}, QPushButton#{names.PLAY_STAGE_BUTTON}{state} {{ color: {text}; }}
+"""
+    return rules
+
+
+def _right_panel(palette: QPalette) -> str:
+    """The bar above the sections of the right panel and the statistics below them."""
+    window = palette.color(ColorRole.Window)
+    ink = palette.color(ColorRole.WindowText)
+    border = _css(mix(window, ink, tokens.BORDER_MIX))
+    return f"""
+QFrame#{names.RIGHT_PANEL_TOP_BAR} {{
+    background-color: {_css(window)};
+    border-bottom: {BORDER_WIDTH}px solid {border};
+}}
+QFrame#{names.BOTTOM_STATS_SECTION} {{
+    background-color: {_css(window)};
+    border-top: {BORDER_WIDTH}px solid {border};
+}}
+QFrame#{names.BOTTOM_STATS_HEADER} {{
+    background-color: transparent;
+    border: none;
+}}
+QLabel#{names.BOTTOM_STATS_SUMMARY_LABEL} {{
+    color: {_css(ink)};
+    font-weight: bold;
+}}
+QFrame#{names.BOTTOM_STATS_DETAILS_FRAME} {{
+    background-color: {_css(palette.color(ColorRole.Base))};
+    border-top: {BORDER_WIDTH}px solid {border};
+}}
+QLabel#{names.BOTTOM_STATS_DETAILS_LABEL} {{
+    color: {_css(palette.color(ColorRole.Text))};
+}}
+"""
+
+
+def build_stylesheet(palette: QPalette, theme: Theme) -> str:
+    """
+    Build the stylesheet of the whole application for a theme.
 
     Args:
         palette: Palette of the theme, the one that `build_palette` returns.
+        theme: The theme, for the colors that are not in the palette (status of the sections, ...).
 
     Returns:
         The stylesheet, to set on the application together with the same palette.
     """
-    return "".join(part(palette) for part in (_buttons, _fields, _group_boxes, _feedback))
+    parts = (_buttons(palette), _fields(palette), _group_boxes(palette), _feedback(palette))
+    return "".join(parts) + _scroll_bars(palette) + _sections(palette, theme) + _right_panel(palette)
