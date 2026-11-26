@@ -35,3 +35,6 @@ BUTTON_VIS_SUB_ROI_RESET: str = "Reset Sub-ROI"
 TOOLTIP_VIS_SUB_ROI_RESET: str = "Clear the visualization sub-region without affecting pipeline results"
 STATUS_VIS_SUB_ROI_UNAVAILABLE: str = "Complete the analysis pipeline to use Visualization Sub-ROI."
 STATUS_VIS_SUB_ROI_INACTIVE: str = "No visualization sub-region selected."
+
+# i do not know where to put it, we should move it someday
+SCALAR_BAR_VELOCITY: str = "Velocity (µm/s)"

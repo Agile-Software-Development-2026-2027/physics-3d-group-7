@@ -1,6 +1,6 @@
 import time
 from enum import Enum, auto
-from typing import override
+from typing import Any, override
 
 import numpy as np
 import pyvista as pv
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
 from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
+from vtkmodules.vtkRenderingCore import vtkPolyDataMapper
 
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.fps_counter import FpsCounter
@@ -59,6 +60,8 @@ VIS_SUB_ROI_PREVIEW_COLOR = "#f59e0b"
 
 TRANSLATION_TOLERANCE = 1e-5  # tolerance for translation in ROI editing
 
+DEFAULT_VELOCITY_SCALAR_BAR_TITLE = "Velocity (µm/s)"
+
 
 class RoiMode(Enum):
     INACTIVE = auto()
@@ -72,6 +75,11 @@ class VisSubRoiMode(Enum):
     WAITING_FIRST_POINT = auto()
     DRAGGING = auto()
     EDITING = auto()
+
+
+class ScalarBarMode(Enum):
+    VOLUME = auto()
+    VELOCITY = auto()
 
 
 class Viewport(QWidget):
@@ -130,6 +138,10 @@ class Viewport(QWidget):
         self._volume_grid: pv.ImageData | None = None
         self._volume_visible: bool = True
 
+        """Strong Python reference to the volume mapper so that PyVista does not delete '_lut' 
+        (which is the lookup table) after removing the `"values"` scalar bar or replacing 'plotter.mapper'"""
+        self._volume_mapper: Any = None
+
         self._blobs_poly: pv.PolyData | None = None
         self._blobs_visible: bool = True
         self._trajectories_poly: pv.PolyData | None = None
@@ -183,6 +195,12 @@ class Viewport(QWidget):
         self._text_color: str = DEFAULT_TEXT_COLOR
         # opacity unit distance that PyVista gives to the volume, set_volume_opacity scales it
         self._base_opacity_unit_distance: float = 1.0
+
+        # scalar bar state: switches from volume intensities ("values") to trajectory velocity
+        self._scalar_bar_mode: ScalarBarMode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title: str | None = None
+        self._velocity_lut: pv.LookupTable | None = None
+        self._velocity_bar_mapper: vtkPolyDataMapper | None = None
 
         # visualization-only Sub-ROI state (does not modify volume data or DATA ROI)
         self._vis_sub_roi_state: VisSubRoiState = VisSubRoiState(
@@ -344,10 +362,13 @@ class Viewport(QWidget):
             self._volume_grid.point_data.Modified()
             self._volume_grid.Modified()
 
-            # Aggiorna il range min, max della colormap/opacità e della scalar bar
+            # update the scalar range of the volume mapper and the volume scalar bar,
+            # so that the colors are correct
             vmin, vmax = float(np.min(values)), float(np.max(values))
-            self.plotter.actors["volume"].mapper.scalar_range = (vmin, vmax)
-            self.plotter.update_scalar_bar_range((vmin, vmax))
+            vol_mapper = self._volume_mapper or self.plotter.actors["volume"].mapper
+            vol_mapper.scalar_range = (vmin, vmax)
+            if self._scalar_bar_mode == ScalarBarMode.VOLUME and "values" in self.plotter.scalar_bars:
+                self.plotter.update_scalar_bar_range((vmin, vmax), name="values")
 
             # if is none we set it to the bounds of the volume
             # so that we can use it to clamp the sub-ROI bounds
@@ -374,9 +395,14 @@ class Viewport(QWidget):
             name="volume",
             mapper="gpu",
             render=False,
+            show_scalar_bar=(self._scalar_bar_mode == ScalarBarMode.VOLUME),
             scalar_bar_args={"render": False},
         )
         actor.SetVisibility(self._volume_visible)
+
+        # Keep a strong Python reference so PyVista's _BaseVolumeMapper.__del__ does not delete _lut
+        # when the "values" scalar bar is removed or another actor replaces plotter.mapper.
+        self._volume_mapper = actor.mapper
 
         # the gpu mapper lets us draw the moving frames at a lower resolution (see _set_volume_quality),
         # the smart one (PyVista's default) does not. with the sample distance taken from the voxel
@@ -468,7 +494,8 @@ class Viewport(QWidget):
         actor = self.plotter.actors.get("volume")
         if actor is not None:
             # the lookup table builds the new colors and keeps the opacity it already has
-            actor.mapper.lookup_table.cmap = name
+            vol_mapper = self._volume_mapper or actor.mapper
+            vol_mapper.lookup_table.cmap = name
             self._request_render()
 
     def set_volume_opacity(self, opacity: float) -> None:
@@ -536,6 +563,87 @@ class Viewport(QWidget):
         """
         self._text_color = color
         self._paint_text()
+        self._request_render()
+
+    @property
+    def scalar_bar_mode(self) -> ScalarBarMode:
+        """Whether the viewport scalar bar currently represents volume intensities or velocity."""
+        return self._scalar_bar_mode
+
+    def show_velocity_scalar_bar(
+        self,
+        vmin: float,
+        vmax: float,
+        colormap: str,
+        *,
+        visible: bool = True,
+        title: str = DEFAULT_VELOCITY_SCALAR_BAR_TITLE,
+    ) -> None:
+        """Switch the viewport scalar bar to trajectory velocity with an independent lookup table."""
+        cmap = colormap if colormap in colormaps else "turbo"
+        lo = float(vmin) if np.isfinite(vmin) else 0.0
+        hi = float(vmax) if np.isfinite(vmax) and vmax > lo else lo + 1.0
+
+        # the lookup table is used to color the scalar bar and the trajectories, so we keep it here
+        lut = pv.LookupTable(cmap=cmap)
+        lut.scalar_range = (lo, hi)
+
+        if self._velocity_bar_mapper is None:
+            self._velocity_bar_mapper = vtkPolyDataMapper()
+        # use the mapper to set the lookup table and the scalar range for the scalar bar
+        self._velocity_bar_mapper.SetLookupTable(lut)
+        self._velocity_bar_mapper.SetScalarRange(lo, hi)
+
+        if "values" in self.plotter.scalar_bars:
+            self.plotter.remove_scalar_bar("values", render=False)
+
+        if (
+            self._velocity_scalar_bar_title is not None
+            and self._velocity_scalar_bar_title != title
+            and self._velocity_scalar_bar_title in self.plotter.scalar_bars
+        ):
+            self.plotter.remove_scalar_bar(self._velocity_scalar_bar_title, render=False)
+
+        if title in self.plotter.scalar_bars:
+            self.plotter.scalar_bars[title].SetLookupTable(lut)
+        else:
+            self.plotter.add_scalar_bar(
+                title=title, mapper=self._velocity_bar_mapper, fmt="%.1f", render=False
+            )
+
+        self._scalar_bar_mode = ScalarBarMode.VELOCITY
+        self._velocity_scalar_bar_title = title
+        self._velocity_lut = lut
+        self.plotter.scalar_bars[title].SetVisibility(bool(visible))
+        self._paint_text()
+        self._request_render()
+
+    def restore_volume_scalar_bar(self) -> None:
+        """Remove the velocity scalar bar and restore the volume intensity ('values') scalar bar."""
+        vol_actor = self.plotter.actors.get("volume")
+        had_velocity_bar = (
+            self._velocity_scalar_bar_title is not None
+            and self._velocity_scalar_bar_title in self.plotter.scalar_bars
+        )
+        if (
+            self._scalar_bar_mode == ScalarBarMode.VOLUME
+            and not had_velocity_bar
+            and (vol_actor is None or "values" in self.plotter.scalar_bars)
+        ):
+            return
+
+        if had_velocity_bar and self._velocity_scalar_bar_title is not None:
+            self.plotter.remove_scalar_bar(self._velocity_scalar_bar_title, render=False)
+
+        self._scalar_bar_mode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title = None
+        self._velocity_lut = None
+
+        if vol_actor is not None and "values" not in self.plotter.scalar_bars:
+            vol_mapper = self._volume_mapper or vol_actor.mapper
+            self.plotter.add_scalar_bar(title="values", mapper=vol_mapper, fmt="%.1f", render=False)
+            self._paint_text()
+
         self._request_render()
 
     def _apply_volume_opacity(self, actor: pv.Actor) -> None:
@@ -1190,6 +1298,7 @@ class Viewport(QWidget):
             None
         """
         self._volume_grid = None
+        self._volume_mapper = None
         self._blobs_source_poly = None
         self._trajectories_source_poly = None
         self._blobs_poly = None
@@ -1205,6 +1314,10 @@ class Viewport(QWidget):
         )
         self._disable_roi_box_widget()
         self._disable_vis_sub_roi_box_widget()
+        self._scalar_bar_mode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title = None
+        self._velocity_lut = None
+        self._velocity_bar_mapper = None
         self.plotter.clear()
         # the reset_camera of the renderer as in show_volume, so the view is drawn only once, below
         self.plotter.renderer.reset_camera(render=False)
