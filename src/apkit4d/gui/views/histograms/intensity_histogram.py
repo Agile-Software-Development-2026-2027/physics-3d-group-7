@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.gui.constants import texts
+from apkit4d.gui.constants.appearance import HISTOGRAM_HEIGHT_RANGE
 from apkit4d.gui.theme import DEFAULT_THEME, THEME_COLORS, ThemeColors
 
 
@@ -20,8 +21,8 @@ class IntensityHistogram(pg.PlotWidget):
     def __init__(self, object_name: str, x_units: str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent=parent)
         self.setObjectName(object_name)
-        self.setMinimumHeight(230)
-        self.setMaximumHeight(280)
+        self.setMinimumHeight(HISTOGRAM_HEIGHT_RANGE[0])
+        self.setMaximumHeight(HISTOGRAM_HEIGHT_RANGE[1])
 
         self._volume: NDArray | None = None
         self._current_title: str = ""
