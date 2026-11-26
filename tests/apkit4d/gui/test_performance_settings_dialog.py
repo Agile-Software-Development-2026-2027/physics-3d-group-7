@@ -1,7 +1,7 @@
 """Tests for the performance settings dialog."""
 
 import pytest
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import QComboBox, QDialogButtonBox, QDoubleSpinBox, QSpinBox
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.frame_loading_config import (
@@ -39,7 +39,7 @@ def test_initial_config(qtbot) -> None:
     [
         (FrameLoadingMode.LAZY, False, False, False),
         (FrameLoadingMode.AUTOMATIC, True, False, True),
-        (FrameLoadingMode.MANUAL, True, True, False),
+        (FrameLoadingMode.MANUAL, True, True, True),
         (FrameLoadingMode.FULL, False, False, True),
     ],
 )
@@ -89,3 +89,22 @@ def test_values_preserved_when_switching_modes(dialog) -> None:
     mode_combo.setCurrentIndex(mode_combo.findData(FrameLoadingMode.MANUAL.value))
 
     assert cache_limit_spin.value() == 32.0
+
+
+def test_restore_defaults(qtbot) -> None:
+    config = FrameLoadingConfig(
+        mode=FrameLoadingMode.MANUAL,
+        lookahead_seconds=5.0,
+        cache_limit_gb=32.0,
+        memory_reserve_percent=30,
+    )
+
+    dialog = PerformanceSettingsDialog(config)
+    qtbot.addWidget(dialog)
+
+    buttons = dialog.findChild(QDialogButtonBox, names.PERFORMANCE_BUTTONS)
+    reset_button = buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults)
+
+    reset_button.click()
+
+    assert dialog.config() == FrameLoadingConfig()
