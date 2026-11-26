@@ -155,4 +155,4 @@ class FileController(QObject):
         if channel != results.channel:
             source.close()
             raise ValueError(texts.RESULTS_OTHER_CHANNEL.format(saved=results.channel, opened=channel))
-        return PrecomputedFrameSource(source, session)
+        return PrecomputedFrameSource(source, session, params_path=results.params_path.resolve())
