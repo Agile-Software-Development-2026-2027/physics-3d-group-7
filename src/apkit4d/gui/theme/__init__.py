@@ -1,33 +1,17 @@
 """
-Look of the application: the colors of the themes, Qt palette builder, and QSS component stylers.
+Look of the application: the colors of the themes, the Qt palette and the stylesheet.
 
     themes      the `Theme` enum, `ThemeColors`, `StatusColors`, and color palettes
     tokens      sizes, fonts and color mixes shared by every component (design tokens)
     colors      shades derived from the palette of the active theme with the mixes of `tokens`
-    stylesheet  stylesheet of the standard Qt controls, with the tokens and the shades of `colors`
+    stylesheet  stylesheet of every control and component, with the tokens and the shades of `colors`
     apply       builds the Qt palette and the stylesheet of a theme and applies them to the application
-    style       QSS stylesheet generators and styler classes for all GUI components
 
 This package centralizes how the application looks and is styled. Which theme is active is
 decided by the `ThemeController`.
 """
 
 from apkit4d.gui.theme.apply import apply_theme, build_palette
-from apkit4d.gui.theme.style import (
-    AccordionStyler,
-    RightPanelStyler,
-    ScrollAreaStyler,
-    ThemeStyler,
-    get_accordion_content_area_stylesheet,
-    get_accordion_header_frame_stylesheet,
-    get_accordion_play_button_stylesheet,
-    get_accordion_toggle_button_stylesheet,
-    get_bottom_stats_stylesheet,
-    get_right_panel_top_bar_stylesheet,
-    get_scroll_area_stylesheet,
-    get_scrollbar_stylesheet,
-    get_status_colors,
-)
 from apkit4d.gui.theme.themes import (
     DARK_COLORS,
     DARK_STATUS_COLORS,
@@ -49,22 +33,9 @@ __all__ = [
     "LIGHT_STATUS_COLORS",
     "STATUS_THEME_COLORS",
     "THEME_COLORS",
-    "AccordionStyler",
-    "RightPanelStyler",
-    "ScrollAreaStyler",
     "StatusColors",
     "Theme",
     "ThemeColors",
-    "ThemeStyler",
     "apply_theme",
     "build_palette",
-    "get_accordion_content_area_stylesheet",
-    "get_accordion_header_frame_stylesheet",
-    "get_accordion_play_button_stylesheet",
-    "get_accordion_toggle_button_stylesheet",
-    "get_bottom_stats_stylesheet",
-    "get_right_panel_top_bar_stylesheet",
-    "get_scroll_area_stylesheet",
-    "get_scrollbar_stylesheet",
-    "get_status_colors",
 ]
