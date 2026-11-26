@@ -196,8 +196,8 @@ def get_accordion_toggle_button_stylesheet(
     bg_col, text_col = get_status_colors(status, colors)
     is_dark = colors.window == DARK_COLORS.window
     hover_bg = "rgba(255, 255, 255, 0.05)" if is_dark else "rgba(0, 0, 0, 0.04)"
-    # FIXME: when the accordion is expanded use a better color to signify the status instead of colors.window
-    checked_bg = colors.window if status == StepStatus.IDLE else bg_col
+    # checked_bg = colors.window if status == StepStatus.IDLE else bg_col
+    checked_bg = bg_col  # same color independedntly of expanded/collapsed state (temp)
     bottom_radius = 0 if is_expanded else 4
 
     return f"""
