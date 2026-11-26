@@ -44,6 +44,8 @@ class VolumeView(Protocol):
         self, grid: pv.ImageData, reset_camera: bool = True, force_update: bool = False
     ) -> None: ...
 
+    def set_volume_visible(self, visible: bool) -> None: ...
+
 
 class _SignalLike(Protocol):
     def connect(self, slot: Callable[..., object]) -> object: ...
@@ -291,6 +293,10 @@ class VolumeController(QObject):
         """Bring the 3D view back to its initial position, showing again the volume that is on screen."""
         if self._last_grid is not None:
             self._view.show_volume(self._last_grid, reset_camera=True)
+
+    def set_volume_visible(self, visible: bool) -> None:
+        """Show or hide the volume in the 3D view."""
+        self._view.set_volume_visible(visible)
 
     def _start_reading(self, source: FrameSource, frame: int) -> None:
         self._busy = True

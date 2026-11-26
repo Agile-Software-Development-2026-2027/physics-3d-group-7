@@ -91,6 +91,7 @@ class MainController(QObject):
             # the volume controller must know the new recording before the playback goes back to frame 0
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
+            window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
             window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
@@ -166,7 +167,7 @@ class MainController(QObject):
         window.left_panel.set_theme(self._theme_controller.theme)
 
         self._trajectory_controller: TrajectoryController | None = (
-            TrajectoryController(window.left_panel, view, parent=self) if view is not None else None
+            TrajectoryController(window, view, parent=self) if view is not None else None
         )
         if self._trajectory_controller is not None:
             self._playback_controller.frame_changed.connect(self._trajectory_controller.on_set_frame)

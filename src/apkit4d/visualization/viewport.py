@@ -128,6 +128,7 @@ class Viewport(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         self._volume_grid: pv.ImageData | None = None
+        self._volume_visible: bool = True
 
         self._blobs_poly: pv.PolyData | None = None
         self._blobs_visible: bool = True
@@ -375,6 +376,7 @@ class Viewport(QWidget):
             render=False,
             scalar_bar_args={"render": False},
         )
+        actor.SetVisibility(self._volume_visible)
 
         # the gpu mapper lets us draw the moving frames at a lower resolution (see _set_volume_quality),
         # the smart one (PyVista's default) does not. with the sample distance taken from the voxel
@@ -435,6 +437,14 @@ class Viewport(QWidget):
 
         self._request_render()
         self.displayed_volume_bounds_updated.emit(self.volume_bounds)
+
+    def set_volume_visible(self, visible: bool) -> None:
+        """Show or hide the volume without discarding its current data."""
+        self._volume_visible = bool(visible)
+        actor = self.plotter.actors.get("volume")
+        if actor is not None:
+            actor.SetVisibility(self._volume_visible)
+            self._request_render()
 
     def set_colormap(self, name: str) -> None:
         """

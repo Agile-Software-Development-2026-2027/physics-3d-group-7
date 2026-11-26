@@ -172,6 +172,22 @@ def test_export_video_action_requests_export(window, qtbot):
         action.trigger()
 
 
+@pytest.mark.parametrize(
+    "name",
+    [names.SHOW_VOLUME_ACTION, names.SHOW_BLOBS_ACTION, names.SHOW_TRAJECTORIES_ACTION],
+)
+def test_layer_actions_are_disabled_without_a_loaded_file(window, name):
+    action = window.findChild(QAction, name)
+    assert action is not None
+    assert not action.isEnabled()
+
+    window.set_current_file(Path("sample.czi"))
+    assert action.isEnabled()
+
+    window.set_current_file(None)
+    assert not action.isEnabled()
+
+
 def test_export_video_action_opens_dialog(window, qapp, monkeypatch):
     from apkit4d.gui.controllers import main_controller
 
@@ -185,6 +201,22 @@ def test_export_video_action_opens_dialog(window, qapp, monkeypatch):
 
     dialog_class.assert_called_once_with(controller._video_export_controller, window)
     dialog.exec.assert_called_once_with()
+
+
+def test_volume_layer_action_toggles_volume_visibility(window, qapp):
+    view = MagicMock()
+    MainController(window, qapp, window, view=view)
+    action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
+
+    assert action is not None
+    assert action.isChecked()
+    assert not action.isEnabled()
+    window.set_current_file(Path("sample.czi"))
+    action.setChecked(False)
+    action.setChecked(True)
+
+    view.set_volume_visible.assert_any_call(False)
+    view.set_volume_visible.assert_any_call(True)
 
 
 def test_run_returns_the_exit_code_of_the_application(qapp, czi_file, monkeypatch):
