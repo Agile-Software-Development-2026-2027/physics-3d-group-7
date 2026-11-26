@@ -269,7 +269,9 @@ class MultiFileController(QObject):
         self._window.add_files_action.setEnabled(idle and self._reference is not None)
         self._panel.run.setEnabled(idle and self._reference is not None and bool(self._recordings))
         self._panel.tracking.setEnabled(idle)
-        self._panel.remove.setEnabled(idle and bool(self._panel.recordings.selectedItems()))
+        self._panel.remove.setEnabled(
+            idle and len(self._recordings) > 1 and bool(self._panel.recordings.selectedItems())
+        )
         self._panel.recordings.setDragDropMode(
             QAbstractItemView.DragDropMode.InternalMove if idle else QAbstractItemView.DragDropMode.NoDragDrop
         )
@@ -304,7 +306,7 @@ class MultiFileController(QObject):
             return
         item = self._panel.recordings.selectedItems()[0]
         row = self._panel.recordings.row(item)
-        if self._recordings[row] == self._reference and len(self._recordings) > 1:
+        if self._recordings[row] == self._reference:
             # Use the row below if there is one. Otherwise, use the row above
             next_row = row + 1 if row + 1 < len(self._recordings) else row - 1
             next_path = self._recordings[next_row]

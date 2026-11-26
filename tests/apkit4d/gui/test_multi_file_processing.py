@@ -119,6 +119,11 @@ def test_multi_file_menu_runs_independent_pipeline_exports(qapp, qtbot, tmp_path
     assert all(result.params_path.is_file() for result in results)
     assert first.is_file()
     assert panel.recordings.count() == 1
+    panel.recordings.setCurrentRow(0)
+    assert not panel.remove.isEnabled()
+    panel.remove.click()
+    assert panel.recordings.count() == 1
+    assert files.source.path == second
     assert not panel.recordings.item(0).font().bold()
 
 
