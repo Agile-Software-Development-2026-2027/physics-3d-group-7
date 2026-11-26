@@ -15,6 +15,7 @@ from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepS
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
+from apkit4d.visualization.viewport import RoiMode
 
 
 class FakeRoiView(QObject):
@@ -26,24 +27,29 @@ class FakeRoiView(QObject):
         super().__init__(parent)
         self.started = 0
         self.cancelled = 0
+        self.roi_mode: RoiMode = RoiMode.INACTIVE
         self.previews: list[RegionOfInterest] = []
         self.pending_accept_roi: RegionOfInterest | None = None
 
     def start_roi_selection(self) -> None:
         self.started += 1
+        self.roi_mode = RoiMode.WAITING_FIRST_POINT
 
     def set_roi_preview(self, roi: RegionOfInterest) -> None:
         self.previews.append(roi)
         self.pending_accept_roi = roi
+        self.roi_mode = RoiMode.EDITING
 
     def accept_roi_selection(self) -> RegionOfInterest | None:
         roi = self.pending_accept_roi
         self.pending_accept_roi = None
+        self.roi_mode = RoiMode.INACTIVE
         return roi
 
     def cancel_roi_selection(self) -> None:
         self.cancelled += 1
         self.pending_accept_roi = None
+        self.roi_mode = RoiMode.INACTIVE
 
 
 def _make_harness(qtbot, *, with_source: bool = True):
@@ -265,3 +271,65 @@ def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
 
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
     assert h.model.get_step_params(PipelineStep.ROI) == crop.to_dict()
+
+
+# ensure that the roi_interaction_started signal is emitted when the user starts an interaction
+# if one of the 2 ways to start do not work, the sub-roi would be active, overlapping it
+def test_roi_interaction_started_emitted_on_select_and_spinbox_edit(qtbot) -> None:
+    h = _make_harness(qtbot)
+    started_events: list[bool] = []
+    h.controller.roi_interaction_started.connect(lambda: started_events.append(True))
+
+    select_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_SELECT_BUTTON)
+    assert select_btn is not None
+    select_btn.click()
+    assert len(started_events) == 1
+
+    x_min_spin = h.inspector.findChild(QDoubleSpinBox, names.ROI_INSPECTOR_X_MIN)
+    assert x_min_spin is not None
+    x_min_spin.setValue(15.0)
+    assert len(started_events) == 2
+
+    # Ignored when no source is loaded
+    h_empty = _make_harness(qtbot, with_source=False)
+    empty_events: list[bool] = []
+    h_empty.controller.roi_interaction_started.connect(lambda: empty_events.append(True))
+    h_empty.controller._on_start_roi_selection()
+    h_empty.controller._on_inspector_bounds_edited(
+        RegionOfInterest(x_min=1.0, x_max=5.0, y_min=1.0, y_max=5.0, z_min=1.0, z_max=5.0)
+    )
+    assert empty_events == []
+
+
+# ensure that cancelling an active ROI editing restores
+# the inspector to the last accepted ROI and unlocks the playback bar
+def test_cancel_active_roi_editing_restores_inspector_and_unlocks_playback_bar(qtbot) -> None:
+    h = _make_harness(qtbot)
+    accepted_roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+    _accept_bounds(h, accepted_roi)
+
+    select_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_SELECT_BUTTON)
+    assert select_btn is not None
+    select_btn.click()
+    assert not h.playback_bar.isEnabled()
+    assert h.roi_view.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+    h.controller.cancel_active_roi_editing()
+
+    assert h.roi_view.cancelled == 1
+    assert h.roi_view.roi_mode == RoiMode.INACTIVE
+    assert h.playback_bar.isEnabled()
+    assert h.vol.roi == accepted_roi
+    assert h.inspector.get_roi() == accepted_roi
+
+
+# ensure that cancelling an active ROI editing do not call cancel_roi_selection
+# when the roi_view is inactive, and does not unlock the playback bar
+def test_cancel_active_roi_editing_is_noop_when_inactive(qtbot) -> None:
+    h = _make_harness(qtbot)
+    h.playback_bar.setEnabled(False)
+
+    h.controller.cancel_active_roi_editing()
+
+    assert h.roi_view.cancelled == 0
+    assert not h.playback_bar.isEnabled()

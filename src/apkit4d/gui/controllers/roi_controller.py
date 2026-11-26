@@ -2,7 +2,7 @@
 
 import logging
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget
 
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
@@ -13,12 +13,15 @@ from apkit4d.gui.controllers.playback_controller import PlaybackController
 from apkit4d.gui.controllers.volume_controller import RoiSelectionView, VolumeController
 from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
+from apkit4d.visualization.viewport import RoiMode
 
 logger = logging.getLogger(__name__)
 
 
 class RoiStageController(QObject):
     """Coordinates ROI selection, preview, undo history, and Stage 1 model state."""
+
+    roi_interaction_started = Signal()
 
     def __init__(
         self,
@@ -75,6 +78,14 @@ class RoiStageController(QObject):
             self._volume_controller.set_roi(roi)
         self._apply_roi_to_inspector(roi)
 
+    def cancel_active_roi_editing(self) -> None:
+        """Cancel an active DATA_ROI selection/preview if one is currently in progress."""
+        view_active = getattr(self._roi_view, "roi_mode", RoiMode.INACTIVE) != RoiMode.INACTIVE
+        inspector_active = self._inspector is not None and self._inspector._editing_mode
+        if not view_active and not inspector_active:
+            return
+        self._on_cancel_roi()
+
     @property
     def full_volume_bounds(self) -> Bounds6D | None:
         """Full uncropped physical bounds of the active recording, if known."""
@@ -128,6 +139,7 @@ class RoiStageController(QObject):
         if self._file_controller.source is None:
             return
 
+        self.roi_interaction_started.emit()
         self._pause_and_lock_playback_for_roi()
 
         if self._inspector is not None:
@@ -149,6 +161,7 @@ class RoiStageController(QObject):
         if self._file_controller.source is None:
             return
 
+        self.roi_interaction_started.emit()
         self._pause_and_lock_playback_for_roi()
 
         if self._roi_view is not None:
