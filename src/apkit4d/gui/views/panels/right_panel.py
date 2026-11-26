@@ -28,7 +28,6 @@ from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.theme import (
     DEFAULT_THEME,
     THEME_COLORS,
-    RightPanelStyler,
     Theme,
     ThemeColors,
 )
@@ -184,10 +183,6 @@ class BottomStatsSection(QFrame):
         """Toggle between collapsed and expanded states."""
         self.set_expanded(not self._is_expanded, animate=animate)
 
-    def apply_theme(self, colors: ThemeColors) -> None:
-        """Apply theme colors to header, labels, borders, and details frame."""
-        RightPanelStyler.apply_bottom_stats(self, colors)
-
 
 class RightPanel(SidePanel):
     """
@@ -246,7 +241,6 @@ class RightPanel(SidePanel):
 
         self.toggle_all_btn = QPushButton(texts.BUTTON_TOGGLE_ALL, self.top_bar)
         self.toggle_all_btn.setObjectName(names.TOGGLE_ALL_BUTTON)
-        self.toggle_all_btn.setFlat(True)  # part of the top bar: the global button style skips it
         self.toggle_all_btn.setToolTip(texts.TOOLTIP_TOGGLE_ALL)
         self.toggle_all_btn.clicked.connect(self.toggle_all)
 
@@ -457,18 +451,12 @@ class RightPanel(SidePanel):
         self.apply_theme(THEME_COLORS[theme])
 
     def apply_theme(self, colors: ThemeColors) -> None:
-        """Apply theme colors to all components."""
-        self._style_top_bar(colors)
+        """Repaint what the stylesheet of the application does not reach, such as the plots."""
         for section in self._sections:
             section.apply_theme(colors)
-        self._bottom_stats.apply_theme(colors)
 
         if detection_inspector := self.detection_inspector:
             detection_inspector.apply_theme(colors)
-
-    def _style_top_bar(self, colors: ThemeColors) -> None:
-        """Style the top control bar with the active theme colors."""
-        self.top_bar.setStyleSheet(RightPanelStyler.top_bar_stylesheet(colors))
 
     def _on_play_clicked(self, step: PipelineStep) -> None:
         """Handle play button click on stage header."""
