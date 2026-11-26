@@ -9,7 +9,7 @@ from PySide6.QtCore import QModelIndex, QObject, Qt, Signal
 from PySide6.QtWidgets import QAbstractItemView, QListWidgetItem
 
 from apkit4d.batching.export import save_batch_results
-from apkit4d.core.models import DetectionConfig, PreprocessingConfig, TrackingConfig
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
@@ -88,7 +88,7 @@ def _process_recordings(
                     source,
                     preproc,
                     detection,
-                    roi,
+                    RoiConfig().with_region(roi),
                     progress_callback=lambda done, total, row=row: update(
                         row, texts.MULTI_FILE_DETECTING.format(done=done, total=total), ""
                     ),
@@ -142,7 +142,6 @@ class MultiFileController(QObject):
         window: MainWindow,
         files: FileController,
         pipeline: PipelineModel,
-        current_roi: Callable[[], RegionOfInterest | None],
         parent: QObject,
         show_roi: Callable[[RegionOfInterest], None],
     ) -> None:
@@ -152,7 +151,7 @@ class MultiFileController(QObject):
         self._export = window.right_panel.batch_inspector
         self._files = files
         self._pipeline = pipeline
-        self._current_roi = current_roi
+        self._current_roi = self._pipeline.get_roi_params().region
         self._show_roi = show_roi
         # Store the new reference path, the row to remove if any, and the function
         # that restores the previous settings.
@@ -334,7 +333,7 @@ class MultiFileController(QObject):
         """
         steps = (PipelineStep.PREPROCESSING, PipelineStep.DETECTION, PipelineStep.TRACKING)
         params = {step: self._pipeline.get_step_params(step) for step in steps}
-        roi = self._current_roi()
+        roi = self._current_roi
         folder = self._export.output_dir.text()
         fmt = self._export.format.currentText()
         first = self._export.first_frame.value()
@@ -425,7 +424,7 @@ class MultiFileController(QObject):
             last,
             (info.n_z, info.n_y, info.n_x),
             getattr(source, "channel", 0),
-            self._current_roi(),
+            self._current_roi,
             preproc,
             detection,
             tracking,
