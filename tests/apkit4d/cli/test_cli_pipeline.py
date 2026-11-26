@@ -32,6 +32,7 @@ def test_apkit4d_pipeline_is_defined(runner: CliRunner):
     "param",
     [
         "file",
+        "--input-dir",
         "--params",
         "--first-frame",
         "--last-frame",
@@ -46,10 +47,10 @@ def test_apkit4d_pipeline_has_params_defined(param: str):
     assert is_param_defined(PIPELINE, param)
 
 
-def test_file_is_a_path_and_an_obligatory_argument():
+def test_file_accepts_multiple_existing_paths():
     arg = get_argument(PIPELINE, "file")
-    assert arg.required
-    assert arg.nargs == 1
+    assert not arg.required
+    assert arg.nargs == -1
     assert isinstance(arg.type, click.Path)
     assert arg.type.type is pathlib.Path
     assert arg.type.exists
@@ -379,3 +380,93 @@ def test_unreadable_saved_results_are_reported(runner, tmp_path):
 
     assert result.exit_code == 1
     assert "Cannot read the saved results" in result.output
+
+
+def test_multiple_recordings_use_shared_parameters_and_write_separate_results(runner, tmp_path):
+    first = tmp_path / "source.czi"
+    second = tmp_path / "other" / first.name
+    second.parent.mkdir()
+    first.touch()
+    second.touch()
+    output = tmp_path / "exports"
+    params = write_params(tmp_path, {"blob": {"threshold": 0.2}, "tracking": {"min_len": 2}})
+
+    def detect(**kwargs):
+        return save_results(kwargs["out_dir"], kwargs["czi"])
+
+    with patch("apkit4d.cli.commands.pipeline.run_batch", side_effect=detect) as mock_run:
+        result = runner.invoke(
+            cli, ["pipeline", str(first), str(second), "--params", str(params), "--out", str(output)]
+        )
+
+    assert result.exit_code == 0, result.output
+    calls = [call.kwargs for call in mock_run.call_args_list]
+    assert [call["czi"] for call in calls] == [first, second]
+    assert all(call["blob_params"].threshold == 0.2 for call in calls)
+    exports = list(output.glob("*/*_blobs_params.json"))
+    assert len(exports) == 2
+    saved_recordings = set()
+    for path in exports:
+        saved = json.loads(path.read_text())
+        saved_recordings.add(pathlib.Path(saved["czi"]))
+        assert saved["tracking"]["min_len"] == 2
+        assert (path.parent / saved["tracks_table"]).is_file()
+    assert saved_recordings == {first, second}
+
+
+def test_multiple_recordings_continue_after_a_failure(runner, tmp_path):
+    first = tmp_path / "broken.czi"
+    second = tmp_path / "valid.czi"
+    first.touch()
+    second.touch()
+    detected = save_results(tmp_path, second)
+
+    with patch("apkit4d.cli.commands.pipeline.run_batch", side_effect=[ValueError("Invalid CZI"), detected]):
+        result = runner.invoke(cli, ["pipeline", str(first), str(second), "--only", "detection"])
+
+    assert result.exit_code == 1
+    assert f"Failed to process {first}: Invalid CZI" in result.output
+    assert "Detection completed." in result.output
+    assert "Processed 1 of 2 recordings." in result.output
+
+
+@pytest.mark.parametrize("names", [("only.czi",), ("z.czi", "a.CZI")])
+def test_input_directory_processes_czi_files_in_filename_order(runner, tmp_path, names):
+    for name in names:
+        (tmp_path / name).touch()
+    (tmp_path / "notes.txt").touch()
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "ignored.czi").touch()
+    output = tmp_path / "exports"
+    detected = SimpleNamespace(num_blobs=0, num_frames=1, table_path=None, params_path=None)
+
+    with patch("apkit4d.cli.commands.pipeline.run_batch", return_value=detected) as mock_run:
+        result = runner.invoke(
+            cli, ["pipeline", "--input-dir", str(tmp_path), "--only", "detection", "--out", str(output)]
+        )
+
+    assert result.exit_code == 0, result.output
+    calls = [call.kwargs for call in mock_run.call_args_list]
+    assert [call["czi"].name for call in calls] == sorted(names)
+    assert all(call["out_dir"].parent == output for call in calls)
+
+
+def test_input_directory_reports_no_czi_recordings(runner, tmp_path):
+    result = runner.invoke(cli, ["pipeline", "--input-dir", str(tmp_path)])
+    assert result.exit_code == 2
+    assert "No CZI recordings found" in result.output
+
+
+def test_input_directory_and_file_arguments_are_mutually_exclusive(runner, tmp_path):
+    recording = tmp_path / "sample.czi"
+    recording.touch()
+    result = runner.invoke(cli, ["pipeline", str(recording), "--input-dir", str(tmp_path)])
+    assert result.exit_code == 2
+    assert "Specify FILE arguments or --input-dir" in result.output
+
+
+def test_pipeline_requires_an_input(runner):
+    result = runner.invoke(cli, ["pipeline"])
+    assert result.exit_code == 2
+    assert "Specify at least one FILE or use --input-dir" in result.output

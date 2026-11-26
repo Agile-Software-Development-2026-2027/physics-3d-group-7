@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QAction, QDragEnterEvent, QDragLeaveEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QWidget
 
 from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui import app as gui_app
@@ -13,6 +13,10 @@ from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, names, shortcuts, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
+from apkit4d.gui.models.frame_loading_config import (
+    FrameLoadingConfig,
+    FrameLoadingMode,
+)
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.mock import MockConfig, MockFrameSource
@@ -388,3 +392,58 @@ def test_fps_event_filter_coalesces_multiple_child_paints_per_frame(window, monk
     QApplication.processEvents()
 
     assert window._qt_fps_ticker.fps() == pytest.approx(20.0)
+
+
+def test_performance_action_requests_settings(window, qtbot):
+    action = window.findChild(QAction, names.PERFORMANCE_ACTION)
+
+    assert action is not None
+    assert action.isEnabled()
+
+    with qtbot.waitSignal(window.performance_settings_requested):
+        action.trigger()
+
+
+def test_performance_action_updates_config(window, qapp, monkeypatch):
+    from apkit4d.gui.controllers import main_controller
+
+    config = FrameLoadingConfig(
+        mode=FrameLoadingMode.MANUAL,
+        cache_limit_gb=32.0,
+    )
+
+    dialog = MagicMock()
+    dialog.exec.return_value = QDialog.DialogCode.Accepted
+    dialog.config.return_value = config
+
+    dialog_class = MagicMock(return_value=dialog)
+    monkeypatch.setattr(main_controller, "PerformanceSettingsDialog", dialog_class)
+
+    controller = MainController(window, qapp, window, view=MagicMock())
+
+    window.findChild(QAction, names.PERFORMANCE_ACTION).trigger()
+
+    dialog_class.assert_called_once_with(FrameLoadingConfig(), window)
+    dialog.exec.assert_called_once_with()
+    assert controller._frame_loading_config == config
+
+
+def test_performance_action_cancel_preserves_config(window, qapp, monkeypatch):
+    from apkit4d.gui.controllers import main_controller
+
+    dialog = MagicMock()
+    dialog.exec.return_value = QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(
+        main_controller,
+        "PerformanceSettingsDialog",
+        MagicMock(return_value=dialog),
+    )
+
+    controller = MainController(window, qapp, window, view=MagicMock())
+    original_config = controller._frame_loading_config
+
+    window.findChild(QAction, names.PERFORMANCE_ACTION).trigger()
+
+    assert controller._frame_loading_config == original_config
+    dialog.config.assert_not_called()
