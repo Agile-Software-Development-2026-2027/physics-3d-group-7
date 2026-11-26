@@ -2,9 +2,9 @@
 Main window of the apkit4d desktop application.
 
 The window has three columns, resizable with a splitter: controls on the left, the 3D view with its
-playback bar in the center, controls on the right. It only lets the user choose a .czi file and
-announces it with the `file_opened` signal. Reading the file and showing the volume are done by
-whoever connects to that signal (the controller).
+playback bar in the center, controls on the right. It accepts .czi files for opening and .json files
+for loading saved results. Reading the files and showing the volume are done by whoever connects to
+the corresponding signals (the controller).
 """
 
 from collections.abc import Callable
@@ -29,8 +29,8 @@ class MainWindow(QMainWindow):
     """
     Application window with a File menu, three columns and a status bar.
 
-    The center panel holds a placeholder until the 3D view is added with `set_view`. Every component
-    has an object name, so tests can find it with `findChild` and simulate the user.
+    The center panel holds a drag-and-drop surface until a file is loaded. Every component has an
+    object name, so tests can find it with `findChild` and simulate the user.
 
     Signals:
         files_selected: Emitted with the paths selected for a new batch.
@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
 
         self._left = LeftPanel()
         self._center = CenterPanel()
+        self._center.file_dropped.connect(self.open_dropped_file)
         self._right = RightPanel()
 
         self._qt_fps_ticker = FpsCounter(window_seconds=1.0)
@@ -112,11 +113,13 @@ class MainWindow(QMainWindow):
 
     def set_current_file(self, path: Path | None) -> None:
         """
-        Show the name of the open file in the title of the window.
+        Show the name of the open file and update file-dependent actions.
 
         Args:
             path: The open file, or None to show only the name of the application.
         """
+        self._export_video_action.setEnabled(path is not None)
+        self._center.set_file_loaded(path is not None)
         if path is None:
             self.setWindowTitle(application.APP_NAME)
         else:
@@ -143,6 +146,13 @@ class MainWindow(QMainWindow):
             return False
         self.file_opened.emit(path)
         return True
+
+    def open_dropped_file(self, path: Path) -> None:
+        """Open a dropped CZI file or load dropped JSON results."""
+        if path.suffix.lower() == application.JSON_SUFFIX:
+            self.results_opened.emit(path)
+        else:
+            self.open_file(path)
 
     def choose_recording(self, name: str) -> Path | None:
         """
@@ -191,13 +201,14 @@ class MainWindow(QMainWindow):
             shortcuts.OPEN_RESULTS,
             self._choose_results,
         )
-        self._add_action(
+        self._export_video_action = self._add_action(
             menu,
             names.EXPORT_VIDEO_ACTION,
             texts.ACTION_EXPORT_VIDEO,
             shortcuts.EXPORT_VIDEO,
             self.video_export_requested.emit,
         )
+        self._export_video_action.setEnabled(False)
         menu.addSeparator()
         self._add_action(menu, names.QUIT_ACTION, texts.ACTION_QUIT, shortcuts.QUIT, self.close)
 

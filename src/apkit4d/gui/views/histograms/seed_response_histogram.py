@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QWidget
 
 from apkit4d.core.models import DetectionConfig
 from apkit4d.gui.constants import texts
+from apkit4d.gui.constants.appearance import HISTOGRAM_HEIGHT_RANGE
 from apkit4d.gui.theme import ThemeColors
 
 
@@ -37,7 +38,9 @@ class SeedResponseHistogram(pg.PlotWidget):
         self.setMenuEnabled(True)
         self.hideButtons()
         self.setLimits(yMin=0, xMin=0)
-        self.setMinimumHeight(160)
+
+        self.setMinimumHeight(HISTOGRAM_HEIGHT_RANGE[0])
+        self.setMaximumHeight(HISTOGRAM_HEIGHT_RANGE[1])
 
         self.setLabel("left", texts.SEED_HISTOGRAM_LEFT_AXIS_LABEL)
         self.setLabel("bottom", texts.SEED_HISTOGRAM_BOTTOM_AXIS_LABEL)

@@ -16,7 +16,6 @@ from apkit4d.gui.constants import names, texts, view_style
 from apkit4d.gui.theme.themes import DEFAULT_THEME, THEME_COLORS, ThemeColors
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
-from apkit4d.gui.views.widgets.labeled_row import labeled_row
 from apkit4d.gui.views.widgets.v_separator import VSeparator
 from apkit4d.visualization.vis_sub_roi import VisSubRoiState, clamp_outside_opacity
 
@@ -104,11 +103,12 @@ class VisSubRoiSection(AccordionSection):
         opacity_layout.addWidget(self._outside_opacity_slider)
         opacity_layout.addWidget(self._outside_opacity_value)
 
-        self._opacity_box = labeled_row(
-            texts.BOX_VIS_SUB_ROI_OUTSIDE_OPACITY,
-            opacity_row,
-            names.VIS_SUB_ROI_OPACITY_BOX,
-        )
+        self._opacity_box = QWidget()
+        self._opacity_box.setObjectName(names.VIS_SUB_ROI_OPACITY_BOX)
+        opacity_box_layout = QHBoxLayout(self._opacity_box)
+        opacity_box_layout.setSpacing(5)
+        opacity_box_layout.addWidget(QLabel(texts.BOX_VIS_SUB_ROI_OUTSIDE_OPACITY))
+        opacity_box_layout.addWidget(opacity_row)
 
         # reset button and status label
         self._reset_button = QPushButton(texts.BUTTON_VIS_SUB_ROI_RESET)

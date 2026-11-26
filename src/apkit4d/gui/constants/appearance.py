@@ -69,3 +69,5 @@ BUBBLE_PADDING: int = 11  # on the left and on the right of the text
 SLIDER_HEADROOM: int = (
     BUBBLE_HEIGHT + BUBBLE_POINTER_HEIGHT + BUBBLE_GAP - (SLIDER_HEIGHT - SLIDER_GROOVE_HEIGHT) // 2 + 1
 )  # the last pixel is a margin, so that the smoothed edge of the bubble is not cut
+
+HISTOGRAM_HEIGHT_RANGE: tuple[int, int] = (200, 250)

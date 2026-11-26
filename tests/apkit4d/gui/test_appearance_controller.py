@@ -75,7 +75,7 @@ def test_controls_of_the_panel_reach_the_view(controller, view, panel) -> None:
 
 
 def test_chosen_background_stays_with_the_theme_and_the_text_follows_it(controller, view, panel) -> None:
-    panel.background_chosen.emit("#ffffff")
+    panel.appearance_section.background_chosen.emit("#ffffff")
 
     view.set_background.assert_called_with("#ffffff")
     view.set_text_color.assert_called_with(LIGHT_COLORS.text)  # dark text on a white background
@@ -88,7 +88,7 @@ def test_chosen_background_stays_with_the_theme_and_the_text_follows_it(controll
 
 
 def test_chosen_outline_stays_when_the_background_changes(controller, view, panel) -> None:
-    panel.outline_chosen.emit("#ff0000")
+    panel.appearance_section.outline_chosen.emit("#ff0000")
     controller.set_theme(Theme.LIGHT)
 
     view.set_outline_color.assert_called_with("#ff0000")

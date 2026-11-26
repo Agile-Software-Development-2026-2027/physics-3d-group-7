@@ -34,6 +34,7 @@ from apkit4d.gui.controllers.video_export_controller import (
     VideoExportController,
     VideoExportView,
 )
+from apkit4d.gui.controllers.vis_sub_roi_controller import VisSubRoiController
 from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeView
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
@@ -157,7 +158,7 @@ class MainController(QObject):
         if self._appearance_controller is not None:
             self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
 
-        window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
+        window.left_panel.appearance_section.theme_switch_requested.connect(self._theme_controller.toggle)
         self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
         window.right_panel.set_theme(self._theme_controller.theme)
         self._theme_controller.theme_changed.connect(window.left_panel.set_theme)
@@ -191,6 +192,24 @@ class MainController(QObject):
             view=view,
             parent=self,
         )
+
+        left_panel = getattr(window, "left_panel", None)
+        vis_sub_roi_section = (
+            getattr(left_panel, "vis_sub_roi_section", None) if left_panel is not None else None
+        )
+        self._vis_sub_roi_controller = VisSubRoiController(
+            section=vis_sub_roi_section,
+            pipeline_model=self._pipeline_model,
+            file_controller=self._file_controller,
+            view=view,
+            parent=self,
+        )
+        # connect the ROI and VisSubROI controllers so that they don't interfere with each other
+        self._vis_sub_roi_controller.interaction_starting.connect(
+            self._roi_controller.cancel_active_roi_editing
+        )
+        self._roi_controller.roi_interaction_started.connect(self._vis_sub_roi_controller.stop_interaction)
+
         self._batch_controller = BatchController(
             window,
             self.file_controller,
@@ -258,6 +277,11 @@ class MainController(QObject):
     def roi_controller(self) -> RoiStageController:
         """Controller managing the Stage 1 Region of Interest workflow."""
         return self._roi_controller
+
+    @property
+    def vis_sub_roi_controller(self) -> VisSubRoiController:
+        """Controller coordinating the Visualization Sub-ROI workflow."""
+        return self._vis_sub_roi_controller
 
     @property
     def blob_controller(self) -> BlobDetectionController | None:

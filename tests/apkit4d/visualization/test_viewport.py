@@ -18,6 +18,7 @@ from apkit4d.visualization.viewport import (
     MOVING_IMAGE_SAMPLE_DISTANCE,
     RoiMode,
     Viewport,
+    VisSubRoiMode,
 )
 from apkit4d.visualization.vis_sub_roi import (
     DEFAULT_BLOB_RGB,
@@ -1414,3 +1415,260 @@ class TestViewportBlobsAndTrajectoriesSubRoi:
             bounds=None,
             outside_opacity=DEFAULT_OUTSIDE_OPACITY,
         )
+
+
+class TestViewportVisSubRoiInteraction:
+    @staticmethod
+    def _setup_front_camera(viewport: Viewport) -> None:
+        viewport.resize(600, 600)
+        viewport.plotter.render_window.SetSize(600, 600)
+        viewport.show_volume(make_grid(), reset_camera=True)
+        viewport.plotter.camera.SetPosition(2.0, 2.0, 20.0)
+        viewport.plotter.camera.SetFocalPoint(2.0, 2.0, 2.0)
+        viewport.plotter.camera.SetViewUp(0.0, 1.0, 0.0)
+        viewport.plotter.renderer.ResetCameraClippingRange()
+
+    @staticmethod
+    def _world_to_px(viewport: Viewport, wx: float, wy: float, wz: float) -> tuple[int, int]:
+        renderer = viewport.plotter.renderer
+        renderer.SetWorldPoint(wx, wy, wz, 1.0)
+        renderer.WorldToDisplay()
+        dx, dy, _ = renderer.GetDisplayPoint()
+        return int(round(dx)), int(round(dy))
+
+    # we test the signal emission in two cases: when a new grid is shown
+    # and when the existing grid is updated in place
+    # protect from identical bounds when we close and open a file with same grid size
+    def test_displayed_volume_bounds_updated_emits_on_new_grid_and_in_place_fast_path(self, viewport):
+        received: list[tuple[float, float, float, float, float, float]] = []
+        viewport.displayed_volume_bounds_updated.connect(received.append)
+
+        first = make_grid(5)
+        first.point_data["values"] = np.full(first.n_points, 1.0)
+        viewport.show_volume(first, reset_camera=False)
+        cached_grid = viewport._volume_grid
+
+        second = make_grid(5)
+        second.point_data["values"] = np.full(second.n_points, 2.0)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+
+        assert viewport._volume_grid is cached_grid
+        assert len(received) == 2
+        assert received[0] == pytest.approx((0.0, 4.0, 0.0, 4.0, 0.0, 4.0))
+        assert received[1] == pytest.approx((0.0, 4.0, 0.0, 4.0, 0.0, 4.0))
+
+    # if no volume displayed yet, the signal should not be emitted
+    def test_start_vis_sub_roi_selection_ignored_without_volume(self, viewport):
+        started: list[bool] = []
+        viewport.vis_sub_roi_selection_started.connect(lambda: started.append(True))
+
+        viewport.start_vis_sub_roi_selection()
+
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.INACTIVE
+        assert started == []
+
+    # simulate all click-drag-release events to create a sub-ROI
+    # and verify the box widget is enabled
+    def test_click_drag_release_creates_vis_sub_roi_and_enables_separate_box_widget(self, viewport):
+        self._setup_front_camera(viewport)
+        started: list[bool] = []
+        bounds_updates: list[tuple[float, float, float, float, float, float]] = []
+        viewport.vis_sub_roi_selection_started.connect(lambda: started.append(True))
+        viewport.vis_sub_roi_bounds_changed.connect(bounds_updates.append)
+
+        viewport.set_vis_sub_roi_outside_opacity(0.05)
+        viewport.start_vis_sub_roi_selection()
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.WAITING_FIRST_POINT
+        assert len(started) == 1
+
+        iren = viewport.plotter.iren.interactor
+
+        # Click outside volume stays in WAITING_FIRST_POINT
+        iren.SetEventPosition(1, 1)
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.WAITING_FIRST_POINT
+
+        # Click inside volume and drag across the front face
+        iren.SetEventPosition(*self._world_to_px(viewport, 1.0, 1.0, 4.0))
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.DRAGGING
+        assert viewport.roi_mode == RoiMode.INACTIVE
+
+        iren.SetEventPosition(*self._world_to_px(viewport, 3.0, 3.0, 4.0))
+        viewport._on_mouse_move(None, "MouseMoveEvent")
+
+        assert "vis_sub_roi_preview" in viewport.plotter.actors
+        assert "roi_preview" not in viewport.plotter.actors
+        assert viewport.vis_sub_roi_state.enabled is True
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.05)
+        assert viewport.vis_sub_roi_state.bounds is not None
+        np.testing.assert_allclose(
+            viewport.vis_sub_roi_state.bounds,
+            (1.0, 3.0, 1.0, 3.0, 0.0, 4.0),
+            atol=0.25,
+        )
+
+        # Release transitions to EDITING with dedicated axis-aligned box widget
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.EDITING
+        assert viewport.vis_sub_roi_box_visible is True
+        assert viewport._vis_sub_roi_box_widget is not None
+        assert viewport._vis_sub_roi_box_widget.GetEnabled() == 1
+        assert viewport._vis_sub_roi_box_widget.GetRotationEnabled() == 0
+        assert viewport._roi_box_widget is None
+        assert len(bounds_updates) >= 2
+
+    # simulate a quick click without any mouse move to create a sub-ROI
+    # and verify the box widget is enabled
+    def test_quick_click_without_mouse_move_creates_vis_sub_roi_on_release(self, viewport):
+        self._setup_front_camera(viewport)
+        viewport.start_vis_sub_roi_selection()
+
+        iren = viewport.plotter.iren.interactor
+        iren.SetEventPosition(*self._world_to_px(viewport, 2.0, 2.0, 4.0))
+        viewport._on_left_button_press(None, "LeftButtonPressEvent")
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.DRAGGING
+
+        viewport._on_left_button_release(None, "LeftButtonReleaseEvent")
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.EDITING
+        assert viewport.vis_sub_roi_state.enabled is True
+        assert viewport.vis_sub_roi_state.bounds is not None
+        assert viewport.vis_sub_roi_box_visible is True
+
+    # simulate a click-drag-release to create a sub-ROI, then resize and translate the box widget
+    # and verify the bounds are clamped to the volume and the enabled flag is preserved
+    def test_box_widget_resize_and_translation_clamp_and_preserve_enabled_flag(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=True)  # bounds 0..4
+        viewport.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=True,
+                bounds=(1.0, 3.0, 1.0, 3.0, 1.0, 3.0),
+                outside_opacity=0.15,
+            )
+        )
+        viewport.show_vis_sub_roi_box()
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.EDITING
+        assert viewport._vis_sub_roi_box_rep is not None
+
+        updates: list[tuple[float, float, float, float, float, float]] = []
+        viewport.vis_sub_roi_bounds_changed.connect(updates.append)
+
+        # Resize X min past 0.0 -> must clamp to 0.0
+        viewport._on_vis_sub_roi_box_start_interaction(None, "StartInteractionEvent")
+        viewport._vis_sub_roi_box_rep.PlaceWidget([-4.0, 3.0, 1.0, 3.0, 1.0, 3.0])
+        viewport._on_vis_sub_roi_box_interaction(None, "InteractionEvent")
+        viewport._on_vis_sub_roi_box_end_interaction(None, "EndInteractionEvent")
+
+        assert viewport.vis_sub_roi_state.bounds == pytest.approx((0.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        assert viewport.vis_sub_roi_state.enabled is True
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.15)
+        assert len(updates) == 1
+
+        # Pure translation past +X edge -> slides to [1.0, 4.0] keeping width 3.0
+        viewport._on_vis_sub_roi_box_start_interaction(None, "StartInteractionEvent")
+        b = viewport._vis_sub_roi_box_rep.GetBounds()
+        viewport._vis_sub_roi_box_rep.PlaceWidget([b[0] + 5.0, b[1] + 5.0, b[2], b[3], b[4], b[5]])
+        viewport._on_vis_sub_roi_box_interaction(None, "InteractionEvent")
+        viewport._on_vis_sub_roi_box_end_interaction(None, "EndInteractionEvent")
+
+        assert viewport.vis_sub_roi_state.bounds == pytest.approx((1.0, 4.0, 1.0, 3.0, 1.0, 3.0))
+
+    # test that stop_vis_sub_roi_interaction, clear_vis_sub_roi,
+    # and reset_vis_sub_roi_state have distinct semantics
+    def test_stop_interaction_clear_and_reset_keep_distinct_semantics(self, viewport):
+        viewport.show_volume(make_grid(), reset_camera=False)
+        ended: list[bool] = []
+        viewport.vis_sub_roi_interaction_ended.connect(lambda: ended.append(True))
+
+        # Calling stop when already inactive is a quiet no-op
+        viewport.stop_vis_sub_roi_interaction()
+        assert ended == []
+
+        viewport.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=True,
+                bounds=(1.0, 3.0, 1.0, 3.0, 1.0, 3.0),
+                outside_opacity=0.2,
+            )
+        )
+        viewport.set_vis_sub_roi_box_visible(True)
+        assert viewport.vis_sub_roi_box_visible is True
+
+        # stop_vis_sub_roi_interaction hides box but preserves visualization state
+        viewport.stop_vis_sub_roi_interaction()
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.INACTIVE
+        assert viewport.vis_sub_roi_box_visible is False
+        assert len(ended) == 1
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=True,
+            bounds=(1.0, 3.0, 1.0, 3.0, 1.0, 3.0),
+            outside_opacity=0.2,
+        )
+
+        # clear_vis_sub_roi hides box, disables and clears bounds, preserves outside_opacity
+        viewport.show_vis_sub_roi_box()
+        viewport.clear_vis_sub_roi()
+        assert viewport.vis_sub_roi_box_visible is False
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=0.2,
+        )
+
+        # reset_vis_sub_roi_state resets outside_opacity back to 0.01 without removing volume
+        viewport.set_vis_sub_roi_state(
+            VisSubRoiState(enabled=True, bounds=(1.0, 3.0, 1.0, 3.0, 1.0, 3.0), outside_opacity=0.3)
+        )
+        viewport.show_vis_sub_roi_box()
+        viewport.reset_vis_sub_roi_state()
+        assert viewport.vis_sub_roi_box_visible is False
+        assert "volume" in viewport.plotter.actors
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )
+
+    # test that starting a DATA_ROI selection hides the VIS_SUB_ROI box,
+    # and starting a VIS_SUB_ROI selection cancels any active DATA_ROI preview
+    def test_mutual_exclusion_with_data_roi_and_reclamping_on_new_grid(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)  # bounds 0..5
+        viewport.set_vis_sub_roi_state(
+            VisSubRoiState(enabled=True, bounds=(1.0, 4.5, 1.0, 4.5, 1.0, 4.5), outside_opacity=0.05)
+        )
+        viewport.show_vis_sub_roi_box()
+        assert viewport.vis_sub_roi_box_visible is True
+
+        # Starting DATA_ROI hides VIS_SUB_ROI box without altering VIS_SUB_ROI state
+        viewport.start_roi_selection()
+        assert viewport.roi_mode == RoiMode.WAITING_FIRST_POINT
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.INACTIVE
+        assert viewport.vis_sub_roi_box_visible is False
+        assert viewport.vis_sub_roi_state.bounds == pytest.approx((1.0, 4.5, 1.0, 4.5, 1.0, 4.5))
+
+        # show_vis_sub_roi_box is ignored while DATA_ROI is active
+        viewport.show_vis_sub_roi_box()
+        assert viewport.vis_sub_roi_box_visible is False
+
+        # Starting VIS_SUB_ROI selection defensively cancels active DATA_ROI preview
+        viewport.set_roi_preview(RegionOfInterest(0.5, 3.0, 0.5, 3.0, 0.5, 3.0))
+        assert viewport.roi_mode == RoiMode.EDITING
+        viewport.start_vis_sub_roi_selection()
+        assert viewport.roi_mode == RoiMode.INACTIVE
+        assert "roi_preview" not in viewport.plotter.actors
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.WAITING_FIRST_POINT
+
+        # Showing a smaller volume re-clamps an already-visible VIS_SUB_ROI editing box
+        viewport.stop_vis_sub_roi_interaction()
+        viewport.show_vis_sub_roi_box((1.0, 4.5, 1.0, 4.5, 1.0, 4.5))
+        viewport.show_volume(make_grid(4), reset_camera=False)  # bounds 0..3
+        assert viewport._vis_sub_roi_box_rep is not None
+        box_bounds = viewport._vis_sub_roi_box_rep.GetBounds()
+        assert box_bounds[1] <= 3.0
+        assert box_bounds[3] <= 3.0
+        assert box_bounds[5] <= 3.0
+
+        viewport.clear()
+        assert viewport.vis_sub_roi_mode == VisSubRoiMode.INACTIVE
+        assert viewport._vis_sub_roi_box_widget is not None
+        assert viewport._vis_sub_roi_box_widget.GetEnabled() == 0

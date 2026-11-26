@@ -128,6 +128,7 @@ class FileController(QObject):
         if self._source is not None:
             self._source.close()
             self._source = None
+            self._window.set_current_file(None)
             self.closed.emit()
 
     def _on_opened(self, task_id: int, source: FrameSource) -> None:

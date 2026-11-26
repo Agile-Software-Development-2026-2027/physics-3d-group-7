@@ -322,8 +322,8 @@ class BlobDetectionInspector(QWidget):
 
         self._main_layout.addWidget(group)
 
+    @staticmethod
     def _add_field(
-        self,
         form: QFormLayout,
         label_text: str,
         widget: QWidget,
