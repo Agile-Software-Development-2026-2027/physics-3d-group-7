@@ -40,7 +40,7 @@ class RoiInspector(QWidget):
     reset_roi_clicked = Signal()
     bounds_edited = Signal(object)
     undo_roi_clicked = Signal()
-    selected_frames_changed = Signal(object)  # FrameRange | None
+    selected_frames_confirmed = Signal(object)  # FrameRange | None
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -152,7 +152,7 @@ class RoiInspector(QWidget):
 
         save_layout.addWidget(QLabel(texts.INSPECTOR_LABEL_SELECT_FRAMES))
         self.frames_selector = FramesSelector(FrameRange(0, 0))
-        self.frames_selector.selected_frames_changed.connect(self.selected_frames_changed.emit)
+        self.frames_selector.selected_frames_confirmed.connect(self.selected_frames_confirmed.emit)
         save_layout.addWidget(self.frames_selector)
 
         form.addRow(save_widget)

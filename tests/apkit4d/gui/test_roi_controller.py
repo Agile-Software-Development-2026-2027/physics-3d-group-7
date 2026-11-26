@@ -174,7 +174,7 @@ def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
 
     selected_range = FrameRange(1, 3)
-    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
 
     assert h.model.get_roi_params().frame_range == selected_range
 
@@ -283,10 +283,10 @@ def test_selected_frames_are_propagated_to_model_and_playback(qtbot, monkeypatch
     set_frame_range = MagicMock()
     monkeypatch.setattr(h.playback, "set_frame_range", set_frame_range)
 
-    with qtbot.waitSignal(h.inspector.selected_frames_changed) as changed:
-        h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+    with qtbot.waitSignal(h.inspector.selected_frames_confirmed) as confirmed:
+        h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
 
-    assert changed.args == [selected_range]
+    assert confirmed.args == [selected_range]
     assert h.model.get_roi_params().frame_range == selected_range
 
     set_frame_range.assert_called_once_with(selected_range)
@@ -306,7 +306,7 @@ def test_frame_range_update_preserves_existing_roi(qtbot) -> None:
     _accept_bounds(h, accepted_roi)
 
     selected_range = FrameRange(1, 3)
-    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
 
     params = h.model.get_roi_params()
 
@@ -318,7 +318,7 @@ def test_accepting_roi_preserves_selected_frame_range(qtbot) -> None:
     h = _make_harness(qtbot)
 
     selected_range = FrameRange(1, 3)
-    h.inspector.frames_selector.selected_frames_changed.emit(selected_range)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
 
     accepted_roi = RegionOfInterest(
         x_min=10.0,
@@ -334,6 +334,46 @@ def test_accepting_roi_preserves_selected_frame_range(qtbot) -> None:
 
     assert params.region == accepted_roi
     assert params.frame_range == selected_range
+
+
+def test_narrowing_frame_range_keeps_stages_but_widening_invalidates_them(qtbot) -> None:
+    h = _make_harness(qtbot)
+    full_range = FrameRange.full(5)
+    roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+
+    # Start from a known range so the later changes are narrowing/widening, not None -> range
+    h.inspector.frames_selector.selected_frames_confirmed.emit(full_range)
+    _accept_bounds(h, roi)
+    h.pipeline.complete_stage(PipelineStep.PREPROCESSING)
+
+    # Narrowing: the new range is contained in the old one, so existing results stay valid
+    h.inspector.frames_selector.selected_frames_confirmed.emit(FrameRange(1, 3))
+
+    assert h.model.get_roi_params().frame_range == FrameRange(1, 3)
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+
+    # Widening: the new range is not contained in the old one, so Stage 1 and downstream are invalidated
+    h.inspector.frames_selector.selected_frames_confirmed.emit(full_range)
+
+    assert h.model.get_roi_params().frame_range == full_range
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+    assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+
+
+def test_clearing_frame_range_invalidates_stages(qtbot) -> None:
+    h = _make_harness(qtbot)
+    roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+
+    h.inspector.frames_selector.selected_frames_confirmed.emit(FrameRange(1, 3))
+    _accept_bounds(h, roi)
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+
+    h.inspector.frames_selector.selected_frames_confirmed.emit(None)
+
+    assert h.model.get_roi_params().frame_range is None
+    assert h.model.get_roi_params().region == roi
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
 
 
 def test_set_enabled_state_updates_frames_selector(qtbot, monkeypatch) -> None:

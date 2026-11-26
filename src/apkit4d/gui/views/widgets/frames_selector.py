@@ -8,8 +8,7 @@ from apkit4d.gui.constants import texts
 
 
 class FramesSelector(QWidget):
-    selected_frames_changed = Signal(object)
-    frame_range_changed = Signal(object)
+    selected_frames_confirmed = Signal(object)
 
     def __init__(
         self,
@@ -26,8 +25,8 @@ class FramesSelector(QWidget):
 
         self.set_frame_range(frame_range, True)
 
-        self._end_frame.valueChanged.connect(self._on_end_frame_change)
-        self._start_frame.valueChanged.connect(self._on_start_frame_change)
+        self._start_frame.editingFinished.connect(self._on_start_frame_confirmed)
+        self._end_frame.editingFinished.connect(self._on_end_frame_confirmed)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -60,32 +59,6 @@ class FramesSelector(QWidget):
     ) -> Self:
         return cls(FrameRange(start_frame, end_frame), parent)
 
-    def _on_start_frame_change(self, frame: int):
-        if self._frame_range is None:
-            return
-
-        if frame > self._end_frame.value():
-            self._end_frame.blockSignals(True)
-            self._end_frame.setValue(frame)
-            self._end_frame.blockSignals(False)
-        else:
-            self._frame_range = self._frame_range.with_start(frame)
-
-        self.selected_frames_changed.emit(FrameRange(frame - 1, self._end_frame.value() - 1))
-
-    def _on_end_frame_change(self, frame: int):
-        if self._frame_range is None:
-            return
-
-        if frame < self._start_frame.value():
-            self._start_frame.blockSignals(True)
-            self._start_frame.setValue(frame)
-            self._start_frame.blockSignals(False)
-        else:
-            self._frame_range = self._frame_range.with_end(frame)
-
-        self.selected_frames_changed.emit(FrameRange(self._start_frame.value() - 1, frame - 1))
-
     def _update_enabled_state(self):
         disabled = self._disabled or self._frame_range is None
 
@@ -116,7 +89,7 @@ class FramesSelector(QWidget):
             self._start_frame.setValue(0)
             self._end_frame.setValue(0)
 
-            self.selected_frames_changed.emit(None)
+            self.selected_frames_confirmed.emit(None)
 
         else:
             self._start_frame.setSpecialValueText("")
@@ -135,5 +108,43 @@ class FramesSelector(QWidget):
                 self._start_frame.setValue(frame_range.start_display)
                 self._end_frame.setValue(frame_range.end_display)
 
+            start = self._start_frame.value()
+            end = self._end_frame.value()
+
+            self.selected_frames_confirmed.emit(FrameRange(start - 1, end - 1))
+
         self._update_enabled_state()
-        self.frame_range_changed.emit(frame_range)
+
+    def _on_start_frame_confirmed(self):
+        if self._frame_range is None:
+            return
+
+        new_frame_range = self._frame_range.with_start(self._start_frame.value() - 1)
+
+        self._start_frame.blockSignals(True)
+        self._start_frame.setValue(new_frame_range.start_display)
+        self._start_frame.blockSignals(False)
+
+        self._end_frame.blockSignals(True)
+        self._end_frame.setValue(new_frame_range.end_display)
+        self._end_frame.blockSignals(False)
+
+        self._frame_range = new_frame_range
+        self.selected_frames_confirmed.emit(new_frame_range)
+
+    def _on_end_frame_confirmed(self):
+        if self._frame_range is None:
+            return
+
+        new_frame_range = self._frame_range.with_end(self._end_frame.value() - 1)
+
+        self._start_frame.blockSignals(True)
+        self._start_frame.setValue(new_frame_range.start_display)
+        self._start_frame.blockSignals(False)
+
+        self._end_frame.blockSignals(True)
+        self._end_frame.setValue(new_frame_range.end_display)
+        self._end_frame.blockSignals(False)
+
+        self._frame_range = new_frame_range
+        self.selected_frames_confirmed.emit(new_frame_range)

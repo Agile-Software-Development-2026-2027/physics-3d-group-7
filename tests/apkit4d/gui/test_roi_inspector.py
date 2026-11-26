@@ -184,18 +184,25 @@ class TestRoiInspectorFrames:
         labels = [label.text() for label in inspector.findChildren(QLabel)]
         assert texts.INSPECTOR_LABEL_SELECT_FRAMES in labels
 
-    def test_selecting_frames_is_announced_from_zero(self, with_frames: RoiInspector):
+    def test_selecting_frames_is_announced_from_zero(
+        self,
+        with_frames: RoiInspector,
+    ):
         selected: list[FrameRange | None] = []
-        with_frames.selected_frames_changed.connect(selected.append)
+        selector = with_frames.frames_selector
+        selector.selected_frames_confirmed.connect(selected.append)
 
-        with_frames.frames_selector._start_frame.setValue(3)
-        with_frames.frames_selector._end_frame.setValue(7)
+        selector._start_frame.setValue(3)
+        selector._start_frame.editingFinished.emit()
+
+        selector._end_frame.setValue(7)
+        selector._end_frame.editingFinished.emit()
 
         assert selected == [FrameRange(2, 9), FrameRange(2, 6)]
 
     def test_no_frames_is_announced_as_none(self, with_frames: RoiInspector):
         selected: list[FrameRange | None] = []
-        with_frames.selected_frames_changed.connect(selected.append)
+        with_frames.selected_frames_confirmed.connect(selected.append)
 
         with_frames.frames_selector.set_frame_range(None, True)
 

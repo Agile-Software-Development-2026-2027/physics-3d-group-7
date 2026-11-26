@@ -40,7 +40,10 @@ def test_spinboxes_cannot_leave_the_frame_range(selector):
 def test_labels_tell_which_spinbox_is_which(selector):
     labels = [label.text() for label in selector.findChildren(QLabel)]
 
-    assert labels == [texts.START_FRAME_LABEL, texts.END_FRAME_LABEL]
+    assert labels == [
+        texts.START_FRAME_LABEL,
+        texts.END_FRAME_LABEL,
+    ]
 
 
 def test_selector_is_enabled_when_there_are_frames(selector):
@@ -48,151 +51,219 @@ def test_selector_is_enabled_when_there_are_frames(selector):
     assert selector._end_frame.isEnabled()
 
 
-def test_changing_the_start_announces_the_frames_from_zero(selector):
-    selected = record(selector.selected_frames_changed)
+def test_changing_start_does_not_announce_frames(selector):
+    selected = record(selector.selected_frames_confirmed)
 
     selector._start_frame.setValue(15)
-
-    assert selected == [FrameRange(14, 19)]
-
-
-def test_changing_the_end_announces_the_frames_from_zero(selector):
-    selected = record(selector.selected_frames_changed)
-
-    selector._end_frame.setValue(17)
-
-    assert selected == [FrameRange(9, 16)]
-
-
-def test_start_past_the_end_pushes_the_end_and_announces_once(selector):
-    selector._end_frame.setValue(12)
-    selected = record(selector.selected_frames_changed)
-
-    selector._start_frame.setValue(15)
-
-    assert (selector._start_frame.value(), selector._end_frame.value()) == (15, 15)
-    assert selected == [FrameRange(14, 14)]
-
-
-def test_end_before_the_start_pulls_the_start_and_announces_once(selector):
-    selector._start_frame.setValue(18)
-    selected = record(selector.selected_frames_changed)
-
-    selector._end_frame.setValue(14)
-
-    assert (selector._start_frame.value(), selector._end_frame.value()) == (14, 14)
-    assert selected == [FrameRange(13, 13)]
-
-
-def test_selecting_a_single_frame_is_allowed(selector):
-    selected = record(selector.selected_frames_changed)
-
-    selector._end_frame.setValue(10)
-
-    assert selected == [FrameRange(9, 9)]
-    assert selected[0].count == 1
-
-
-def test_new_range_moves_the_limits_and_keeps_the_choice_inside_them(selector):
-    selector._start_frame.setValue(13)
-    selector._end_frame.setValue(16)
-
-    selector.set_frame_range(FrameRange(0, 29))
-
-    for spin in (selector._start_frame, selector._end_frame):
-        assert (spin.minimum(), spin.maximum()) == (1, 30)
-    assert (selector._start_frame.value(), selector._end_frame.value()) == (13, 16)
-
-
-def test_new_range_can_select_all_its_frames(selector):
-    selected = record(selector.selected_frames_changed)
-
-    selector.set_frame_range(FrameRange(0, 29), True)
-
-    assert (selector._start_frame.value(), selector._end_frame.value()) == (1, 30)
-    assert selected[-1] == FrameRange(0, 29)
-
-
-def test_shorter_range_pulls_the_choice_inside_it(selector):
-    selector.set_frame_range(FrameRange(0, 4))
-
-    assert selector._start_frame.value() == 5
-    assert selector._end_frame.value() == 5
-
-
-def test_new_range_is_announced(selector):
-    ranges = record(selector.frame_range_changed)
-
-    selector.set_frame_range(FrameRange(0, 29))
-
-    assert ranges == [FrameRange(0, 29)]
-
-
-def test_no_range_disables_the_spinboxes_and_shows_a_dash(selector):
-    selector.set_frame_range(None)
-
-    for spin in (selector._start_frame, selector._end_frame):
-        assert not spin.isEnabled()
-        assert spin.specialValueText() == "—"
-        assert (spin.minimum(), spin.maximum(), spin.value()) == (0, 0, 0)
-
-
-def test_no_range_announces_no_frames(selector):
-    selected = record(selector.selected_frames_changed)
-    ranges = record(selector.frame_range_changed)
-
-    selector.set_frame_range(None)
-
-    assert selected == [None]
-    assert ranges == [None]
-
-
-def test_a_range_after_no_range_enables_the_spinboxes_again(selector):
-    selector.set_frame_range(None)
-
-    selector.set_frame_range(FrameRange(0, 9), True)
-
-    for spin in (selector._start_frame, selector._end_frame):
-        assert spin.isEnabled()
-        assert spin.specialValueText() == ""
-    assert (selector._start_frame.value(), selector._end_frame.value()) == (1, 10)
-
-
-def test_nothing_is_announced_while_there_are_no_frames(selector):
-    selector.set_frame_range(None)
-    selected = record(selector.selected_frames_changed)
-
-    selector._start_frame.setValue(0)
-    selector._end_frame.setValue(0)
 
     assert selected == []
 
 
-def test_disable_blocks_the_spinboxes_and_enable_gives_them_back(selector):
-    selector.disable(True)
-    assert not selector._start_frame.isEnabled()
-    assert not selector._end_frame.isEnabled()
-    assert selector._start_frame.specialValueText() == "—"
+def test_changing_end_does_not_announce_frames(selector):
+    selected = record(selector.selected_frames_confirmed)
 
-    selector.disable(False)
-    assert selector._start_frame.isEnabled()
-    assert selector._end_frame.isEnabled()
-    assert selector._start_frame.specialValueText() == ""
+    selector._end_frame.setValue(17)
+
+    assert selected == []
 
 
-def test_disable_with_no_frames_stays_disabled_after_enabling(selector):
+def test_confirming_start_announces_frames(selector):
+    selected = record(selector.selected_frames_confirmed)
+
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+
+    assert selected == [FrameRange(14, 19)]
+
+
+def test_confirming_end_announces_frames(selector):
+    selected = record(selector.selected_frames_confirmed)
+
+    selector._end_frame.setValue(17)
+    selector._end_frame.editingFinished.emit()
+
+    assert selected == [FrameRange(9, 16)]
+
+
+def test_confirming_start_uses_with_start_clamping(
+    selector: FramesSelector,
+):
+    # First confirm the end frame.
+    selector._end_frame.setValue(12)
+    selector._end_frame.editingFinished.emit()
+
+    emitted = record(selector.selected_frames_confirmed)
+
+    # Then move the start beyond the confirmed end.
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+
+    expected = FrameRange(9, 11).with_start(14)
+
+    assert selector._frame_range == expected
+    assert emitted == [expected]
+    assert selector._start_frame.value() == expected.start_display
+    assert selector._end_frame.value() == expected.end_display
+
+
+def test_confirming_end_uses_with_end_clamping(
+    selector: FramesSelector,
+):
+    # First confirm the start frame.
+    selector._start_frame.setValue(18)
+    selector._start_frame.editingFinished.emit()
+
+    emitted = record(selector.selected_frames_confirmed)
+
+    # Then move the end before the confirmed start.
+    selector._end_frame.setValue(14)
+    selector._end_frame.editingFinished.emit()
+
+    expected = FrameRange(17, 19).with_end(13)
+
+    assert selector._frame_range == expected
+    assert emitted == [expected]
+    assert selector._start_frame.value() == expected.start_display
+    assert selector._end_frame.value() == expected.end_display
+
+
+def test_confirming_single_frame(selector: FramesSelector):
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+
+    selector._end_frame.setValue(15)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector._frame_range == FrameRange(14, 14)
+    assert emitted[-1] == FrameRange(14, 14)
+
+
+def test_confirming_does_not_emit_twice(
+    selector: FramesSelector,
+):
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector._start_frame.setValue(12)
+    selector._start_frame.editingFinished.emit()
+
+    assert len(emitted) == 1
+
+
+def test_set_frame_range_updates_limits(selector: FramesSelector):
+    selector.set_frame_range(FrameRange(19, 29), adjust_frames=True)
+
+    assert selector._start_frame.minimum() == 20
+    assert selector._start_frame.maximum() == 30
+    assert selector._end_frame.minimum() == 20
+    assert selector._end_frame.maximum() == 30
+
+
+def test_set_frame_range_adjusts_values(selector: FramesSelector):
+    selector.set_frame_range(FrameRange(19, 29), adjust_frames=True)
+
+    assert selector._start_frame.value() == 20
+    assert selector._end_frame.value() == 30
+
+
+def test_set_frame_range_preserves_values_without_adjustment(
+    selector: FramesSelector,
+):
+    selector._start_frame.setValue(12)
+    selector._end_frame.setValue(18)
+
+    selector.set_frame_range(FrameRange(9, 19))
+
+    assert selector._start_frame.value() == 12
+    assert selector._end_frame.value() == 18
+
+
+def test_set_frame_range_emits_current_selection(
+    selector: FramesSelector,
+):
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector.set_frame_range(FrameRange(9, 19), adjust_frames=True)
+
+    assert emitted == [FrameRange(9, 19)]
+
+
+def test_set_frame_range_none_disables_spinboxes(
+    selector: FramesSelector,
+):
+    emitted = record(selector.selected_frames_confirmed)
+
     selector.set_frame_range(None)
 
-    selector.disable(False)
+    assert not selector._start_frame.isEnabled()
+    assert not selector._end_frame.isEnabled()
+    assert selector._start_frame.value() == 0
+    assert selector._end_frame.value() == 0
+    assert emitted == [None]
+
+
+def test_set_frame_range_none_displays_special_value(
+    selector: FramesSelector,
+):
+    selector.set_frame_range(None)
+
+    assert selector._start_frame.specialValueText() == "—"
+    assert selector._end_frame.specialValueText() == "—"
+
+
+def test_restoring_frame_range_enables_spinboxes(
+    selector: FramesSelector,
+):
+    selector.set_frame_range(None)
+    selector.set_frame_range(FrameRange(9, 19), adjust_frames=True)
+
+    assert selector._start_frame.isEnabled()
+    assert selector._end_frame.isEnabled()
+    assert selector._start_frame.value() == 10
+    assert selector._end_frame.value() == 20
+
+
+def test_disabling_preserves_selected_range(
+    selector: FramesSelector,
+):
+    selector._start_frame.setValue(12)
+    selector._start_frame.editingFinished.emit()
+
+    selected_range = selector._frame_range
+
+    selector.disable()
 
     assert not selector._start_frame.isEnabled()
     assert not selector._end_frame.isEnabled()
+    assert selector._frame_range == selected_range
 
 
-def test_disable_keeps_the_choice(selector):
-    selector._start_frame.setValue(13)
-
-    selector.disable(True)
+def test_enabling_restores_spinboxes(
+    selector: FramesSelector,
+):
+    selector.disable()
     selector.disable(False)
 
-    assert selector._start_frame.value() == 13
+    assert selector._start_frame.isEnabled()
+    assert selector._end_frame.isEnabled()
+
+
+def test_disable_does_not_clear_special_value(
+    selector: FramesSelector,
+):
+    selector.set_frame_range(None)
+    selector.disable()
+
+    assert selector._start_frame.specialValueText() == "—"
+    assert selector._end_frame.specialValueText() == "—"
+
+
+def test_disabling_does_not_emit_selection(
+    selector: FramesSelector,
+):
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector.disable()
+
+    assert emitted == []

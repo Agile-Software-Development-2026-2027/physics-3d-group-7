@@ -105,12 +105,12 @@ class RoiStageController(QObject):
         self._inspector.reset_roi_clicked.connect(self._on_reset_roi)
         self._inspector.bounds_edited.connect(self._on_inspector_bounds_edited)
         self._inspector.undo_roi_clicked.connect(self._on_undo_roi)
-        self._inspector.selected_frames_changed.connect(self._on_selected_frames_changed)
+        self._inspector.selected_frames_confirmed.connect(self._on_selected_frames_confirmed)
 
         if self._roi_view is not None:
             self._roi_view.roi_updated.connect(self._on_viewport_roi_updated)
 
-    def _on_selected_frames_changed(self, frame_range: FrameRange | None):
+    def _on_selected_frames_confirmed(self, frame_range: FrameRange | None):
         roi_params = self._pipeline_model.get_roi_params()
 
         self._pipeline_model.set_roi_params(roi_params.with_frame_range(frame_range))
