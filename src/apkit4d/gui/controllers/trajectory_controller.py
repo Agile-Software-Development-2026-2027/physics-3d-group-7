@@ -46,18 +46,21 @@ class TrajectoryController(QObject):
         self._prepared: PreparedTrajectories | None = None
         self._current_frame = 0
         self._config = TrajectoryRenderConfig(
-            visible=panel.show_trajectories,
-            show_blobs=panel.show_blobs,
-            tail_length=panel.trajectory_tail_length,
-            color_mode=panel.trajectory_color_mode,
-            colormap=panel.trajectory_colormap,
+            # TODO: layers
+            # visible=panel.layers_section.show_trajectories,
+            # show_blobs=panel.layers_section.show_blobs,
+            visible=True,
+            show_blobs=True,
+            tail_length=panel.appearance_section.trajectory_tail_length,
+            color_mode=panel.appearance_section.trajectory_color_mode,
+            colormap=panel.appearance_section.trajectory_colormap,
         )
 
         panel.show_trajectories_toggled.connect(self._on_show_trajectories_toggled)
         panel.show_blobs_toggled.connect(self._on_show_blobs_toggled)
-        panel.trajectory_tail_changed.connect(self._on_tail_length_changed)
-        panel.trajectory_color_mode_changed.connect(self._on_color_mode_changed)
-        panel.trajectory_colormap_changed.connect(self._on_colormap_changed)
+        panel.appearance_section.trajectory_tail_changed.connect(self._on_tail_length_changed)
+        panel.appearance_section.trajectory_color_mode_changed.connect(self._on_color_mode_changed)
+        panel.appearance_section.trajectory_colormap_changed.connect(self._on_colormap_changed)
 
         view.set_blobs_visible(self._config.show_blobs)
 
