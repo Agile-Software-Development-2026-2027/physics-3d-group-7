@@ -5,7 +5,7 @@ Texts of the main window: placeholder, menus and status bar.
 from apkit4d.gui.constants.application import CZI_SUFFIX
 
 # center panel
-PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
+PLACEHOLDER: str = f"Drop a {CZI_SUFFIX} file here or use File > Open"
 # main window
 MOCK_SOURCE_NAME: str = "Mock Algae Session"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"

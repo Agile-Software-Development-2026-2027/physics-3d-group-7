@@ -32,6 +32,7 @@ from apkit4d.gui.theme import (
     get_scrollbar_stylesheet,
     get_status_colors,
 )
+from apkit4d.gui.theme.stylesheet import build_stylesheet
 
 
 def test_theme_enum_and_defaults() -> None:
@@ -52,6 +53,16 @@ def test_build_palette() -> None:
         palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText).name().lower()
         == DARK_COLORS.disabled_text.lower()
     )
+
+
+def test_file_drop_surface_has_a_dashed_border_and_drag_style() -> None:
+    stylesheet = build_stylesheet(build_palette(DARK_COLORS))
+    selector = f"QLabel#{names.CENTER_PLACEHOLDER}"
+
+    assert f"{selector} {{" in stylesheet
+    assert "border: 2px dashed" in stylesheet
+    assert f'{selector}[dragActive="true"] {{' in stylesheet
+    assert f"{selector}:hover {{" not in stylesheet
 
 
 def test_apply_theme_to_application(qapp) -> None:

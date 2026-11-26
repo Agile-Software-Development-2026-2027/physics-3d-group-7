@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from PySide6.QtCore import QEvent
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
+from PySide6.QtGui import QAction, QDragEnterEvent, QDragLeaveEvent, QDropEvent
 from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QWidget
 
 from apkit4d.core.models import DetectionConfig, TrackingConfig
@@ -57,6 +57,69 @@ def test_open_action_opens_the_chosen_file(window, qtbot, czi_file, monkeypatch)
     with qtbot.waitSignal(window.file_opened) as blocker:
         window.findChild(QAction, "open_action").trigger()
     assert blocker.args == [czi_file]
+
+
+def test_drop_surface_opens_a_czi_file(window, qtbot, czi_file):
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    assert not surface.property("dragActive")
+    mime_data = QMimeData()
+    mime_data.setUrls([QUrl.fromLocalFile(str(czi_file))])
+
+    drag_event = QDragEnterEvent(
+        QPoint(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(surface, drag_event)
+    assert drag_event.isAccepted()
+    assert surface.property("dragActive")
+
+    QApplication.sendEvent(surface, QDragLeaveEvent())
+    assert not surface.property("dragActive")
+
+    QApplication.sendEvent(
+        surface,
+        QDragEnterEvent(
+            QPoint(0, 0),
+            Qt.DropAction.CopyAction,
+            mime_data,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    assert surface.property("dragActive")
+
+    drop_event = QDropEvent(
+        QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(window.file_opened) as blocker:
+        QApplication.sendEvent(surface, drop_event)
+    assert blocker.args == [czi_file]
+    assert not surface.property("dragActive")
+
+
+def test_center_switches_between_drop_surface_and_view_when_file_loads(window):
+    view = QWidget()
+    window.set_view(view)
+    window.show()
+
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    assert surface.isVisible()
+    assert not view.isVisible()
+
+    window.set_current_file(Path("sample.czi"))
+    assert view.isVisible()
+    assert not surface.isVisible()
+
+    window.set_current_file(None)
+    assert surface.isVisible()
+    assert not view.isVisible()
 
 
 def test_quit_action_closes_the_window(window):

@@ -29,8 +29,8 @@ class MainWindow(QMainWindow):
     """
     Application window with a File menu, three columns and a status bar.
 
-    The center panel holds a placeholder until the 3D view is added with `set_view`. Every component
-    has an object name, so tests can find it with `findChild` and simulate the user.
+    The center panel holds a drag-and-drop surface until a file is loaded. Every component has an
+    object name, so tests can find it with `findChild` and simulate the user.
 
     Signals:
         files_selected: Emitted with the paths selected for a new batch.
@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
 
         self._left = LeftPanel()
         self._center = CenterPanel()
+        self._center.file_dropped.connect(self.open_file)
         self._right = RightPanel()
 
         self._qt_fps_ticker = FpsCounter(window_seconds=1.0)
@@ -118,6 +119,7 @@ class MainWindow(QMainWindow):
             path: The open file, or None to show only the name of the application.
         """
         self._export_video_action.setEnabled(path is not None)
+        self._center.set_file_loaded(path is not None)
         if path is None:
             self.setWindowTitle(application.APP_NAME)
         else:
