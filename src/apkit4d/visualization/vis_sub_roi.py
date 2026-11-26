@@ -21,7 +21,9 @@ from apkit4d.visualization.data_mapper import (
 )
 
 DEFAULT_OUTSIDE_OPACITY: float = 0.01
+DEFAULT_BLOB_RGB: tuple[int, int, int] = (255, 0, 0)
 _MIN_AXIS_SPAN: float = 1e-12
+_SEGMENT_T_EPS: float = 1e-9
 
 
 def clamp_outside_opacity(opacity: float) -> float:
@@ -171,39 +173,107 @@ def compute_inside_mask(
     )
 
 
+def build_sub_roi_blobs_polydata(
+    blobs: pv.PolyData | None,
+    state: VisSubRoiState | None = None,
+    *,
+    base_rgb: tuple[int, int, int] = DEFAULT_BLOB_RGB,
+) -> pv.PolyData:
+    """Build a display-only blob 'PolyData' with per-point 'uint8' RGBA opacity.
+
+    Returns a deep copy with 'rgba' point scalars so caller PolyData and NumPy buffers
+    are never mutated. When 'state' is inactive, all points have full opacity (255).
+
+    Parameters:
+        blobs: Input blob 'PolyData' with any number of points.
+        state: Optional 'VisSubRoiState' controlling Sub-ROI attenuation.
+        base_rgb: RGB color to apply to all points, clamped to [0, 255] and converted to 'uint8'.
+    Returns:
+        A new 'PolyData' with the same points and a new 'rgba' point array of shape '(N, 4)'
+        where 'N' is the number of points in 'blobs'.
+    """
+    if blobs is None or blobs.n_points == 0:
+        return pv.PolyData()
+
+    out_poly = blobs.copy(deep=True)
+    n_points = out_poly.n_points
+    rgba = np.empty((n_points, 4), dtype=np.uint8)
+    rgba[:, 0] = int(np.clip(base_rgb[0], 0, 255))
+    rgba[:, 1] = int(np.clip(base_rgb[1], 0, 255))
+    rgba[:, 2] = int(np.clip(base_rgb[2], 0, 255))
+
+    if state is not None and state.enabled and state.bounds is not None:
+        # compute a boolean mask indicating which points are inside the Sub-ROI bounds
+        inside = compute_inside_mask(np.asarray(out_poly.points, dtype=np.float64), state.bounds)
+        # set the alpha channel to 255 for points inside and to 'outside_alpha' for points outside
+        rgba[:, 3] = np.where(inside, 255, state.outside_alpha).astype(np.uint8)
+    else:
+        rgba[:, 3] = 255
+
+    # attach the 'rgba' array to the output PolyData and set it as the active scalars
+    out_poly.point_data["rgba"] = rgba
+    out_poly.set_active_scalars("rgba", preference="point")
+    return out_poly
+
+
 def _split_segment_at_aabb(
     p0: NDArray[np.float64],
     p1: NDArray[np.float64],
     bounds: Bounds6D,
 ) -> list[tuple[float, float, bool]]:
-    """Return sorted sub-segment parameter intervals '(t_start, t_end, inside)' in '[0.0, 1.0]'."""
+    """Return non-degenerate sorted sub-segment intervals '(t_start, t_end, inside)' in '[0.0, 1.0]'.
+
+    i changed this function to slab clipping algorithm so that i can determine directly t_enter and
+    t_exit for the segment and then return the intervals based on that.
+    """
     xmin, xmax, ymin, ymax, zmin, zmax = _normalize_bounds(bounds)
     box_min = (xmin, ymin, zmin)
     box_max = (xmax, ymax, zmax)
     delta = p1 - p0
 
-    ts: list[float] = [0.0, 1.0]
+    t_enter = 0.0
+    t_exit = 1.0
     for axis in range(3):
         d_axis = float(delta[axis])
-        if abs(d_axis) > _MIN_AXIS_SPAN:
-            p0_axis = float(p0[axis])
-            for plane_val in (box_min[axis], box_max[axis]):
-                t = (plane_val - p0_axis) / d_axis
-                if 0.0 < t < 1.0:
-                    ts.append(float(t))
+        p0_axis = float(p0[axis])
+        lo = box_min[axis]
+        hi = box_max[axis]
+        # if the segment is parallel to the axis, check if it is outside the box
+        if abs(d_axis) <= _MIN_AXIS_SPAN:
+            if p0_axis < lo or p0_axis > hi:
+                return [(0.0, 1.0, False)]
+        else:
+            # for each axis i compute the intersections interval similar to the
+            # slab method for ray-box intersection
+            inv_d = 1.0 / d_axis
+            t1 = (lo - p0_axis) * inv_d
+            t2 = (hi - p0_axis) * inv_d
+            t_near = min(t1, t2)
+            t_far = max(t1, t2)
+            t_enter = max(t_enter, t_near)
+            t_exit = min(t_exit, t_far)
+            # if the segment is completely outside the box, return a single interval
+            # with inside=False
+            if t_enter > t_exit:
+                return [(0.0, 1.0, False)]
 
-    ts.sort()
-    unique_ts: list[float] = [ts[0]]
-    for t in ts[1:]:
-        if abs(t - unique_ts[-1]) > 1e-9:
-            unique_ts.append(t)
+    # if the segment is almost null we do not create any sub-segment and return a single
+    # interval with inside=False
+    if t_exit - t_enter <= _SEGMENT_T_EPS:
+        return [(0.0, 1.0, False)]
 
     intervals: list[tuple[float, float, bool]] = []
-    # i discovered zip to iterate over pairs lol its very useful
-    for t_a, t_b in zip(unique_ts[:-1], unique_ts[1:], strict=False):
-        mid = p0 + 0.5 * (t_a + t_b) * delta
-        inside = bool(compute_inside_mask(mid[None, :], bounds)[0])
-        intervals.append((t_a, t_b, inside))
+    if t_enter > _SEGMENT_T_EPS:
+        intervals.append((0.0, float(t_enter), False))
+    else:
+        t_enter = 0.0
+
+    if 1.0 - t_exit > _SEGMENT_T_EPS:
+        intervals.append((float(t_enter), float(t_exit), True))
+        intervals.append((float(t_exit), 1.0, False))
+    else:
+        intervals.append((float(t_enter), 1.0, True))
+
     return intervals
 
 
@@ -225,63 +295,69 @@ def _iter_polyline_cells(poly: pv.PolyData) -> list[list[int]]:
     return polylines
 
 
-def build_sub_roi_trajectory_polydata(
-    prepared: PreparedTrajectories,
-    current_frame: int,
-    config: TrajectoryRenderConfig,
+"""
+    i've splitted the construction of trajectories and the application of the sub_roi to make 
+    it easier and avoid to rebuild the trajectory polydata.
+
+    Imagine that the viewport has already built the trajectory polydata and then 
+    the user activates the sub_roi, we don't want to rebuild the trajectory polydata again, 
+    we just want to apply the sub_roi to it. splitting allows us to do that.
+"""
+
+
+def apply_vis_sub_roi_to_trajectories(
+    base_poly: pv.PolyData | None,
     state: VisSubRoiState | None = None,
 ) -> pv.PolyData:
-    """Build display trajectory 'PolyData' with AABB boundary splitting and 'uint8' RGBA.
+    """Apply Visualization Sub-ROI splitting and 'uint8' RGBA opacity to a trajectory 'PolyData'.
 
-    When 'state' is 'None', 'state.enabled' is 'False', or 'state.bounds' is 'None',
-    delegates to 'build_trajectory_polydata()' and attaches opaque ('alpha=255') 'rgba'.
-    When active, splits segments crossing any AABB face and interpolates 'rgb',
-    'speed_um_s', and 'frame' while preserving 'track_id' and leaving 'prepared' untouched.
+    Never mutates 'base_poly'. When 'state' is inactive, returns a deep copy preserving the
+    original polyline topology and exact RGB colors with full alpha (255). When active, splits
+    segments crossing AABB faces and assigns alpha 255 inside and 'state.outside_alpha' outside.
     """
-
-    # Build the base trajectory polydata for the current frame and configuration.
-    base_poly = build_trajectory_polydata(prepared, current_frame, config)
-    if base_poly.n_points == 0 or base_poly.n_cells == 0:
+    if base_poly is None or base_poly.n_points == 0 or base_poly.n_cells == 0:
         return pv.PolyData()
 
-    # i take the base color so that i can make it transparent
-    # if the point is outside the sub-ROI box
-    base_rgb = np.asarray(base_poly.point_data["rgb"], dtype=np.uint8)
-    # state of sub roi
-    is_active = state is not None and state.enabled and state.bounds is not None
+    # we now accept either 'rgb' or 'rgba' point_data,
+    #  but we will always work with 'rgb' for interpolation
+    if "rgb" in base_poly.point_data:
+        base_rgb = np.ascontiguousarray(base_poly.point_data["rgb"], dtype=np.uint8)
+    elif "rgba" in base_poly.point_data:
+        base_rgb = np.ascontiguousarray(np.asarray(base_poly.point_data["rgba"], dtype=np.uint8)[:, :3])
+    else:
+        raise ValueError("Trajectory PolyData must contain 'rgb' or 'rgba' point_data.")
 
-    # if it is not i return the trajectory with full opacity
+    is_active = state is not None and state.enabled and state.bounds is not None
     if not is_active:
-        rgba = np.empty((base_poly.n_points, 4), dtype=np.uint8)
+        # deep copy to guarantee that the returned PolyData is independent
+        # of the input, even when no splitting is needed
+        out_poly = base_poly.copy(deep=True)
+        rgba = np.empty((out_poly.n_points, 4), dtype=np.uint8)
         rgba[:, :3] = base_rgb
         rgba[:, 3] = 255
-        out_poly = base_poly.copy()
         out_poly.point_data["rgba"] = rgba
+        # we set the active scalars to 'rgba' to ensure that when sub-roi is not active
+        # we still have the correct color representation for the trajectories
+        out_poly.set_active_scalars("rgba", preference="point")
         return out_poly
 
     assert state is not None and state.bounds is not None
     bounds = _normalize_bounds(state.bounds)
     out_alpha = state.outside_alpha
 
-    # now i need to split the segments
-    # first of all i need to get the points, the colors and the other point data
     src_points = np.asarray(base_poly.points, dtype=np.float64)
-    src_rgb = base_rgb.astype(np.float64)
-    src_track_id = (
-        np.asarray(base_poly.point_data["track_id"], dtype=np.int64)
-        if "track_id" in base_poly.point_data
-        else np.zeros(base_poly.n_points, dtype=np.int64)
-    )
-    src_speed = (
-        np.asarray(base_poly.point_data["speed_um_s"], dtype=np.float64)
-        if "speed_um_s" in base_poly.point_data
-        else np.zeros(base_poly.n_points, dtype=np.float64)
-    )
-    src_frame = (
-        np.asarray(base_poly.point_data["frame"], dtype=np.float64)
-        if "frame" in base_poly.point_data
-        else np.zeros(base_poly.n_points, dtype=np.float64)
-    )
+    src_rgb_f64 = base_rgb.astype(np.float64)
+
+    # in the prevoius version we were creating alwayst the 3 arrays
+    # even if they were not present in the base_poly, now we check if they are present
+    # and only create them if they are.
+    has_track_id = "track_id" in base_poly.point_data
+    has_speed = "speed_um_s" in base_poly.point_data
+    has_frame = "frame" in base_poly.point_data
+
+    src_track_id = np.asarray(base_poly.point_data["track_id"], dtype=np.int64) if has_track_id else None
+    src_speed = np.asarray(base_poly.point_data["speed_um_s"], dtype=np.float64) if has_speed else None
+    src_frame = np.asarray(base_poly.point_data["frame"], dtype=np.float64) if has_frame else None
 
     out_pts: list[NDArray[np.float32]] = []
     out_rgba: list[tuple[int, int, int, int]] = []
@@ -291,48 +367,83 @@ def build_sub_roi_trajectory_polydata(
     out_cells: list[int] = []
     v_cursor = 0
 
-    # first for iterate over the polylines of the base trajectory
-    # polylines are defined by the vertex indices of the base_poly
     for v_indices in _iter_polyline_cells(base_poly):
-        # iterate over each segment of the polyline defined by consecutive vertex indices
-        # for each segment i get the two points, the two colors
-        # the two speeds and the two frames and the track id
         for i in range(len(v_indices) - 1):
             ia, ib = v_indices[i], v_indices[i + 1]
             pa, pb = src_points[ia], src_points[ib]
-            rgb_a, rgb_b = src_rgb[ia], src_rgb[ib]
-            sp_a, sp_b = float(src_speed[ia]), float(src_speed[ib])
-            fr_a, fr_b = float(src_frame[ia]), float(src_frame[ib])
-            tid = int(src_track_id[ia])
+            rgb_a_u8, rgb_b_u8 = base_rgb[ia], base_rgb[ib]
+            rgb_a_f64, rgb_b_f64 = src_rgb_f64[ia], src_rgb_f64[ib]
+            tid = int(src_track_id[ia]) if src_track_id is not None else 0
+            sp_a = float(src_speed[ia]) if src_speed is not None else 0.0
+            sp_b = float(src_speed[ib]) if src_speed is not None else 0.0
+            fr_a = float(src_frame[ia]) if src_frame is not None else 0.0
+            fr_b = float(src_frame[ib]) if src_frame is not None else 0.0
 
-            # now for each segment i need to split it at the AABB boundaries
             for t0, t1, inside in _split_segment_at_aabb(pa, pb, bounds):
                 alpha = 255 if inside else out_alpha
-                # for each sub-segment i need to compute the interpolated color, speed, frame and track id
+                # we now iterate over the two endpoints of the sub-segment and compute the interpolated
+                # position, color, speed, and frame values for each endpoint.
                 for t_val in (t0, t1):
-                    pt = pa + t_val * (pb - pa)
-                    rgb_interp = np.clip(np.rint(rgb_a + t_val * (rgb_b - rgb_a)), 0, 255).astype(np.uint8)
-                    out_pts.append(pt.astype(np.float32))
-                    out_rgba.append((int(rgb_interp[0]), int(rgb_interp[1]), int(rgb_interp[2]), alpha))
-                    out_tids.append(tid)
-                    out_speeds.append(sp_a + t_val * (sp_b - sp_a))
-                    out_frames.append(fr_a + t_val * (fr_b - fr_a))
+                    if t_val == 0.0:
+                        pt = pa.astype(np.float32)
+                        r, g, b = int(rgb_a_u8[0]), int(rgb_a_u8[1]), int(rgb_a_u8[2])
+                        speed_val = sp_a
+                        frame_val = fr_a
+                    elif t_val == 1.0:
+                        pt = pb.astype(np.float32)
+                        r, g, b = int(rgb_b_u8[0]), int(rgb_b_u8[1]), int(rgb_b_u8[2])
+                        speed_val = sp_b
+                        frame_val = fr_b
+                    else:
+                        pt = (pa + t_val * (pb - pa)).astype(np.float32)
+                        rgb_interp = np.clip(
+                            np.rint(rgb_a_f64 + t_val * (rgb_b_f64 - rgb_a_f64)), 0, 255
+                        ).astype(np.uint8)
+                        r, g, b = int(rgb_interp[0]), int(rgb_interp[1]), int(rgb_interp[2])
+                        speed_val = sp_a + t_val * (sp_b - sp_a)
+                        frame_val = fr_a + t_val * (fr_b - fr_a)
 
-                # now i need to add the two new points to the output cells
+                    out_pts.append(pt)
+                    out_rgba.append((r, g, b, alpha))
+                    if has_track_id:
+                        out_tids.append(tid)
+                    if has_speed:
+                        out_speeds.append(speed_val)
+                    if has_frame:
+                        out_frames.append(frame_val)
+
+                # extend the out_cells with the new 2 points
                 out_cells.extend([2, v_cursor, v_cursor + 1])
                 v_cursor += 2
 
     # if there are no output points, return an empty PolyData
     if not out_pts:
         return pv.PolyData()
+
     # build the output PolyData with the new points, lines, and point data
+    rgba_arr = np.asarray(out_rgba, dtype=np.uint8)
     split_poly = pv.PolyData(
         np.vstack(out_pts),
         lines=np.asarray(out_cells, dtype=np.int64),
     )
-    split_poly.point_data["rgba"] = np.asarray(out_rgba, dtype=np.uint8)
-    split_poly.point_data["rgb"] = np.asarray(out_rgba, dtype=np.uint8)[:, :3]
-    split_poly.point_data["track_id"] = np.asarray(out_tids, dtype=np.int64)
-    split_poly.point_data["speed_um_s"] = np.asarray(out_speeds, dtype=np.float32)
-    split_poly.point_data["frame"] = np.asarray(out_frames, dtype=np.float64)
+    split_poly.point_data["rgba"] = rgba_arr
+    split_poly.point_data["rgb"] = np.ascontiguousarray(rgba_arr[:, :3])
+    if has_track_id:
+        split_poly.point_data["track_id"] = np.asarray(out_tids, dtype=np.int64)
+    if has_speed:
+        split_poly.point_data["speed_um_s"] = np.asarray(out_speeds, dtype=np.float32)
+    if has_frame:
+        split_poly.point_data["frame"] = np.asarray(out_frames, dtype=np.float64)
+    split_poly.set_active_scalars("rgba", preference="point")
     return split_poly
+
+
+def build_sub_roi_trajectory_polydata(
+    prepared: PreparedTrajectories,
+    current_frame: int,
+    config: TrajectoryRenderConfig,
+    state: VisSubRoiState | None = None,
+) -> pv.PolyData:
+    """Build display trajectory 'PolyData' with AABB boundary splitting and 'uint8' RGBA."""
+    base_poly = build_trajectory_polydata(prepared, current_frame, config)
+    return apply_vis_sub_roi_to_trajectories(base_poly, state)

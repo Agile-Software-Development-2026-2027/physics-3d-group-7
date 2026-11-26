@@ -78,6 +78,7 @@ class BottomStatsSection(QFrame):
 
         self._toggle_btn = QPushButton(texts.STATS_ARROW_COLLAPSED)
         self._toggle_btn.setObjectName(names.BOTTOM_STATS_TOGGLE_BUTTON)
+        self._toggle_btn.setFlat(True)  # part of the header: the global stylesheet of the buttons skips it
         self._toggle_btn.setFixedSize(24, 20)
         self._toggle_btn.setToolTip(texts.TOOLTIP_STATS_TOGGLE)
         self._toggle_btn.clicked.connect(lambda: self.toggle(animate=True))
@@ -245,6 +246,7 @@ class RightPanel(SidePanel):
 
         self.toggle_all_btn = QPushButton(texts.BUTTON_TOGGLE_ALL, self.top_bar)
         self.toggle_all_btn.setObjectName(names.TOGGLE_ALL_BUTTON)
+        self.toggle_all_btn.setFlat(True)  # part of the top bar: the global button style skips it
         self.toggle_all_btn.setToolTip(texts.TOOLTIP_TOGGLE_ALL)
         self.toggle_all_btn.clicked.connect(self.toggle_all)
 

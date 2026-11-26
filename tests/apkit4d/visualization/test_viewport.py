@@ -1,8 +1,16 @@
 import numpy as np
+import pandas as pd
 import pytest
 import pyvista as pv
 
 from apkit4d.core.roi import RegionOfInterest
+from apkit4d.visualization.data_mapper import (
+    PreparedTrajectories,
+    TrajectoryColorMode,
+    TrajectoryRenderConfig,
+    build_trajectory_polydata,
+    create_blob_mesh,
+)
 from apkit4d.visualization.viewport import (
     DEFAULT_COLORMAP,
     FAST_SCROLL_THRESHOLD,
@@ -10,6 +18,11 @@ from apkit4d.visualization.viewport import (
     MOVING_IMAGE_SAMPLE_DISTANCE,
     RoiMode,
     Viewport,
+)
+from apkit4d.visualization.vis_sub_roi import (
+    DEFAULT_BLOB_RGB,
+    DEFAULT_OUTSIDE_OPACITY,
+    VisSubRoiState,
 )
 
 
@@ -1136,3 +1149,268 @@ class TestViewportFpsTicker:
             window.InvokeEvent("EndEvent")
 
         assert viewport.render_fps == pytest.approx(20.0)
+
+
+class TestViewportVolumeSubRoi:
+    def test_initial_state_defaults_to_disabled_and_one_percent_opacity(self, viewport):
+        state = viewport.vis_sub_roi_state
+        assert state.enabled is False
+        assert state.bounds is None
+        assert state.outside_opacity == pytest.approx(DEFAULT_OUTSIDE_OPACITY)
+
+    def test_show_volume_registers_fragment_shader_replacement(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        shader_prop = viewport.plotter.actors["volume"].GetShaderProperty()
+        assert shader_prop is not None
+        assert shader_prop.GetNumberOfShaderReplacements() >= 1
+
+    def test_disable_preserves_bounds_and_outside_opacity(self, viewport):
+        grid = pv.ImageData(dimensions=(10, 10, 10), spacing=(1.0, 1.0, 1.0), origin=(5.0, 2.0, 1.0))
+        grid.point_data["values"] = np.ones(grid.n_points, dtype=np.float32)
+        viewport.show_volume(grid, reset_camera=False)
+
+        viewport.set_vis_sub_roi_outside_opacity(0.05)
+        viewport.set_vis_sub_roi_bounds((6.0, 12.0, 3.0, 9.0, 2.0, 8.0))
+        viewport.set_vis_sub_roi_enabled(True)
+        assert viewport.vis_sub_roi_state.enabled is True
+
+        viewport.set_vis_sub_roi_enabled(False)
+        assert viewport.vis_sub_roi_state.enabled is False
+        assert viewport.vis_sub_roi_state.bounds == pytest.approx((6.0, 12.0, 3.0, 9.0, 2.0, 8.0))
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.05)
+
+    def test_clear_vis_sub_roi_clears_bounds_but_preserves_outside_opacity(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        viewport.set_vis_sub_roi_outside_opacity(0.15)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        viewport.clear_vis_sub_roi()
+        assert viewport.vis_sub_roi_state.enabled is False
+        assert viewport.vis_sub_roi_state.bounds is None
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.15)
+
+    def test_viewport_clear_resets_vis_sub_roi_including_opacity(self, viewport):
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        viewport.set_vis_sub_roi_outside_opacity(0.25)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        viewport.clear()
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )
+
+    def test_preserves_colormap_opacity_and_in_place_frame_updates(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.full(first.n_points, 1.0)
+        viewport.show_volume(first, reset_camera=False)
+        viewport.set_colormap("viridis")
+        viewport.set_volume_opacity(2.0)
+        viewport.set_vis_sub_roi_bounds((1.0, 3.0, 1.0, 3.0, 1.0, 3.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        cached_grid = viewport._volume_grid
+        prop = viewport.plotter.actors["volume"].prop
+        expected_unit_dist = prop.opacity_unit_distance
+
+        second = make_grid(5)
+        second.point_data["values"] = np.full(second.n_points, 3.0)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+
+        assert viewport._volume_grid is cached_grid
+        np.testing.assert_allclose(viewport._volume_grid.point_data["values"], 3.0)
+        assert prop.opacity_unit_distance == pytest.approx(expected_unit_dist)
+        assert np.allclose(lut_colors(viewport), colormap_colors("viridis"))
+
+
+class TestViewportBlobsAndTrajectoriesSubRoi:
+    @staticmethod
+    def _sample_blobs() -> tuple[pd.DataFrame, pv.PolyData]:
+        df = pd.DataFrame(
+            {
+                "frame": [0, 0, 0],
+                "label": [1, 2, 3],
+                "x_um": [2.0, 4.0, 9.0],
+                "y_um": [2.0, 4.0, 2.0],
+                "z_um": [2.0, 2.0, 2.0],
+                "volume_um3": [12.0, 14.0, 16.0],
+            }
+        )
+        return df, create_blob_mesh(df)
+
+    @staticmethod
+    def _sample_trajectories(
+        color_mode: TrajectoryColorMode = TrajectoryColorMode.SPEED,
+        colormap: str = "viridis",
+        tail_length: int = -1,
+    ) -> tuple[PreparedTrajectories, pv.PolyData]:
+        df = pd.DataFrame(
+            {
+                "track_id": [1, 1, 2, 2, 3, 3],
+                "frame": [0, 1, 0, 1, 0, 1],
+                "x_um": [0.0, 10.0, 2.0, 3.0, 7.0, 9.0],
+                "y_um": [2.0, 2.0, 2.0, 2.0, 8.0, 8.0],
+                "z_um": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                "t_s": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            }
+        )
+        prepared = PreparedTrajectories.from_dataframe(df)
+        cfg = TrajectoryRenderConfig(color_mode=color_mode, colormap=colormap, tail_length=tail_length)
+        return prepared, build_trajectory_polydata(prepared, current_frame=1, config=cfg)
+
+    def test_blobs_sub_roi_updates_rgba_in_place_and_preserves_actor_visibility_and_source(self, viewport):
+        df, src_poly = self._sample_blobs()
+        df_before = df.copy(deep=True)
+        src_pts_before = np.asarray(src_poly.points).copy()
+
+        viewport.show_blobs(src_poly)
+        blobs_actor = viewport.plotter.actors["blobs"]
+        assert "rgba" not in src_poly.point_data
+        assert len(viewport.plotter.scalar_bars) == 0
+
+        # Initially inactive -> all blobs opaque red
+        assert viewport._blobs_poly is not None
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"],
+            np.array([[*DEFAULT_BLOB_RGB, 255]] * 3, dtype=np.uint8),
+        )
+
+        # Hide blobs and verify Sub-ROI updates keep actor reused and hidden
+        viewport.set_blobs_visible(False)
+        viewport.set_vis_sub_roi_bounds((1.0, 4.0, 1.0, 4.0, 1.0, 4.0))
+        viewport.set_vis_sub_roi_enabled(True)
+
+        assert viewport.plotter.actors["blobs"] is blobs_actor
+        assert blobs_actor.GetVisibility() == 0
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"][:, :3],
+            np.tile(DEFAULT_BLOB_RGB, (3, 1)),
+        )
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"][:, 3],
+            np.array([255, 255, 3], dtype=np.uint8),
+        )
+
+        # Update outside opacity and re-show blobs
+        viewport.set_vis_sub_roi_outside_opacity(0.25)
+        viewport.set_blobs_visible(True)
+        assert viewport.plotter.actors["blobs"] is blobs_actor
+        assert blobs_actor.GetVisibility() == 1
+        assert viewport._blobs_poly.point_data["rgba"][2, 3] == round(0.25 * 255)
+
+        # Disabling restores full opacity while preserving bounds & outside_opacity
+        viewport.set_vis_sub_roi_enabled(False)
+        assert viewport.plotter.actors["blobs"] is blobs_actor
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"][:, 3],
+            np.array([255, 255, 255], dtype=np.uint8),
+        )
+
+        # Re-enabling then clear_vis_sub_roi restores full opacity and preserves outside_opacity
+        viewport.set_vis_sub_roi_enabled(True)
+        assert viewport._blobs_poly.point_data["rgba"][2, 3] == round(0.25 * 255)
+        viewport.clear_vis_sub_roi()
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"][:, 3],
+            np.array([255, 255, 255], dtype=np.uint8),
+        )
+        assert viewport.vis_sub_roi_state.outside_opacity == pytest.approx(0.25)
+
+        # Mutating live display poly must not mutate caller source or internal source copy
+        viewport._blobs_poly.points[0, 0] = -999.0
+        pd.testing.assert_frame_equal(df, df_before)
+        np.testing.assert_array_equal(src_poly.points, src_pts_before)
+        assert "rgba" not in src_poly.point_data
+        assert viewport._blobs_source_poly is not None
+        assert viewport._blobs_source_poly.points[0, 0] == pytest.approx(2.0)
+
+    def test_trajectories_sub_roi_splits_reuses_actor_preserves_line_width_rgb_and_restores(self, viewport):
+        prepared, src_poly = self._sample_trajectories(
+            color_mode=TrajectoryColorMode.SPEED,
+            colormap="viridis",
+        )
+        src_pts_before = np.asarray(src_poly.points).copy()
+        src_rgb_before = np.asarray(src_poly.point_data["rgb"]).copy()
+        src_lines_before = np.asarray(src_poly.lines).copy()
+        prepared_pts_before = prepared.points_um.copy()
+
+        viewport.show_trajectories(src_poly, line_width=4.25)
+        tracks_actor = viewport.plotter.actors["tracks_highlighted"]
+        assert len(viewport.plotter.scalar_bars) == 0
+        assert viewport._trajectories_poly is not None
+        assert viewport._trajectories_poly.n_points == src_poly.n_points
+        assert viewport._trajectories_poly.n_cells == src_poly.n_cells
+        np.testing.assert_array_equal(viewport._trajectories_poly.point_data["rgba"][:, :3], src_rgb_before)
+        np.testing.assert_array_equal(
+            viewport._trajectories_poly.point_data["rgba"][:, 3],
+            np.full(src_poly.n_points, 255, dtype=np.uint8),
+        )
+
+        # Enable Sub-ROI: Track 1 crosses x=1 and x=5 (3 segments), Track 2 inside, Track 3 outside
+        viewport.set_vis_sub_roi_bounds((1.0, 5.0, 1.0, 5.0, 1.0, 5.0))
+        viewport.set_vis_sub_roi_outside_opacity(0.01)
+        viewport.set_vis_sub_roi_enabled(True)
+
+        assert viewport.plotter.actors["tracks_highlighted"] is tracks_actor
+        assert tracks_actor.GetProperty().GetLineWidth() == pytest.approx(4.25)
+        assert viewport._trajectories_poly.n_cells == 5  # 3 (Track 1) + 1 (Track 2) + 1 (Track 3)
+
+        tids = viewport._trajectories_poly.point_data["track_id"]
+        alphas = viewport._trajectories_poly.point_data["rgba"][:, 3]
+        assert np.all(alphas[tids == 2] == 255)
+        assert np.all(alphas[tids == 3] == 3)
+        assert set(alphas[tids == 1].tolist()) == {3, 255}
+
+        # Disabling restores exact original unsplit geometry, RGB, and full opacity
+        viewport.set_vis_sub_roi_enabled(False)
+        assert viewport.plotter.actors["tracks_highlighted"] is tracks_actor
+        assert tracks_actor.GetProperty().GetLineWidth() == pytest.approx(4.25)
+        assert viewport._trajectories_poly.n_points == src_poly.n_points
+        assert viewport._trajectories_poly.n_cells == src_poly.n_cells
+        np.testing.assert_array_equal(viewport._trajectories_poly.lines, src_lines_before)
+        np.testing.assert_array_equal(viewport._trajectories_poly.point_data["rgba"][:, :3], src_rgb_before)
+        np.testing.assert_array_equal(
+            viewport._trajectories_poly.point_data["rgba"][:, 3],
+            np.full(src_poly.n_points, 255, dtype=np.uint8),
+        )
+
+        # Source PolyData and PreparedTrajectories are never mutated
+        assert "rgba" not in src_poly.point_data
+        np.testing.assert_array_equal(src_poly.points, src_pts_before)
+        np.testing.assert_array_equal(src_poly.point_data["rgb"], src_rgb_before)
+        np.testing.assert_array_equal(prepared.points_um, prepared_pts_before)
+
+    def test_showing_blobs_and_trajectories_while_sub_roi_already_enabled_applies_immediately(self, viewport):
+        viewport.set_vis_sub_roi_bounds((1.0, 5.0, 1.0, 5.0, 1.0, 5.0))
+        viewport.set_vis_sub_roi_outside_opacity(0.2)
+        viewport.set_vis_sub_roi_enabled(True)
+
+        _, blobs_poly = self._sample_blobs()
+        _, tracks_poly = self._sample_trajectories(color_mode=TrajectoryColorMode.TRACK_ID)
+
+        viewport.show_blobs(blobs_poly)
+        viewport.show_trajectories(tracks_poly, line_width=3.5)
+
+        expected_out_alpha = round(0.2 * 255)
+        assert viewport._blobs_poly is not None
+        np.testing.assert_array_equal(
+            viewport._blobs_poly.point_data["rgba"][:, 3],
+            np.array([255, 255, expected_out_alpha], dtype=np.uint8),
+        )
+        assert viewport._trajectories_poly is not None
+        assert viewport._trajectories_poly.n_cells == 5
+        assert viewport.plotter.actors["tracks_highlighted"].GetProperty().GetLineWidth() == pytest.approx(
+            3.5
+        )
+
+        viewport.clear()
+        assert viewport._blobs_source_poly is None
+        assert viewport._trajectories_source_poly is None
+        assert viewport.vis_sub_roi_state == VisSubRoiState(
+            enabled=False,
+            bounds=None,
+            outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+        )

@@ -9,7 +9,8 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPaintEvent, Q
 from PySide6.QtWidgets import QAbstractSpinBox, QDoubleSpinBox, QHBoxLayout, QWidget
 
 from apkit4d.gui.constants import appearance, texts
-from apkit4d.gui.views.widgets.colors import focus_pen, plain_button_colors
+from apkit4d.gui.theme import tokens
+from apkit4d.gui.theme.colors import focus_pen, plain_button_colors
 from apkit4d.gui.views.widgets.icon_button import IconButton
 from apkit4d.gui.views.widgets.icons import Icon
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
@@ -43,7 +44,7 @@ class NumberStepper(QWidget):
         self, *, width: int, decimals: int, step: float, suffix: str = "", parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self.setFixedSize(width, appearance.STEPPER_HEIGHT)
+        self.setFixedSize(width, tokens.CONTROL_HEIGHT)
 
         self._spin = QDoubleSpinBox()
         self._spin.setDecimals(decimals)
@@ -55,7 +56,7 @@ class NumberStepper(QWidget):
         self._spin.setKeyboardTracking(False)  # the value changes when it is confirmed, not at every key
         self._spin.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # the wheel acts only after a click on it
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        font.setPointSizeF(appearance.STEPPER_FONT_POINTS)
+        font.setPointSizeF(tokens.FONT_POINTS)
         font.setWeight(QFont.Weight.DemiBold)
         self._spin.setFont(font)
         palette = self._spin.palette()
@@ -116,15 +117,15 @@ class NumberStepper(QWidget):
         background, border, _ink = plain_button_colors(
             palette, enabled=self.isEnabled(), down=False, hovered=False
         )
-        inset = appearance.FOCUS_RING_WIDTH / 2 if self._focused else 0.5
+        inset = tokens.FOCUS_RING_WIDTH / 2 if self._focused else 0.5
         shape = self.rect().toRectF().adjusted(inset, inset, -inset, -inset)
         painter.setBrush(background)
         painter.setPen(focus_pen(palette) if self._focused else border)
-        painter.drawRoundedRect(shape, appearance.BUTTON_RADIUS, appearance.BUTTON_RADIUS)
+        painter.drawRoundedRect(shape, tokens.BUTTON_RADIUS, tokens.BUTTON_RADIUS)
 
     @staticmethod
     def _make_button(icon: Icon, tooltip: str, slot) -> IconButton:
-        button = IconButton(icon, appearance.STEPPER_BUTTON_SIZE, appearance.STEPPER_ICON_SIZE, flat=True)
+        button = IconButton(icon, appearance.STEPPER_BUTTON_SIZE, tokens.SMALL_ICON_SIZE, flat=True)
         button.setToolTip(tooltip)
         button.setAutoRepeat(True)  # holding the button keeps changing the value
         button.clicked.connect(slot)

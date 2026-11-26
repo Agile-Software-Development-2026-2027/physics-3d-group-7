@@ -1,5 +1,8 @@
 """
 Sizes of the window and of its parts, in pixels, and opacity of the splitter handles.
+
+Only sizes that belong to one component are here. The sizes shared by every component are in
+`theme.tokens`.
 """
 
 # window
@@ -32,36 +35,26 @@ HANDLE_LINE_OPACITY: int = 50
 GRIP_OPACITY: int = 90
 GRIP_ARROW_OPACITY: int = 210
 
-# playback bar
+# playback bar: the reference look of the application. The sizes that every component shares
+# (radius, control height, icons, spacing, fonts, color mixes) are in `theme.tokens`
 BAR_MARGINS: tuple[int, int, int, int] = (18, 0, 18, 14)  # left, top, right, bottom
-BAR_ROWS_SPACING: int = 10  # between the slider and the row of buttons
-BAR_ITEMS_SPACING: int = 8  # between the items of a row
 TRANSPORT_BUTTON_SIZE: int = 36
 PLAY_BUTTON_SIZE: int = 44
 TRANSPORT_ICON_SIZE: int = 20
 PLAY_ICON_SIZE: int = 22
-BUTTON_RADIUS: int = 9
-FOCUS_RING_WIDTH: int = 2  # ring around a button reached with the keyboard
-FOCUS_RING_LIGHTEN: float = 0.6  # the ring of the accent button is the accent color mixed with white
-SLIDER_HEIGHT: int = 22
-COUNTER_FONT_POINTS: float = 13
 COUNTER_SPACING: int = 10  # extra space between the buttons and the counter
 COUNTER_VERTICAL_PADDING: int = 6
+SPEED_STEPPER_WIDTH: int = 148
+STEP_STEPPER_WIDTH: int = 98
+STEPPER_BUTTON_SIZE: int = 26  # the - and + buttons inside a number field
+DIVIDER_HEIGHT: int = 24
+
+# slider of the frames
+SLIDER_HEIGHT: int = 22
 SLIDER_PADDING: int = 9  # space between the ends of the groove and the sides of the widget
 SLIDER_GROOVE_HEIGHT: int = 6
 SLIDER_HANDLE_RADIUS: float = 7.2
 SLIDER_HANDLE_RING: float = 2.6
-
-# colors of the playback bar, as a mix of the window color (0) and of the text color (1)
-BORDER_MIX: float = 0.16
-DISABLED_BORDER_MIX: float = 0.08
-HOVER_MIX: float = 0.10
-GROOVE_MIX: float = 0.20
-COUNTER_MUTED_MIX: float = 0.62  # the total of the counter is dimmed
-DISABLED_GROOVE_MIX: float = 0.14
-DISABLED_RING_MIX: float = 0.24
-ACCENT_HOVER_MIX: float = 0.15  # mix of the accent color (0) and of white (1) while the mouse is over it
-ACCENT_PRESSED_DARKER: int = 115  # percentage of darkening of the accent color while it is pressed
 
 # preview that follows the mouse on the slider: a marker on the groove and a bubble above it
 HOVER_MARKER_WIDTH: int = 2
@@ -71,24 +64,8 @@ BUBBLE_HEIGHT: int = 24  # of the body of the bubble, without the pointer
 BUBBLE_POINTER_HEIGHT: int = 6
 BUBBLE_POINTER_WIDTH: int = 10
 BUBBLE_GAP: int = 3  # between the tip of the pointer and the groove
-BUBBLE_RADIUS: int = 7
 BUBBLE_PADDING: int = 11  # on the left and on the right of the text
-BUBBLE_FONT_POINTS: float = 9.5
 # the slider keeps some room above its groove, where the bubble of the preview is drawn
 SLIDER_HEADROOM: int = (
     BUBBLE_HEIGHT + BUBBLE_POINTER_HEIGHT + BUBBLE_GAP - (SLIDER_HEIGHT - SLIDER_GROOVE_HEIGHT) // 2 + 1
 )  # the last pixel is a margin, so that the smoothed edge of the bubble is not cut
-
-# playback bar: speed, step and reset camera
-STEPPER_HEIGHT: int = 32
-STEPPER_BUTTON_SIZE: int = 26
-STEPPER_ICON_SIZE: int = 18
-STEPPER_FONT_POINTS: float = 11
-SPEED_STEPPER_WIDTH: int = 148
-STEP_STEPPER_WIDTH: int = 98
-ACTION_BUTTON_HEIGHT: int = 32
-ACTION_BUTTON_PADDING: int = 12  # on the left and on the right of the content of a button with a text
-ACTION_ICON_SIZE: int = 20
-ACTION_ICON_GAP: int = 6  # between the icon and the text of a button
-DIVIDER_HEIGHT: int = 24
-GROUP_SPACING: int = 8  # extra space on both sides of a divider

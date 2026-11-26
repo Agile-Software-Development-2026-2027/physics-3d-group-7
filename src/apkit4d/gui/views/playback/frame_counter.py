@@ -9,7 +9,8 @@ from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics, QPainter, QPaintEv
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from apkit4d.gui.constants import appearance, names, texts
-from apkit4d.gui.views.widgets.colors import mix
+from apkit4d.gui.theme import tokens
+from apkit4d.gui.theme.colors import mix
 
 ColorRole = QPalette.ColorRole
 ColorGroup = QPalette.ColorGroup
@@ -31,7 +32,7 @@ class FrameCounter(QWidget):
         super().__init__(parent)
         self.setObjectName(names.FRAME_COUNTER)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        font.setPointSizeF(appearance.COUNTER_FONT_POINTS)
+        font.setPointSizeF(tokens.LARGE_FONT_POINTS)
         self.setFont(font)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._frame = 0
@@ -84,7 +85,7 @@ class FrameCounter(QWidget):
         palette = self.palette()
         if self.isEnabled():
             ink = palette.color(ColorRole.WindowText)
-            muted = mix(palette.color(ColorRole.Window), ink, appearance.COUNTER_MUTED_MIX)
+            muted = mix(palette.color(ColorRole.Window), ink, tokens.MUTED_MIX)
         else:
             ink = muted = palette.color(ColorGroup.Disabled, ColorRole.WindowText)
 

@@ -48,7 +48,7 @@ def run(path: Path | None = None, *, mock: bool = False) -> int:
     Show the main window and run the Qt event loop until the window is closed.
 
     Args:
-        path: Optional .czi file to open at startup.
+        path: Optional file to open at startup: a .czi recording, or the json of saved results.
         mock: When True, open a synthetic mock recording instead of a file.
 
     Returns:
@@ -62,6 +62,8 @@ def run(path: Path | None = None, *, mock: bool = False) -> int:
     window.show()
     if mock:
         controller.open_mock()
+    elif path is not None and path.suffix.lower() == ".json":
+        window.results_opened.emit(path)
     elif path is not None:
         window.open_file(path)
     return app.exec()

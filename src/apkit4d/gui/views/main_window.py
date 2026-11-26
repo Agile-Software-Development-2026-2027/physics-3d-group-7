@@ -13,11 +13,12 @@ from typing import override
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
+from PySide6.QtWidgets import QApplication, QDockWidget, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
 
 from apkit4d.gui.constants import appearance, application, names, shortcuts, texts
 from apkit4d.gui.views.panels.center_panel import CenterPanel
 from apkit4d.gui.views.panels.left_panel import LeftPanel
+from apkit4d.gui.views.panels.multi_file_panel import MultiFilePanel
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.widgets.grip_splitter import GripSplitter
@@ -32,11 +33,15 @@ class MainWindow(QMainWindow):
     has an object name, so tests can find it with `findChild` and simulate the user.
 
     Signals:
+        files_selected: Emitted with the paths selected for a new batch.
+        files_added: Emitted with the paths selected to extend the batch.
         file_opened: Emitted with the path of a .czi file once it has been accepted.
         results_opened: Emitted with the path of the json of saved results chosen by the user.
         video_export_requested: Emitted when the user requests a video export.
     """
 
+    files_selected = Signal(list)
+    files_added = Signal(list)
     file_opened = Signal(Path)
     results_opened = Signal(Path)
     video_export_requested = Signal()
@@ -59,6 +64,13 @@ class MainWindow(QMainWindow):
         self._fps_timer.timeout.connect(self._update_fps_label)
 
         self._build_columns()
+        self.multi_file_panel = MultiFilePanel()
+        self._multi_file_dock = QDockWidget(texts.MULTI_FILE_TITLE, self)
+        self._multi_file_dock.setObjectName("multiFileDock")
+        self._multi_file_dock.setWidget(self.multi_file_panel)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._multi_file_dock)
+        self._multi_file_dock.hide()
+        self._multi_file_dock.visibilityChanged.connect(self._size_multi_file_dock_on_first_show)
         self._build_file_menu()
         self._build_view_menu()
         self._build_status_bar()
@@ -165,6 +177,13 @@ class MainWindow(QMainWindow):
         menu = self.menuBar().addMenu(texts.MENU_FILE)
         menu.setObjectName(names.FILE_MENU)
         self._add_action(menu, names.OPEN_ACTION, texts.ACTION_OPEN, shortcuts.OPEN, self._choose_file)
+        self.open_files_action = self._add_action(
+            menu, "openFilesAction", texts.MULTI_FILE_OPEN_ACTION, None, self._choose_files
+        )
+        self.add_files_action = self._add_action(
+            menu, "addFilesAction", texts.MULTI_FILE_ADD_ACTION, None, self._choose_additional_files
+        )
+        self.add_files_action.setEnabled(False)
         self._add_action(
             menu,
             names.OPEN_RESULTS_ACTION,
@@ -185,6 +204,8 @@ class MainWindow(QMainWindow):
     def _build_view_menu(self) -> None:
         menu = self.menuBar().addMenu(texts.MENU_VIEW)
         menu.setObjectName(names.VIEW_MENU)
+
+        menu.addAction(self._multi_file_dock.toggleViewAction())
 
         action = QAction(texts.ACTION_SHOW_FPS, self)
         action.setObjectName(names.SHOW_FPS_ACTION)
@@ -228,18 +249,49 @@ class MainWindow(QMainWindow):
         self._fps_label.setText(texts.FPS_READOUT.format(qt_fps=qt_fps, render_fps=render_fps))
 
     def _add_action(
-        self, menu: QMenu, name: str, text: str, shortcut: str, slot: Callable[..., object]
-    ) -> None:
+        self, menu: QMenu, name: str, text: str, shortcut: str | None, slot: Callable[..., object]
+    ) -> QAction:
+        """Add a menu action with an optional shortcut and return it for later updates."""
         action = QAction(text, self)
         action.setObjectName(name)
-        action.setShortcut(QKeySequence(shortcut))
+        if shortcut is not None:
+            action.setShortcut(QKeySequence(shortcut))
         action.triggered.connect(slot)
         menu.addAction(action)
+        return action
 
     def _choose_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, texts.FILE_DIALOG_TITLE, "", texts.FILE_DIALOG_FILTER)
         if path:
             self.open_file(Path(path))
+
+    def show_multi_file_panel(self) -> None:
+        """Show the batch panel when its queue is ready."""
+        self._multi_file_dock.show()
+
+    def _size_multi_file_dock_on_first_show(self, visible: bool) -> None:
+        if visible:
+            self._multi_file_dock.visibilityChanged.disconnect(self._size_multi_file_dock_on_first_show)
+            self.resizeDocks([self._multi_file_dock], [180], Qt.Orientation.Vertical)
+
+    def _choose_recordings(self, title: str) -> list[Path]:
+        selected_filenames, _selected_filter = QFileDialog.getOpenFileNames(
+            self, title, "", texts.FILE_DIALOG_FILTER
+        )
+        paths = []
+        for filename in selected_filenames:
+            paths.append(Path(filename))
+        return paths
+
+    def _choose_files(self) -> None:
+        paths = self._choose_recordings(texts.MULTI_FILE_OPEN_DIALOG)
+        if paths:
+            self.files_selected.emit(paths)
+
+    def _choose_additional_files(self) -> None:
+        paths = self._choose_recordings(texts.MULTI_FILE_ADD_DIALOG)
+        if paths:
+            self.files_added.emit(paths)
 
     def _choose_results(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
