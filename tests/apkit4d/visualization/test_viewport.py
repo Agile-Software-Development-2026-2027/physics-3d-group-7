@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -17,6 +19,7 @@ from apkit4d.visualization.viewport import (
     FULL_QUALITY_DELAY,
     MOVING_IMAGE_SAMPLE_DISTANCE,
     RoiMode,
+    ScalarBarMode,
     Viewport,
     VisSubRoiMode,
 )
@@ -1672,3 +1675,94 @@ class TestViewportVisSubRoiInteraction:
         assert viewport.vis_sub_roi_mode == VisSubRoiMode.INACTIVE
         assert viewport._vis_sub_roi_box_widget is not None
         assert viewport._vis_sub_roi_box_widget.GetEnabled() == 0
+
+
+class TestViewportVelocityScalarBar:
+    def test_switch_to_velocity_bar_is_isolated_from_volume_updates_and_restores_cleanly(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.linspace(0.0, 100.0, first.n_points)
+        viewport.show_volume(first, reset_camera=False)
+        assert viewport.scalar_bar_mode == ScalarBarMode.VOLUME
+        assert "values" in viewport.plotter.scalar_bars
+
+        title = "Velocity (µm/s)"
+        viewport.show_velocity_scalar_bar(0.0, 42.5, "turbo", visible=True, title=title)
+
+        assert viewport.scalar_bar_mode == ScalarBarMode.VELOCITY
+        assert "values" not in viewport.plotter.scalar_bars
+        assert title in viewport.plotter.scalar_bars
+        vel_bar = viewport.plotter.scalar_bars[title]
+        assert vel_bar.GetVisibility() == 1
+        vel_lut = vel_bar.GetLookupTable()
+        assert vel_lut is not viewport.plotter.actors["volume"].mapper.lookup_table
+        assert vel_lut.GetTableRange() == pytest.approx((0.0, 42.5))
+
+        # Volume updates (in-place fast path and new grid) and colormap changes must not restore "values"
+        second = make_grid(5)
+        second.point_data["values"] = np.linspace(10.0, 500.0, second.n_points)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+        viewport.show_volume(make_grid(7), reset_camera=False, force_update=True)
+        viewport.set_colormap("viridis")
+
+        assert "values" not in viewport.plotter.scalar_bars
+        assert title in viewport.plotter.scalar_bars
+        assert viewport.plotter.scalar_bars[title].GetLookupTable().GetTableRange() == pytest.approx(
+            (0.0, 42.5)
+        )
+
+        # Hiding/showing and updating colormap/text color work in-place
+        viewport.show_velocity_scalar_bar(0.0, 42.5, "plasma", visible=False, title=title)
+        assert viewport.plotter.scalar_bars[title].GetVisibility() == 0
+        assert "values" not in viewport.plotter.scalar_bars
+
+        viewport.show_velocity_scalar_bar(0.0, 55.0, "viridis", visible=True, title=title)
+        assert viewport.plotter.scalar_bars[title].GetVisibility() == 1
+        assert viewport.plotter.scalar_bars[title].GetLookupTable().GetTableRange() == pytest.approx(
+            (0.0, 55.0)
+        )
+        viewport.set_text_color("white")
+        assert viewport.plotter.scalar_bars[title].GetTitleTextProperty().GetColor() == pytest.approx(
+            (1.0, 1.0, 1.0)
+        )
+
+        # Restoring volume scalar bar removes velocity bar and brings back "values" tied to volume LUT
+        viewport.restore_volume_scalar_bar()
+        assert viewport.scalar_bar_mode == ScalarBarMode.VOLUME
+        assert title not in viewport.plotter.scalar_bars
+        assert "values" in viewport.plotter.scalar_bars
+        assert (
+            viewport.plotter.scalar_bars["values"].GetLookupTable()
+            is viewport.plotter.actors["volume"].mapper.lookup_table
+        )
+
+    def test_volume_frame_update_and_colormap_survive_after_velocity_bar_and_trajectories_gc(self, viewport):
+        first = make_grid(5)
+        first.point_data["values"] = np.linspace(0.0, 100.0, first.n_points)
+        viewport.show_volume(first, reset_camera=False)
+
+        pts = np.array([[0.0, 0.0, 0.0], [2.0, 2.0, 2.0]], dtype=np.float32)
+        poly = pv.PolyData(pts, lines=np.array([2, 0, 1], dtype=np.int64))
+        poly.point_data["rgb"] = np.array([[255, 0, 0], [0, 255, 0]], dtype=np.uint8)
+        viewport.show_trajectories(poly)
+        viewport.show_velocity_scalar_bar(0.0, 25.0, "turbo", visible=True, title="Velocity (µm/s)")
+
+        gc.collect()
+
+        # Advancing frame on fast path, changing volume colormap, and restoring "values" must not raise
+        second = make_grid(5)
+        second.point_data["values"] = np.linspace(5.0, 200.0, second.n_points)
+        viewport.show_volume(second, reset_camera=False, force_update=False)
+        viewport.set_colormap("viridis")
+        viewport.restore_volume_scalar_bar()
+
+        assert "values" in viewport.plotter.scalar_bars
+
+    def test_clear_resets_scalar_bar_mode_to_volume(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.show_velocity_scalar_bar(0.0, 10.0, "turbo", visible=True, title="Velocity (µm/s)")
+
+        viewport.clear()
+        assert viewport.scalar_bar_mode == ScalarBarMode.VOLUME
+
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        assert "values" in viewport.plotter.scalar_bars
