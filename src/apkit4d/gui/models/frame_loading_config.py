@@ -1,4 +1,3 @@
-
 """Configuration of frame loading strategies."""
 
 from enum import StrEnum
@@ -20,7 +19,7 @@ class FrameLoadingConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    mode: FrameLoadingMode = FrameLoadingMode.LAZY
+    mode: FrameLoadingMode = FrameLoadingMode.AUTOMATIC
 
     lookahead_seconds: float = Field(
         default=2.0,

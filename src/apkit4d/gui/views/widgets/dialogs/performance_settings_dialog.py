@@ -1,4 +1,3 @@
-
 """Dialog for configuring frame loading strategies."""
 
 from PySide6.QtWidgets import (
@@ -79,9 +78,7 @@ class PerformanceSettingsDialog(QDialog):
         )
 
         self._memory_reserve_spin = QSpinBox()
-        self._memory_reserve_spin.setObjectName(
-            names.PERFORMANCE_MEMORY_RESERVE
-        )
+        self._memory_reserve_spin.setObjectName(names.PERFORMANCE_MEMORY_RESERVE)
         self._memory_reserve_spin.setRange(1, 99)
         self._form.addRow(
             texts.PERFORMANCE_MEMORY_RESERVE,
@@ -89,24 +86,19 @@ class PerformanceSettingsDialog(QDialog):
         )
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.setObjectName(names.PERFORMANCE_BUTTONS)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        self._mode_combo.setCurrentIndex(
-            self._mode_combo.findData(config.mode.value)
-        )
+        self._mode_combo.setCurrentIndex(self._mode_combo.findData(config.mode.value))
         self._lookahead_spin.setValue(config.lookahead_seconds)
         self._cache_limit_spin.setValue(config.cache_limit_gb)
         self._memory_reserve_spin.setValue(config.memory_reserve_percent)
 
-        self._mode_combo.currentIndexChanged.connect(
-            self._update_visible_fields
-        )
+        self._mode_combo.currentIndexChanged.connect(self._update_visible_fields)
         self._update_visible_fields()
 
         self._wheel_guard = install_wheel_guard(self)
