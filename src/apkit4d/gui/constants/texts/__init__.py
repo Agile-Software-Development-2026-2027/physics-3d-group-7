@@ -19,3 +19,4 @@ from apkit4d.gui.constants.texts.right_panel import *  # noqa: F403
 from apkit4d.gui.constants.texts.roi import *  # noqa: F403
 from apkit4d.gui.constants.texts.tracking import *  # noqa: F403
 from apkit4d.gui.constants.texts.video_export import *  # noqa: F403
+from apkit4d.gui.constants.texts.performance import *  # noqa: F403
