@@ -2,9 +2,9 @@
 Main window of the apkit4d desktop application.
 
 The window has three columns, resizable with a splitter: controls on the left, the 3D view with its
-playback bar in the center, controls on the right. It only lets the user choose a .czi file and
-announces it with the `file_opened` signal. Reading the file and showing the volume are done by
-whoever connects to that signal (the controller).
+playback bar in the center, controls on the right. It accepts .czi files for opening and .json files
+for loading saved results. Reading the files and showing the volume are done by whoever connects to
+the corresponding signals (the controller).
 """
 
 from collections.abc import Callable
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
 
         self._left = LeftPanel()
         self._center = CenterPanel()
-        self._center.file_dropped.connect(self.open_file)
+        self._center.file_dropped.connect(self.open_dropped_file)
         self._right = RightPanel()
 
         self._qt_fps_ticker = FpsCounter(window_seconds=1.0)
@@ -146,6 +146,13 @@ class MainWindow(QMainWindow):
             return False
         self.file_opened.emit(path)
         return True
+
+    def open_dropped_file(self, path: Path) -> None:
+        """Open a dropped CZI file or load dropped JSON results."""
+        if path.suffix.lower() == application.JSON_SUFFIX:
+            self.results_opened.emit(path)
+        else:
+            self.open_file(path)
 
     def choose_recording(self, name: str) -> Path | None:
         """

@@ -104,6 +104,35 @@ def test_drop_surface_opens_a_czi_file(window, qtbot, czi_file):
     assert not surface.property("dragActive")
 
 
+def test_drop_surface_opens_json_results(window, qtbot, tmp_path):
+    results_file = tmp_path / "sample_blobs_params.json"
+    results_file.write_text("{}")
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    mime_data = QMimeData()
+    mime_data.setUrls([QUrl.fromLocalFile(str(results_file))])
+    drag_event = QDragEnterEvent(
+        QPoint(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(surface, drag_event)
+    assert drag_event.isAccepted()
+    drop_event = QDropEvent(
+        QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    with qtbot.waitSignal(window.results_opened) as blocker:
+        QApplication.sendEvent(surface, drop_event)
+
+    assert blocker.args == [results_file]
+
+
 def test_center_switches_between_drop_surface_and_view_when_file_loads(window):
     view = QWidget()
     window.set_view(view)
