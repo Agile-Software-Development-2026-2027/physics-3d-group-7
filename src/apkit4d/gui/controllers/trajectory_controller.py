@@ -1,12 +1,13 @@
 """Controller synchronizing 3D trajectory rendering with playback frames and layer settings."""
 
 from dataclasses import replace
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import pandas as pd
 import pyvista as pv
 from PySide6.QtCore import QObject
 
+from apkit4d.gui.constants import texts
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.visualization.data_mapper import (
     PreparedTrajectories,
@@ -31,6 +32,23 @@ class TrajectoryView(Protocol):
     def set_blobs_visible(self, visible: bool) -> None: ...
 
 
+@runtime_checkable
+class VelocityScalarBarView(Protocol):
+    """Optional scalar bar switching contract provided by `Viewport`."""
+
+    def show_velocity_scalar_bar(
+        self,
+        vmin: float,
+        vmax: float,
+        colormap: str,
+        *,
+        visible: bool = True,
+        title: str = ...,
+    ) -> None: ...
+
+    def restore_volume_scalar_bar(self) -> None: ...
+
+
 class TrajectoryController(QObject):
     """Coordinates prepared trajectory data, frame slicing, and LeftPanel visual settings."""
 
@@ -43,7 +61,12 @@ class TrajectoryController(QObject):
         super().__init__(parent)
         self._panel = panel
         self._view = view
+        self._scalar_bar_view: VelocityScalarBarView | None = (
+            view if isinstance(view, VelocityScalarBarView) else None
+        )
         self._prepared: PreparedTrajectories | None = None
+        self._has_tracking_result: bool = False
+        self._velocity_vmax: float = 1.0
         self._current_frame = 0
         self._config = TrajectoryRenderConfig(
             # TODO: layers
@@ -85,15 +108,29 @@ class TrajectoryController(QObject):
         if current_frame is not None:
             self._current_frame = int(current_frame)
 
-        prepared = PreparedTrajectories.from_dataframe(tracks, dt_s=dt_s)
-        self._prepared = prepared if prepared.n_points > 0 else None
+        # switched to an if to handle the tracks are none so the velocity scalar bar
+        # is set to default values, NOT back to volume scalar bar
+        if tracks is None:
+            self._prepared = None
+            self._has_tracking_result = False
+            self._velocity_vmax = 1.0
+        else:
+            prepared = PreparedTrajectories.from_dataframe(tracks, dt_s=dt_s)
+            self._prepared = prepared if prepared.n_points > 0 else None
+            self._has_tracking_result = True
+            self._velocity_vmax = prepared.speed_vmax
+
         self._render()
+        self._sync_velocity_scalar_bar()
 
     def clear_source(self, *_args: object) -> None:
         """Drop prepared trajectories and clear trajectory actors from the view."""
         self._prepared = None
+        self._has_tracking_result = False
+        self._velocity_vmax = 1.0
         self._current_frame = 0
         self._view.clear_trajectories()
+        self._sync_velocity_scalar_bar()
 
     def on_set_frame(self, frame: int) -> None:
         """Re-slice and update visible trajectory segments for `frame`."""
@@ -119,6 +156,22 @@ class TrajectoryController(QObject):
     def _update_config(self, **changes: object) -> None:
         self._config = replace(self._config, **changes)  # type: ignore[arg-type]
         self._render()
+        self._sync_velocity_scalar_bar()
+
+    def _sync_velocity_scalar_bar(self) -> None:
+        if self._scalar_bar_view is None:
+            return
+        if not self._has_tracking_result:
+            self._scalar_bar_view.restore_volume_scalar_bar()
+            return
+        visible = self._config.visible and self._config.color_mode == TrajectoryColorMode.SPEED
+        self._scalar_bar_view.show_velocity_scalar_bar(
+            0.0,
+            self._velocity_vmax,
+            self._config.colormap,
+            visible=visible,
+            title=texts.SCALAR_BAR_VELOCITY,
+        )
 
     def _render(self) -> None:
         if self._prepared is None or not self._config.visible:
