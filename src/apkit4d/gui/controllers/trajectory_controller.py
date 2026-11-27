@@ -36,6 +36,9 @@ class TrajectoryView(Protocol):
 class VelocityScalarBarView(Protocol):
     """Optional scalar bar switching contract provided by `Viewport`."""
 
+    @property
+    def scalar_bar_visible(self) -> bool: ...
+
     def show_velocity_scalar_bar(
         self,
         vmin: float,
@@ -59,6 +62,7 @@ class TrajectoryController(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
+        self._window = window
         self._panel = window.left_panel
         self._view = view
         self._scalar_bar_view: VelocityScalarBarView | None = (
@@ -160,6 +164,7 @@ class TrajectoryController(QObject):
             return
         if not self._has_tracking_result:
             self._scalar_bar_view.restore_volume_scalar_bar()
+            self._window.set_scalar_bar_checked(self._scalar_bar_view.scalar_bar_visible)
             return
         visible = self._config.visible and self._config.color_mode == TrajectoryColorMode.SPEED
         self._scalar_bar_view.show_velocity_scalar_bar(
@@ -169,6 +174,7 @@ class TrajectoryController(QObject):
             visible=visible,
             title=texts.SCALAR_BAR_VELOCITY,
         )
+        self._window.set_scalar_bar_checked(visible and self._scalar_bar_view.scalar_bar_visible)
 
     def _render(self) -> None:
         if self._prepared is None or not self._config.visible:

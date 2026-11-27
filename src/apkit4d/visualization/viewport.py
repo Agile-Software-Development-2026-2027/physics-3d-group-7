@@ -609,6 +609,11 @@ class Viewport(QWidget):
         """Whether the viewport scalar bar currently represents volume intensities or velocity."""
         return self._scalar_bar_mode
 
+    @property
+    def scalar_bar_visible(self) -> bool:
+        """Whether the user-facing scalar bar layer is enabled."""
+        return self._scalar_bar_visible
+
     def show_velocity_scalar_bar(
         self,
         vmin: float,

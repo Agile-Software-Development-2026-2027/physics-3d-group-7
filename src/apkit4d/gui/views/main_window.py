@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import override
 
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QDockWidget, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
 
@@ -126,6 +126,11 @@ class MainWindow(QMainWindow):
     def set_scalar_bar_visible(self, visible: bool) -> None:
         """Set the scalar bar layer action, which updates visibility through its toggled signal."""
         self._show_scalar_bar_action.setChecked(visible)
+
+    def set_scalar_bar_checked(self, checked: bool) -> None:
+        """Update the scalar bar layer checkbox without changing the user's visibility preference."""
+        with QSignalBlocker(self._show_scalar_bar_action):
+            self._show_scalar_bar_action.setChecked(checked)
 
     def set_current_file(self, path: Path | None) -> None:
         """
