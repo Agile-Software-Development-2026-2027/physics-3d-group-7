@@ -14,7 +14,6 @@ from typing import Protocol, cast
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication, QDialog
 
-from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
@@ -250,7 +249,6 @@ class MainController(QObject):
             window,
             self._file_controller,
             self._pipeline_model,
-            self._get_current_roi,
             self,
             show_roi=self._roi_controller.show_roi,
         )
@@ -453,8 +451,3 @@ class MainController(QObject):
     def _on_window_suggested(self, lo: float, hi: float) -> None:
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
             cast(PreprocessingInspector, preproc_sec).set_intensity_window(lo, hi)
-
-    def _get_current_roi(self) -> RegionOfInterest | None:
-        if self._volume_controller is None:
-            return None
-        return self._volume_controller.roi

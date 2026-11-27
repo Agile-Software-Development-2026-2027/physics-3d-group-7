@@ -7,6 +7,8 @@ from typing import ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from apkit4d.core.frame_range import FrameRange
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.tracking.motion import compute_search_gate
 
 
@@ -327,3 +329,120 @@ class PreprocessingConfig(BaseModel):
     clahe_kernel_xy_um: float = Field(
         default=150.0, ge=0.0, description="Size micrometers of the local neighborhood (tile) used in CLAHE."
     )
+
+
+class RoiConfig(BaseModel):
+    """Configuration for the region of interest and frame range."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        arbitrary_types_allowed=True,
+    )
+
+    x_min: float | None = Field(
+        default=None,
+        description="Minimum X coordinate. If None, no lower X bound is applied.",
+    )
+    x_max: float | None = Field(
+        default=None,
+        description="Maximum X coordinate. If None, no upper X bound is applied.",
+    )
+    y_min: float | None = Field(
+        default=None,
+        description="Minimum Y coordinate. If None, no lower Y bound is applied.",
+    )
+    y_max: float | None = Field(
+        default=None,
+        description="Maximum Y coordinate. If None, no upper Y bound is applied.",
+    )
+    z_min: float | None = Field(
+        default=None,
+        description="Minimum Z coordinate. If None, no lower Z bound is applied.",
+    )
+    z_max: float | None = Field(
+        default=None,
+        description="Maximum Z coordinate. If None, no upper Z bound is applied.",
+    )
+    t0: int | None = Field(
+        default=None,
+        description="Start frame index. If None, starts from the first frame.",
+    )
+    t1: int | None = Field(
+        default=None,
+        description="End frame index. If None, runs until the last frame.",
+    )
+
+    def with_region(self, region: RegionOfInterest | None) -> Self:
+        """Return a copy with the specified spatial region of interest."""
+        if region is None:
+            return self.model_copy(
+                update={
+                    "x_min": None,
+                    "x_max": None,
+                    "y_min": None,
+                    "y_max": None,
+                    "z_min": None,
+                    "z_max": None,
+                }
+            )
+
+        return self.model_copy(
+            update={
+                "x_min": region.x_min,
+                "x_max": region.x_max,
+                "y_min": region.y_min,
+                "y_max": region.y_max,
+                "z_min": region.z_min,
+                "z_max": region.z_max,
+            }
+        )
+
+    def with_frame_range(self, frame_range: FrameRange | None) -> Self:
+        """Return a copy with the specified temporal frame range."""
+        if frame_range is None:
+            return self.model_copy(
+                update={
+                    "t0": None,
+                    "t1": None,
+                }
+            )
+
+        return self.model_copy(
+            update={
+                "t0": frame_range.start,
+                "t1": frame_range.end,
+            }
+        )
+
+    @property
+    def region(self) -> RegionOfInterest | None:
+        """Build a RegionOfInterest from spatial bounds, or None if unset."""
+        if (
+            self.x_min is None
+            or self.x_max is None
+            or self.y_min is None
+            or self.y_max is None
+            or self.z_min is None
+            or self.z_max is None
+        ):
+            return None
+
+        return RegionOfInterest(
+            x_min=self.x_min,
+            x_max=self.x_max,
+            y_min=self.y_min,
+            y_max=self.y_max,
+            z_min=self.z_min,
+            z_max=self.z_max,
+        )
+
+    @property
+    def frame_range(self) -> FrameRange | None:
+        """Build a FrameRange from temporal bounds, or None if unset."""
+        if self.t0 is None or self.t1 is None:
+            return None
+
+        return FrameRange(
+            start=self.t0,
+            end=self.t1,
+        )

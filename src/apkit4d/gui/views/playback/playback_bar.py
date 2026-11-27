@@ -12,6 +12,7 @@ from PySide6.QtCore import QSize, Signal, SignalInstance
 from PySide6.QtGui import QPalette, QResizeEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLayout, QVBoxLayout, QWidget
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.gui.constants import appearance, names, playback, texts
 from apkit4d.gui.theme import tokens
 from apkit4d.gui.views.playback.frame_counter import FrameCounter
@@ -59,11 +60,12 @@ class PlaybackBar(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName(names.PLAYBACK_BAR)
+        self._frame_range: FrameRange | None = None
 
+        self.setObjectName(names.PLAYBACK_BAR)
         self._slider = FrameSlider()
         self._slider.setObjectName(names.FRAME_SLIDER)
-        self._slider.valueChanged.connect(self.frame_requested)
+        self._slider.valueChanged.connect(self._on_slider_value_changed)
 
         self._previous_button = self._make_button(
             names.PREVIOUS_BUTTON,
@@ -263,3 +265,22 @@ class PlaybackBar(QWidget):
         button.setToolTip(tooltip)
         button.clicked.connect(signal)
         return button
+
+    def set_frame_range(self, frame_range: FrameRange | None) -> None:
+        self._slider.set_marked_range(
+            (frame_range.start, frame_range.end) if frame_range is not None else None
+        )
+
+    def _on_slider_value_changed(self, frame: int) -> None:
+        if self._frame_range is not None:
+            frame = min(
+                max(frame, self._frame_range.start),
+                self._frame_range.end,
+            )
+
+        if frame != self._slider.value():
+            self._slider.blockSignals(True)
+            self._slider.setValue(frame)
+            self._slider.blockSignals(False)
+
+        self.frame_requested.emit(frame)

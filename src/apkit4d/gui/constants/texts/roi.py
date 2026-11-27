@@ -29,3 +29,4 @@ INSPECTOR_BUTTON_SAVE_ROI: str = "Save ROI"
 INSPECTOR_TOOLTIP_SAVE_ROI: str = (
     "Save the current Region of Interest in a certain range of frames to a file."
 )
+INSPECTOR_LABEL_SELECT_FRAMES: str = "Select frames:"

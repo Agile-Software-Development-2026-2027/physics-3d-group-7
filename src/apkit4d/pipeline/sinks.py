@@ -1,6 +1,6 @@
 """Detection sink implementations for in-memory and streaming disk workflows.
 
-What are sinkis: https://en.wikipedia.org/wiki/Sink_(computing)
+What are sinks: https://en.wikipedia.org/wiki/Sink_(computing)
 """
 
 import json
