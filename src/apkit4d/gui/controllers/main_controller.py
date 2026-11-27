@@ -94,6 +94,7 @@ class MainController(QObject):
         if self._volume_controller is not None:
             # the volume controller must know the new recording before the playback goes back to frame 0
             self._file_controller.loaded.connect(self._volume_controller.set_source)
+            self._file_controller.closed.connect(self._volume_controller.clear_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
@@ -326,6 +327,9 @@ class MainController(QObject):
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._frame_loading_config = dialog.config()
+
+            if self._volume_controller is not None:
+                self._volume_controller.set_frame_loading_config(self._frame_loading_config)
 
     @property
     def trajectory_controller(self) -> TrajectoryController | None:

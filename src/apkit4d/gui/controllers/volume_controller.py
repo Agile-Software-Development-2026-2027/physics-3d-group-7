@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+import psutil
 import pyvista as pv
 from attr import dataclass
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from apkit4d.core.image import Image
 from apkit4d.core.models import PreprocessingConfig
@@ -32,6 +33,12 @@ from apkit4d.detection.preprocessing import preprocess, suggest_window
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
+from apkit4d.gui.models.frame_cache import FrameCache
+from apkit4d.gui.models.frame_cache_policy import calculate_cache_limit
+from apkit4d.gui.models.frame_loading_config import (
+    FrameLoadingConfig,
+    FrameLoadingMode,
+)
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.pipeline.frame_stages import crop_frame
 from apkit4d.visualization.data_mapper import create_volume_grid
@@ -117,6 +124,13 @@ class VolumeController(QObject):
         self._wanted: int | None = None  # the frame to read next, if one was requested meanwhile
         self._busy = False
         self._loading = (0, 0)  # generation and frame that are being read
+        self._frame_loading_config = FrameLoadingConfig()
+        self._frame_cache = FrameCache(max_bytes=0)
+        self._initial_available_bytes = 0
+
+        self._memory_timer = QTimer(self)
+        self._memory_timer.setInterval(500)
+        self._memory_timer.timeout.connect(self._refresh_cache_limit)
 
         self._runner = TaskRunner(self)
         self._runner.succeeded.connect(self._on_read)
@@ -234,6 +248,34 @@ class VolumeController(QObject):
         reason = str(error) or type(error).__name__
         self._window.set_status(f"Preprocessing failed: {reason}")
 
+    def set_frame_loading_config(self, config: FrameLoadingConfig) -> None:
+        """Apply new frame loading settings."""
+        self._frame_loading_config = config
+        self._update_memory_monitor()
+
+    def _update_memory_monitor(self) -> None:
+        """Enable memory monitoring only when caching is active."""
+        if (
+            self._source is None
+            or not self._usable
+            or self._frame_loading_config.mode == FrameLoadingMode.LAZY
+        ):
+            self._memory_timer.stop()
+            self._frame_cache.set_limit(0)
+            return
+
+        self._refresh_cache_limit()
+        self._memory_timer.start()
+
+    def _refresh_cache_limit(self) -> None:
+        """Update the cache limit according to available system memory."""
+        limit = calculate_cache_limit(
+            self._frame_loading_config,
+            self._frame_cache.size_bytes,
+            self._initial_available_bytes,
+        )
+        self._frame_cache.set_limit(limit)
+
     def set_source(self, _path: Path, source: FrameSource) -> None:
         """
         Start showing a recording, from its first frame.
@@ -243,6 +285,7 @@ class VolumeController(QObject):
             source: The open recording.
         """
         self._generation += 1
+        self._frame_cache.clear()
         self._suggest_generation = self._generation
         self._suggest_busy = False
         self._source = source
@@ -259,6 +302,8 @@ class VolumeController(QObject):
         self._current_frame = 0
         self._preproc_pending = False
         self._usable = self._has_valid_voxel(source)
+        self._initial_available_bytes = psutil.virtual_memory().available
+        self._update_memory_monitor()
         if self._usable:
             # when we read the file we set the bounds so that the ROI inspector can show them
             sz, sy, sx = self._voxel
@@ -273,9 +318,23 @@ class VolumeController(QObject):
             self.volume_bounds_changed.emit(bounds)
             self.show_frame(0)
 
+    def clear_source(self) -> None:
+        """Release cached frames when the recording is closed."""
+        self._generation += 1
+        self._source = None
+        self._usable = False
+        self._wanted = None
+        self._preproc_pending = False
+        self._current_full_volume = None
+        self._current_roi_volume = None
+        self._last_grid = None
+
+        self._frame_cache.clear()
+        self._update_memory_monitor()
+
     def show_frame(self, frame: int) -> None:
         """
-        Show `frame` as soon as it has been read. Does nothing if there is no recording to show.
+        Show a frame from the cache or read it in the background.
 
         Args:
             frame: Index of the frame, starting from 0.
@@ -283,10 +342,17 @@ class VolumeController(QObject):
         source = self._source
         if source is None or not self._usable:
             return
+
         if self._busy:
-            # the frame that is being read may be the one wanted, otherwise it is read afterwards
             self._wanted = None if self._loading == (self._generation, frame) else frame
             return
+
+        volume = self._frame_cache.get(frame)
+
+        if volume is not None:
+            self._show_loaded_frame(frame, volume)
+            return
+
         self._start_reading(source, frame)
 
     def reset_camera(self) -> None:
@@ -305,11 +371,20 @@ class VolumeController(QObject):
 
     def _on_read(self, _task_id: int, volume: NDArray) -> None:
         generation, frame = self._finish_reading()
+
         if generation == self._generation:
-            self._current_frame = frame
-            self._current_full_volume = volume
-            self._apply_roi_and_show(volume)
+            if self._frame_cache.max_bytes > 0:
+                self._frame_cache.put(frame, volume)
+
+            self._show_loaded_frame(frame, volume)
+
         self._read_the_next_frame()
+
+    def _show_loaded_frame(self, frame: int, volume: NDArray) -> None:
+        """Display a loaded frame using the current ROI and preprocessing."""
+        self._current_frame = frame
+        self._current_full_volume = volume
+        self._apply_roi_and_show(volume)
 
     def _apply_roi_and_show(self, full_volume: Image[np.float32]) -> None:
         """Extract the ROI slice from `full_volume`, then preprocess or display it."""
@@ -338,7 +413,7 @@ class VolumeController(QObject):
         if self._wanted is None or self._source is None:
             return
         frame, self._wanted = self._wanted, None
-        self._start_reading(self._source, frame)
+        self.show_frame(frame)
 
     def _show(
         self,

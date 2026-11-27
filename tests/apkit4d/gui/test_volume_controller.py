@@ -1,13 +1,19 @@
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 
 from apkit4d.core.models import PreprocessingConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
 from apkit4d.gui.controllers.volume_controller import PreparedVolume, VolumeController
+from apkit4d.gui.models.frame_loading_config import (
+    FrameLoadingConfig,
+    FrameLoadingMode,
+)
 from apkit4d.gui.views.main_window import MainWindow
 
 
@@ -368,3 +374,122 @@ def test_suggest_intensity_window_uses_full_and_roi_volumes(qtbot) -> None:
 
         assert view.grids == []
         assert announced == []
+
+
+@pytest.fixture
+def cache_controller(qtbot, monkeypatch):
+    memory = SimpleNamespace(
+        total=100_000_000_000,
+        available=60_000_000_000,
+    )
+    monkeypatch.setattr("psutil.virtual_memory", lambda: memory)
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    view = FakeVolumeView()
+    controller = VolumeController(window, view, parent=window)
+    controller.set_frame_loading_config(FrameLoadingConfig(mode=FrameLoadingMode.AUTOMATIC))
+
+    yield controller, view, memory
+
+    controller.clear_source()
+
+
+def test_cached_frame_is_not_read_again(qtbot, cache_controller) -> None:
+    controller, view, _ = cache_controller
+    source = FakeSource()
+
+    controller.set_source(Path("test.czi"), source)
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    controller.show_frame(1)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+
+    controller.show_frame(0)
+    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
+
+    assert source.read_calls == [0, 1]
+
+
+def test_lazy_loading_clears_cache(qtbot, cache_controller) -> None:
+    controller, view, _ = cache_controller
+    source = FakeSource()
+
+    controller.set_source(Path("test.czi"), source)
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    assert len(controller._frame_cache) == 1
+
+    controller.set_frame_loading_config(FrameLoadingConfig(mode=FrameLoadingMode.LAZY))
+
+    assert len(controller._frame_cache) == 0
+    assert controller._frame_cache.size_bytes == 0
+    assert not controller._memory_timer.isActive()
+
+    controller.show_frame(0)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+
+    assert source.read_calls == [0, 0]
+    assert len(controller._frame_cache) == 0
+
+
+def test_cache_is_cleared_when_source_changes(qtbot, cache_controller) -> None:
+    controller, view, _ = cache_controller
+
+    first_source = FakeSource()
+    second_source = FakeSource()
+
+    controller.set_source(Path("first.czi"), first_source)
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    controller.show_frame(1)
+    qtbot.waitUntil(lambda: len(view.grids) == 2, timeout=5000)
+
+    assert len(controller._frame_cache) == 2
+
+    controller.set_source(Path("second.czi"), second_source)
+    qtbot.waitUntil(lambda: len(view.grids) == 3, timeout=5000)
+
+    assert second_source.read_calls == [0]
+    assert len(controller._frame_cache) == 1
+    assert controller._frame_cache.get(1) is None
+
+
+def test_memory_timer_reduces_cache(qtbot, cache_controller) -> None:
+    controller, view, memory = cache_controller
+
+    controller.set_source(Path("test.czi"), FakeSource())
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    assert controller._memory_timer.isActive()
+    assert controller._frame_cache.size_bytes > 0
+
+    memory.available = 0
+
+    qtbot.waitUntil(
+        lambda: controller._frame_cache.size_bytes == 0,
+        timeout=3000,
+    )
+
+    assert controller._frame_cache.max_bytes == 0
+
+    memory.available = 60_000_000_000
+
+    qtbot.waitUntil(
+        lambda: controller._frame_cache.max_bytes > 0,
+        timeout=3000,
+    )
+
+
+def test_closing_source_releases_cache(qtbot, cache_controller) -> None:
+    controller, view, _ = cache_controller
+
+    controller.set_source(Path("test.czi"), FakeSource())
+    qtbot.waitUntil(lambda: len(view.grids) == 1, timeout=5000)
+
+    controller.clear_source()
+
+    assert len(controller._frame_cache) == 0
+    assert controller._frame_cache.size_bytes == 0
+    assert not controller._memory_timer.isActive()
