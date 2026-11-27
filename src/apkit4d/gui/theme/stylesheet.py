@@ -30,6 +30,7 @@ header of a section that is running, gets that state as a property (`set_style_p
 rules read as `[status="running"]`.
 """
 
+import math
 import tempfile
 from pathlib import Path
 
@@ -64,6 +65,9 @@ _ARROW_SVG: str = (
     'stroke-linecap="round" stroke-linejoin="round"/></svg>'
 )
 
+# Qt cuts the moving bar of a busy progress bar square at the edges of the track, without following its
+# round corners: inside a padding of 3/10 of the radius, the square ends stay within the round track
+_PROGRESS_PADDING: int = math.ceil(0.3 * tokens.SMALL_RADIUS)
 _SCROLL_BAR_WIDTH: int = tokens.SPACING
 _MIN_SCROLL_HANDLE: int = 3 * tokens.SPACING  # shortest length of the handle of a scroll bar
 
@@ -249,11 +253,12 @@ QProgressBar {{
     color: {_css(ink)};
     border: none;
     border-radius: {tokens.SMALL_RADIUS}px;
+    padding: {_PROGRESS_PADDING}px;
     text-align: center;
 }}
 QProgressBar::chunk {{
     background-color: {_css(palette.color(ColorRole.Highlight))};
-    border-radius: {tokens.SMALL_RADIUS}px;
+    border-radius: {tokens.SMALL_RADIUS - _PROGRESS_PADDING}px;
 }}
 QToolTip {{
     background-color: {_css(palette.color(ColorRole.ToolTipBase))};

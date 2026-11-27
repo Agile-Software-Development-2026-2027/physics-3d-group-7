@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QStyledItemDelegate
+from PySide6.QtWidgets import QComboBox, QLabel, QProgressBar, QPushButton, QStyledItemDelegate
 
 from apkit4d.gui.theme import tokens
 from apkit4d.gui.theme.apply import apply_theme, build_palette
@@ -97,3 +97,18 @@ def test_scroll_bars_are_slim(qapp, qtbot) -> None:
     scroll_area.show()
     assert scroll_area.verticalScrollBar().isVisible()
     assert scroll_area.verticalScrollBar().width() == tokens.SPACING
+
+
+def test_busy_progress_bar_stays_inside_its_round_corners(qapp, qtbot) -> None:
+    apply_theme(qapp, Theme.DARK)
+    accent = DARK_COLORS.highlight
+    bar = QProgressBar()
+    bar.setRange(0, 0)  # busy: a bar moves from side to side and wraps around
+    qtbot.addWidget(bar)
+    bar.resize(300, tokens.CONTROL_HEIGHT)
+    bar.show()
+    for _ in range(40):  # the moving bar reaches both ends several times
+        qtbot.wait(50)
+        image = bar.grab().toImage()
+        for x in (1, bar.width() - 2):  # outside the round corners of the track
+            assert image.pixelColor(x, 1).name() != accent
