@@ -190,6 +190,7 @@ class MainController(QObject):
             trajectory_controller=self._trajectory_controller,
             playback_controller=self._playback_controller,
         )
+        self._tracking_controller.result_ready.connect(self._on_tracking_completed)
 
         self._roi_controller = RoiStageController(
             inspector=window.right_panel.roi_inspector,
@@ -433,6 +434,9 @@ class MainController(QObject):
 
     def _on_detection_completed(self) -> None:
         self._window.set_volume_visible(False)
+
+    def _on_tracking_completed(self, _result: TrackingResult) -> None:
+        self._window.set_scalar_bar_visible(True)
 
     def _commit_preprocessing_stage(self) -> None:
         """Auto-commit the active preprocessing configuration and complete Stage 2."""
