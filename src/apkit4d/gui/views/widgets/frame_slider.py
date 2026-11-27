@@ -39,11 +39,16 @@ class FrameSlider(QSlider):
 
     def __init__(self, parent: QWidget | None = None, *, preview: bool = True) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
+        self._marked_range: tuple[int, int] | None = None
         self._preview = preview
         self.setFixedHeight(self._headroom() + appearance.SLIDER_HEIGHT)
         self.setMouseTracking(preview)  # to follow the mouse also when no button is pressed
         self._hover = None
         self._bubble_font = make_bubble_font(self.font())
+
+    def set_marked_range(self, frame_range: tuple[int, int] | None) -> None:
+        self._marked_range = frame_range
+        self.update()
 
     @override
     def paintEvent(self, _event: QPaintEvent) -> None:
@@ -69,6 +74,23 @@ class FrameSlider(QSlider):
         if enabled:
             painter.setBrush(accent)
             painter.drawRoundedRect(QRectF(pad, top, x - pad, groove), radius, radius)
+
+        if self._marked_range is not None and enabled:
+            start, end = self._marked_range
+
+            painter.save()
+            painter.setPen(QPen(ink, 2))
+
+            for frame in (start, end):
+                marker_x = self._position_of(frame)
+
+                painter.drawLine(
+                    QPointF(marker_x, top - 8),
+                    QPointF(marker_x, top + groove + 8),
+                )
+
+            painter.restore()
+
         if self._hover is not None and enabled:
             self._paint_marker(painter, self._position_of(self._hover), ink)
 

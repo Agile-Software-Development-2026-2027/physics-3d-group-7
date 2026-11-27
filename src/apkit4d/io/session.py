@@ -1,6 +1,7 @@
 """Domain models and protocols for precomputed/loaded analysis sessions."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import pandas as pd
@@ -96,9 +97,10 @@ class PrecomputedSource(Protocol):
 class PrecomputedFrameSource:
     """Adapter pairing any base frame source with a `PrecomputedSession`."""
 
-    def __init__(self, base: Any, session: PrecomputedSession) -> None:
+    def __init__(self, base: Any, session: PrecomputedSession, *, params_path: Path | None = None) -> None:
         self._base = base
         self._session = session
+        self.params_path = params_path
 
     @property
     def info(self) -> CziInfo:

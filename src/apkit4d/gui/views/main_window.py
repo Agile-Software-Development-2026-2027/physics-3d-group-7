@@ -2,9 +2,9 @@
 Main window of the apkit4d desktop application.
 
 The window has three columns, resizable with a splitter: controls on the left, the 3D view with its
-playback bar in the center, controls on the right. It only lets the user choose a .czi file and
-announces it with the `file_opened` signal. Reading the file and showing the volume are done by
-whoever connects to that signal (the controller).
+playback bar in the center, controls on the right. It accepts .czi files for opening and .json files
+for loading saved results. Reading the files and showing the volume are done by whoever connects to
+the corresponding signals (the controller).
 """
 
 from collections.abc import Callable
@@ -29,8 +29,8 @@ class MainWindow(QMainWindow):
     """
     Application window with a File menu, three columns and a status bar.
 
-    The center panel holds a placeholder until the 3D view is added with `set_view`. Every component
-    has an object name, so tests can find it with `findChild` and simulate the user.
+    The center panel holds a drag-and-drop surface until a file is loaded. Every component has an
+    object name, so tests can find it with `findChild` and simulate the user.
 
     Signals:
         files_selected: Emitted with the paths selected for a new batch.
@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         file_opened: Emitted with the path of a .czi file once it has been accepted.
         results_opened: Emitted with the path of the json of saved results chosen by the user.
         video_export_requested: Emitted when the user requests a video export.
+        performance_settings_requested: Emitted when the user requests performance settings.
     """
 
     files_selected = Signal(list)
@@ -45,6 +46,8 @@ class MainWindow(QMainWindow):
     file_opened = Signal(Path)
     results_opened = Signal(Path)
     video_export_requested = Signal()
+    show_volume_toggled = Signal(bool)
+    performance_settings_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -53,6 +56,7 @@ class MainWindow(QMainWindow):
 
         self._left = LeftPanel()
         self._center = CenterPanel()
+        self._center.file_dropped.connect(self.open_dropped_file)
         self._right = RightPanel()
 
         self._qt_fps_ticker = FpsCounter(window_seconds=1.0)
@@ -65,7 +69,7 @@ class MainWindow(QMainWindow):
 
         self._build_columns()
         self.multi_file_panel = MultiFilePanel()
-        self._multi_file_dock = QDockWidget("Multi-file processing", self)
+        self._multi_file_dock = QDockWidget(texts.MULTI_FILE_TITLE, self)
         self._multi_file_dock.setObjectName("multiFileDock")
         self._multi_file_dock.setWidget(self.multi_file_panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._multi_file_dock)
@@ -73,6 +77,8 @@ class MainWindow(QMainWindow):
         self._multi_file_dock.visibilityChanged.connect(self._size_multi_file_dock_on_first_show)
         self._build_file_menu()
         self._build_view_menu()
+        self._build_layers_menu()
+        self._build_settings_menu()
         self._build_status_bar()
 
     @property
@@ -110,13 +116,21 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(message)
 
+    def set_volume_visible(self, visible: bool) -> None:
+        """Set the volume layer action, which updates visibility through its toggled signal."""
+        self._show_volume_action.setChecked(visible)
+
     def set_current_file(self, path: Path | None) -> None:
         """
-        Show the name of the open file in the title of the window.
+        Show the name of the open file and update file-dependent actions.
 
         Args:
             path: The open file, or None to show only the name of the application.
         """
+        self._export_video_action.setEnabled(path is not None)
+        for action in (self._show_volume_action, self._show_blobs_action, self._show_trajectories_action):
+            action.setEnabled(path is not None)
+        self._center.set_file_loaded(path is not None)
         if path is None:
             self.setWindowTitle(application.APP_NAME)
         else:
@@ -143,6 +157,13 @@ class MainWindow(QMainWindow):
             return False
         self.file_opened.emit(path)
         return True
+
+    def open_dropped_file(self, path: Path) -> None:
+        """Open a dropped CZI file or load dropped JSON results."""
+        if path.suffix.lower() == application.JSON_SUFFIX:
+            self.results_opened.emit(path)
+        else:
+            self.open_file(path)
 
     def choose_recording(self, name: str) -> Path | None:
         """
@@ -178,10 +199,10 @@ class MainWindow(QMainWindow):
         menu.setObjectName(names.FILE_MENU)
         self._add_action(menu, names.OPEN_ACTION, texts.ACTION_OPEN, shortcuts.OPEN, self._choose_file)
         self.open_files_action = self._add_action(
-            menu, "openFilesAction", "Open files…", None, self._choose_files
+            menu, "openFilesAction", texts.MULTI_FILE_OPEN_ACTION, None, self._choose_files
         )
         self.add_files_action = self._add_action(
-            menu, "addFilesAction", "Add files…", None, self._choose_additional_files
+            menu, "addFilesAction", texts.MULTI_FILE_ADD_ACTION, None, self._choose_additional_files
         )
         self.add_files_action.setEnabled(False)
         self._add_action(
@@ -191,13 +212,14 @@ class MainWindow(QMainWindow):
             shortcuts.OPEN_RESULTS,
             self._choose_results,
         )
-        self._add_action(
+        self._export_video_action = self._add_action(
             menu,
             names.EXPORT_VIDEO_ACTION,
             texts.ACTION_EXPORT_VIDEO,
             shortcuts.EXPORT_VIDEO,
             self.video_export_requested.emit,
         )
+        self._export_video_action.setEnabled(False)
         menu.addSeparator()
         self._add_action(menu, names.QUIT_ACTION, texts.ACTION_QUIT, shortcuts.QUIT, self.close)
 
@@ -213,6 +235,46 @@ class MainWindow(QMainWindow):
         action.setChecked(False)
         action.toggled.connect(self._on_show_fps_toggled)
         menu.addAction(action)
+
+    def _build_layers_menu(self) -> None:
+        menu = self.menuBar().addMenu(texts.LAYERS_MENU)
+        menu.setObjectName(names.LAYERS_MENU)
+
+        self._show_volume_action = QAction(texts.ACTION_SHOW_VOLUME, self)
+        self._show_volume_action.setObjectName(names.SHOW_VOLUME_ACTION)
+        self._show_volume_action.setCheckable(True)
+        self._show_volume_action.setChecked(True)
+        self._show_volume_action.setEnabled(False)
+        self._show_volume_action.toggled.connect(self.show_volume_toggled)
+        menu.addAction(self._show_volume_action)
+
+        self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
+        self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)
+        self._show_blobs_action.setCheckable(True)
+        self._show_blobs_action.setChecked(True)
+        self._show_blobs_action.setEnabled(False)
+        self._show_blobs_action.toggled.connect(self.left_panel.show_blobs_toggled)
+        menu.addAction(self._show_blobs_action)
+
+        self._show_trajectories_action = QAction(texts.ACTION_SHOW_TRAJECTORIES, self)
+        self._show_trajectories_action.setObjectName(names.SHOW_TRAJECTORIES_ACTION)
+        self._show_trajectories_action.setCheckable(True)
+        self._show_trajectories_action.setChecked(True)
+        self._show_trajectories_action.setEnabled(False)
+        self._show_trajectories_action.toggled.connect(self.left_panel.show_trajectories_toggled)
+        menu.addAction(self._show_trajectories_action)
+
+    def _build_settings_menu(self) -> None:
+        menu = self.menuBar().addMenu(texts.MENU_SETTINGS)
+        menu.setObjectName(names.SETTINGS_MENU)
+
+        self._add_action(
+            menu,
+            names.PERFORMANCE_ACTION,
+            texts.ACTION_PERFORMANCE,
+            None,
+            self.performance_settings_requested.emit,
+        )
 
     def _build_status_bar(self) -> None:
         status_bar = self.statusBar()
@@ -284,12 +346,12 @@ class MainWindow(QMainWindow):
         return paths
 
     def _choose_files(self) -> None:
-        paths = self._choose_recordings("Open files")
+        paths = self._choose_recordings(texts.MULTI_FILE_OPEN_DIALOG)
         if paths:
             self.files_selected.emit(paths)
 
     def _choose_additional_files(self) -> None:
-        paths = self._choose_recordings("Add files")
+        paths = self._choose_recordings(texts.MULTI_FILE_ADD_DIALOG)
         if paths:
             self.files_added.emit(paths)
 

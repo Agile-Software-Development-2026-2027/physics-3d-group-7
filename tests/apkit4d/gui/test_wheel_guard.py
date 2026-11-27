@@ -138,7 +138,7 @@ def test_left_panel_dropdown_wheel_only_changes_with_modifier_key(qtbot, modifie
     """Left-panel comboboxes forward unmodified wheels to scroll area and allow Ctrl/Shift edits."""
     panel = LeftPanel()
     panel.resize(260, 160)
-    panel.layers_section.set_expanded(True, animate=False)
+    panel.appearance_section.set_expanded(True, animate=False)
     panel.show()
     qtbot.addWidget(panel)
     qtbot.wait(50)

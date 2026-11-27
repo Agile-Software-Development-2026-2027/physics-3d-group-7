@@ -12,8 +12,7 @@ import pyvista as pv
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
-from apkit4d.core.models import DetectionConfig, PreprocessingConfig
-from apkit4d.core.roi import RegionOfInterest
+from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -97,6 +96,7 @@ class BlobDetectionController(QObject):
     params_changed = Signal(str, float)
     seeds_response_changed = Signal(object)  # NDArray, or None when there is nothing to show
     detection_progress = Signal(int, int)
+    detection_completed = Signal()
 
     def __init__(
         self,
@@ -160,7 +160,7 @@ class BlobDetectionController(QObject):
         self._detection_running_generation: int | None = None
         self._detection_running_source: FrameSource | None = None
         self._detection_running_params: (
-            tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None] | None
+            tuple[PreprocessingConfig, DetectionConfig, RoiConfig | None] | None
         ) = None
         self._detection_started_at: float = 0.0
 
@@ -269,18 +269,14 @@ class BlobDetectionController(QObject):
         if model_params != self._params:
             self.set_params(model_params)
 
-    def _detection_params(self) -> tuple[PreprocessingConfig, DetectionConfig, RegionOfInterest | None]:
+    def _detection_params(self) -> tuple[PreprocessingConfig, DetectionConfig, RoiConfig]:
         """Take a snapshot of the Stage 3 sequence detection parameters."""
         assert self._pipeline_model is not None
-        roi = self._volume_controller.roi if self._volume_controller is not None else None
-        if self._volume_controller is None:
-            roi_dict = self._pipeline_model.get_step_params(PipelineStep.ROI)
-            roi = RegionOfInterest.from_dict(roi_dict) if roi_dict else None
 
         return (
             self._pipeline_model.get_preproc_params(),
             DetectionConfig(**self._pipeline_model.get_step_params(PipelineStep.DETECTION)),
-            roi,
+            self._pipeline_model.get_roi_params(),
         )
 
     def _on_detection_step_status_changed(self, step: PipelineStep, status: StepStatus) -> None:
@@ -291,6 +287,8 @@ class BlobDetectionController(QObject):
                 self._start_detection_if_needed()
         else:
             self._detection_generation += 1
+            if status == StepStatus.COMPLETED:
+                self.detection_completed.emit()
 
     def _on_detection_pipeline_reset(self) -> None:
         self._detection_generation += 1
@@ -329,7 +327,13 @@ class BlobDetectionController(QObject):
             self._detection_running_generation = self._detection_generation
             self._detection_started_at = time.monotonic()
 
-            total_frames = getattr(getattr(source, "info", None), "n_t", 0)
+            preproc, blob, roi = params
+
+            total_frames = (
+                roi.frame_range.count
+                if roi.frame_range is not None
+                else getattr(getattr(source, "info", None), "n_t", 0)
+            )
             if isinstance(total_frames, int) and total_frames > 0:
                 self._pipeline_controller.report_stage_progress(
                     PipelineStep.DETECTION,
@@ -339,7 +343,6 @@ class BlobDetectionController(QObject):
                     item_label="frames",
                 )
 
-            preproc, blob, roi = params
             sig = inspect.signature(detect_sequence)
             accepts_progress = "progress_callback" in sig.parameters or any(
                 p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
@@ -354,13 +357,7 @@ class BlobDetectionController(QObject):
                     progress_callback=self.detection_progress.emit,
                 )
                 if accepts_progress
-                else partial(
-                    detect_sequence,
-                    cast(CziSource, source),
-                    preproc,
-                    blob,
-                    roi,
-                )
+                else partial(detect_sequence, cast(CziSource, source), preproc, blob, roi)
             )
             self._detection_task = self._detection_runner.run(detect_call)
             logger.debug("Started Stage 3 sequence detection (generation=%d)", self._detection_generation)

@@ -6,7 +6,9 @@ from copy import replace
 
 import pytest
 
-from apkit4d.core.models import BgMode, DetectionConfig, PreprocessingConfig, TrackingConfig
+from apkit4d.core.frame_range import FrameRange
+from apkit4d.core.models import BgMode, DetectionConfig, PreprocessingConfig, RoiConfig, TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -104,8 +106,9 @@ def test_pipeline_model_update_step_params_cascading() -> None:
     model.set_step_status(PipelineStep.PREPROCESSING, StepStatus.COMPLETED)
 
     # Update parameters on ROI: does NOT immediately invalidate completed stages
-    model.update_step_params(PipelineStep.ROI, z_start=10, z_end=100)
-    assert model.get_step_params(PipelineStep.ROI) == {"z_start": 10, "z_end": 100}
+    roi = RegionOfInterest(x_min=0, x_max=1, y_min=0, y_max=1, z_min=10, z_max=100)
+    model.set_roi_params(RoiConfig().with_region(roi))
+    assert model.get_roi_params().region == roi
     assert model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
     assert model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
 
@@ -275,3 +278,83 @@ def test_pipeline_model_tracking_params_defaults_and_reset() -> None:
     model.reset_step_params(PipelineStep.TRACKING)
 
     assert model.get_step_params(PipelineStep.TRACKING) == defaults
+
+
+def test_frame_range_is_none_until_one_is_selected() -> None:
+    model = PipelineModel()
+    assert model.get_roi_params().frame_range is None
+
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+    assert model.get_roi_params().frame_range == FrameRange(2, 9)
+
+
+def test_frame_range_is_kept_in_the_params_of_the_roi_step(qtbot) -> None:
+    model = PipelineModel()
+
+    with qtbot.waitSignal(model.step_params_changed) as changed:
+        model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+
+    assert changed.args == [PipelineStep.ROI]
+    assert model.get_roi_params().frame_range == FrameRange(2, 9)
+
+
+def test_selecting_a_new_frame_range_replaces_the_old_one() -> None:
+    model = PipelineModel()
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(5, 6)))
+
+    assert model.get_roi_params().frame_range == FrameRange(5, 6)
+
+
+def test_selecting_no_frame_range_removes_it_and_keeps_the_roi(qtbot) -> None:
+    model = PipelineModel()
+    roi = RegionOfInterest(x_min=1.0, x_max=5.0, y_min=0, y_max=0, z_min=0, z_max=1)
+    model.set_roi_params(model.get_roi_params().with_region(roi))
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+
+    with qtbot.waitSignal(model.step_params_changed):
+        model.set_roi_params(model.get_roi_params().with_frame_range(None))
+
+    assert model.get_roi_params().frame_range is None
+    assert model.get_roi_params().region == roi
+
+
+def test_updating_the_roi_bounds_keeps_the_frame_range() -> None:
+    model = PipelineModel()
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+    model.set_roi_params(
+        model.get_roi_params().with_region(
+            RegionOfInterest(x_min=1.0, x_max=5.0, y_min=0, y_max=0, z_min=0, z_max=1)
+        )
+    )
+
+    assert model.get_roi_params().frame_range == FrameRange(2, 9)
+
+
+def test_resetting_the_roi_params_removes_the_frame_range() -> None:
+    model = PipelineModel()
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+
+    model.reset_step_params(PipelineStep.ROI)
+
+    assert model.get_roi_params().frame_range is None
+
+
+def test_changing_the_frame_range_of_a_completed_roi_marks_it_dirty() -> None:
+    model = PipelineModel()
+    model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
+    assert not model.is_step_dirty(PipelineStep.ROI)
+
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+
+    assert model.is_step_dirty(PipelineStep.ROI)  # the next stages must be redone on the new frames
+
+
+def test_the_same_frame_range_does_not_mark_a_completed_roi_dirty() -> None:
+    model = PipelineModel()
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+    model.set_step_status(PipelineStep.ROI, StepStatus.COMPLETED)
+
+    model.set_roi_params(model.get_roi_params().with_frame_range(FrameRange(2, 9)))
+
+    assert not model.is_step_dirty(PipelineStep.ROI)

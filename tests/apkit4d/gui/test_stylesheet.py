@@ -8,6 +8,7 @@ import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QComboBox, QLabel, QProgressBar, QPushButton, QStyledItemDelegate
 
+from apkit4d.gui.constants import names
 from apkit4d.gui.theme import tokens
 from apkit4d.gui.theme.apply import apply_theme, build_palette
 from apkit4d.gui.theme.colors import plain_button_colors
@@ -42,6 +43,17 @@ def test_drop_down_arrow_is_an_image_of_the_text_color(theme: Theme) -> None:
     arrow = Path(stylesheet.split(".QComboBox::down-arrow {")[1].split('url("')[1].split('")')[0])
     assert arrow.exists()
     assert colors.window_text in arrow.read_text(encoding="utf-8")
+
+
+@THEMES
+def test_file_drop_surface_has_a_dashed_border_and_drag_style(theme: Theme) -> None:
+    stylesheet = build_stylesheet(build_palette(THEME_COLORS[theme]), theme)
+    selector = f"QLabel#{names.CENTER_PLACEHOLDER}"
+
+    assert f"{selector} {{" in stylesheet
+    assert "border: 2px dashed" in stylesheet
+    assert f'{selector}[dragActive="true"] {{' in stylesheet
+    assert f"{selector}:hover {{" not in stylesheet
 
 
 def test_apply_theme_sets_the_stylesheet(qapp) -> None:

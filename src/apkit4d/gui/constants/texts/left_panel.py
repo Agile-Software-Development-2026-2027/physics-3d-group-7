@@ -6,8 +6,6 @@ Texts of the left column: appearance and layers.
 SECTION_APPEARANCE: str = "Appearance"
 SECTION_LAYERS: str = "Layers"
 LAYERS_EMPTY: str = "No layers yet"
-LABEL_SHOW_TRAJECTORIES: str = "Show trajectories"
-LABEL_SHOW_BLOBS: str = "Show blobs"
 BOX_TRAJECTORY_TAIL: str = "Trail length (frames)"
 TRAJECTORY_TAIL_ALL: str = "All (-1)"
 BOX_TRAJECTORY_COLOR_MODE: str = "Path color by"
@@ -37,3 +35,6 @@ BUTTON_VIS_SUB_ROI_RESET: str = "Reset Sub-ROI"
 TOOLTIP_VIS_SUB_ROI_RESET: str = "Clear the visualization sub-region without affecting pipeline results"
 STATUS_VIS_SUB_ROI_UNAVAILABLE: str = "Complete the analysis pipeline to use Visualization Sub-ROI."
 STATUS_VIS_SUB_ROI_INACTIVE: str = "No visualization sub-region selected."
+
+# i do not know where to put it, we should move it someday
+SCALAR_BAR_VELOCITY: str = "Velocity (µm/s)"

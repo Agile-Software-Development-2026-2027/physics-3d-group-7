@@ -247,12 +247,12 @@ def test_main_controller_initialization_and_theme_sync(qtbot, qapp) -> None:
     assert controller.pipeline_controller.view is window.right_panel
 
     # Toggle theme via left panel switch request
-    window.left_panel.theme_switch_requested.emit()
+    window.left_panel.appearance_section.theme_switch_requested.emit()
     assert window.right_panel.theme == controller.theme_controller.theme
     assert window.right_panel.theme == Theme.LIGHT
 
     # Toggle back to dark
-    window.left_panel.theme_switch_requested.emit()
+    window.left_panel.appearance_section.theme_switch_requested.emit()
     assert window.right_panel.theme == Theme.DARK
 
 

@@ -12,7 +12,7 @@ from typing import Any
 import click
 
 from apkit4d.batching.export import save_tracks
-from apkit4d.batching.processor import BatchResult, run_batch
+from apkit4d.batching.processor import BatchResult, run_batch, stem_of
 from apkit4d.core.models import BatchConfig, DetectionConfig, PreprocessingConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.io.saved_results import read_saved_results
@@ -38,20 +38,29 @@ def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
 
 
 @click.command(
-    help="Analyse a recording without the GUI: detect the blobs and link them into tracks. "
-    + "FILE is a .czi recording, or the json of saved results (<stem>_blobs_params.json) to link "
-    + "its blobs again. The results are written like the Batch export of the app, "
+    help="Analyse one or more CZI recordings without the GUI. Multiple recordings use shared "
+    + "parameters (or defaults) and each gets its own output folder. A single FILE may also be "
+    + "the JSON of saved results (<stem>_blobs_params.json) to link its blobs again. "
+    + "The results are written like the Batch export of the app, "
     + "so they open with `apkit4d gui <json>`."
 )
 @click.argument(
     "file",
+    nargs=-1,
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+)
+@click.option(
+    "--input-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+    help="Process all CZI recordings directly in this directory, sorted by filename. "
+    + "Use this instead of FILE arguments.",
 )
 @click.option(
     "--params",
     type=click.STRING,
     help="JSON file with the channel, preproc, blob, tracking and roi parameters, like the json of "
-    + "saved results. If omitted, saved parameters are used, or defaults if none exist.",
+    + "saved results. If omitted, multiple recordings use defaults. A single recording "
+    + "uses its saved parameters when available.",
 )
 @click.option(
     "--first-frame",
@@ -104,7 +113,8 @@ def load_saved_params(czi: pathlib.Path) -> dict[str, Any]:
     + "If omitted, the directory of the recording.",
 )
 def pipeline(
-    file: pathlib.Path,
+    file: tuple[pathlib.Path, ...],
+    input_dir: pathlib.Path | None,
     params: str | None,
     first_frame: int | None,
     last_frame: int | None,
@@ -114,6 +124,7 @@ def pipeline(
     format: str,
     out: pathlib.Path | None,
 ) -> None:
+    """Run detection and linking from the command line."""
     if workers < 1:
         raise click.BadParameter("Must be at least 1.", param_hint="--workers")
     if chunk < 1:
@@ -122,8 +133,34 @@ def pipeline(
         raise click.BadParameter("Must be non-negative.", param_hint="--first-frame")
     if last_frame is not None and last_frame < 0:
         raise click.BadParameter("Must be non-negative.", param_hint="--last-frame")
+    if input_dir is not None:
+        if file:
+            raise click.UsageError("Specify FILE arguments or --input-dir, not both.")
+        try:
+            file = tuple(
+                sorted(
+                    path for path in input_dir.iterdir() if path.suffix.lower() == ".czi" and path.is_file()
+                )
+            )
+        except OSError as exc:
+            raise click.ClickException(f"Cannot read input directory {input_dir}: {exc}") from exc
+        if not file:
+            raise click.UsageError(f"No CZI recordings found in {input_dir}.")
+    elif not file:
+        raise click.UsageError("Specify at least one FILE or use --input-dir.")
 
-    is_saved_results = file.suffix.lower() == ".json"
+    if input_dir is not None or len(file) > 1:
+        if only == "linking" or any(path.suffix.lower() != ".czi" for path in file):
+            raise click.UsageError("Multiple inputs must be CZI recordings for detection or full analysis.")
+        entry = _read_params(params) if params is not None else {}
+        if not isinstance(entry, dict):
+            raise click.ClickException("Parameters must be a JSON object.")
+        config = BatchConfig(workers=workers, chunk_size=chunk, output_format=format)
+        _process_recordings(file, entry, first_frame, last_frame, config, out, only == "detection")
+        return
+
+    recording = file[0]
+    is_saved_results = recording.suffix.lower() == ".json"
     if is_saved_results and only == "detection":
         raise click.UsageError("Detection needs the recording: give the .czi file, not the saved results.")
     if not is_saved_results and only == "linking":
@@ -132,17 +169,80 @@ def pipeline(
     if params is not None:
         entry = _read_params(params)
     else:
-        entry = {} if is_saved_results else load_saved_params(file)
+        entry = {} if is_saved_results else load_saved_params(recording)
     if not isinstance(entry, dict):
         raise click.ClickException("Parameters must be a JSON object.")
 
     if is_saved_results:
-        _link(file, entry, format)
+        _link(recording, entry, format)
         return
     config = BatchConfig(workers=workers, chunk_size=chunk, output_format=format)
-    result = _detect(file, entry, first_frame, last_frame, config, out)
+    result = _detect(recording, entry, first_frame, last_frame, config, out)
     if only != "detection":
         _link(result.params_path, entry, format)
+
+
+def _process_recordings(
+    recordings: tuple[pathlib.Path, ...],
+    entry: dict[str, Any],
+    first_frame: int | None,
+    last_frame: int | None,
+    config: BatchConfig,
+    out: pathlib.Path | None,
+    detection_only: bool,
+) -> None:
+    """Process each input independently and report failures after the batch.
+
+    Args:
+        recordings: Input CZI paths in command-line order.
+        entry: Shared parameters for all recordings.
+        first_frame: Optional first frame override, zero-based and inclusive.
+        last_frame: Optional last frame override, zero-based and inclusive.
+        config: Processing and output format settings.
+        out: Optional parent directory for recording outputs.
+        detection_only: Skip trajectory linking when true.
+
+    Raises:
+        click.ClickException: At least one recording failed.
+    """
+    failed = 0
+    for path in recordings:
+        recording = path.absolute()
+        click.echo(f"Processing: {recording}")
+        try:
+            folder = _create_output_folder(out if out is not None else recording.parent, recording)
+            result = _detect(recording, entry, first_frame, last_frame, config, folder)
+            if not detection_only:
+                _link(result.params_path, entry, config.output_format)
+        except (click.ClickException, OSError, RuntimeError, ValueError) as exc:
+            failed += 1
+            click.echo(f"Failed to process {recording}: {exc}", err=True)
+    if failed:
+        raise click.ClickException(f"Processed {len(recordings) - failed} of {len(recordings)} recordings.")
+    click.echo(f"Processed {len(recordings)} recordings.")
+
+
+def _create_output_folder(parent: pathlib.Path, recording: pathlib.Path) -> pathlib.Path:
+    """Reserve a fresh directory for one recording's results.
+
+    Args:
+        parent: Directory in which to create the result folder.
+        recording: Recording whose name supplies the folder prefix.
+
+    Returns:
+        The newly created directory.
+    """
+    name = f"{stem_of(recording)}-results"
+    folder = parent / name
+    suffix = 1
+    while True:
+        try:
+            folder.mkdir(parents=True)
+        except FileExistsError:
+            suffix += 1
+            folder = parent / f"{name}-{suffix}"
+        else:
+            return folder
 
 
 def _read_params(params: str) -> Any:
@@ -176,10 +276,10 @@ def _detect(
         if start > end:
             raise click.UsageError("--first-frame cannot be greater than --last-frame.")
 
-    preproc_entry = entry.get("preproc")
-    if preproc_entry is not None and preproc_entry.get("bg_mode", "") == "nessuno":
-        preproc_entry["bg_mode"] = "None"
     try:
+        preproc_entry = entry.get("preproc")
+        if isinstance(preproc_entry, dict) and preproc_entry.get("bg_mode") == "nessuno":
+            preproc_entry = {**preproc_entry, "bg_mode": "None"}
         preproc_params = PreprocessingConfig(**({} if preproc_entry is None else preproc_entry))
         blob_params = DetectionConfig(**(entry.get("blob") or {}))
         roi = RegionOfInterest.from_dict(entry["roi"]) if entry.get("roi") else None

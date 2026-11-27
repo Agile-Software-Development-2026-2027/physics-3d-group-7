@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -16,7 +17,6 @@ from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.debounced_slider import DebouncedSlider
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
-from apkit4d.gui.views.widgets.labeled_row import labeled_row
 from apkit4d.gui.views.widgets.v_separator import VSeparator
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
@@ -190,7 +190,10 @@ class PreprocessingInspector(AccordionSection):
     def _widgets(self):
         defaults = PreprocessingConfig()
 
-        # everybody used QFormLayout, I didn't :\
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
+        form.setSpacing(10)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         # 1. Denoising
         self.denoise_xy_box = QDoubleSpinBox()
@@ -202,8 +205,11 @@ class PreprocessingInspector(AccordionSection):
         self.denoise_xy_box.valueChanged.connect(
             lambda val: self.param_changed.emit("denoise_xy_scale_um", val)
         )
-        self.add_widget(
-            labeled_row(texts.LABEL_PREPROC_DENOISE_XY, self.denoise_xy_box, texts.PREPROC_DENOISE_XY_TOOLTIP)
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_DENOISE_XY,
+            self.denoise_xy_box,
+            texts.PREPROC_DENOISE_XY_TOOLTIP,
         )
 
         self.denoise_z_box = QDoubleSpinBox()
@@ -215,11 +221,14 @@ class PreprocessingInspector(AccordionSection):
         self.denoise_z_box.valueChanged.connect(
             lambda val: self.param_changed.emit("denoise_z_scale_um", val)
         )
-        self.add_widget(
-            labeled_row(texts.LABEL_PREPROC_DENOISE_Z, self.denoise_z_box, texts.PREPROC_DENOISE_Z_TOOLTIP)
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_DENOISE_Z,
+            self.denoise_z_box,
+            texts.PREPROC_DENOISE_Z_TOOLTIP,
         )
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         # 2. Background Removal
         self.bg_mode = QComboBox()
@@ -228,8 +237,11 @@ class PreprocessingInspector(AccordionSection):
             self.bg_mode.addItem(mode.value)
         self.bg_mode.setCurrentText(defaults.bg_mode.value)
         self.bg_mode.currentTextChanged.connect(self._on_bg_mode_changed)
-        self.add_widget(
-            labeled_row(texts.LABEL_PREPROC_BG_MODE, self.bg_mode, texts.PREPROC_DENOISE_BG_MODE_TOOLTIP)
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_BG_MODE,
+            self.bg_mode,
+            texts.PREPROC_DENOISE_BG_MODE_TOOLTIP,
         )
 
         self.bg_percentile = QDoubleSpinBox()
@@ -240,12 +252,11 @@ class PreprocessingInspector(AccordionSection):
         self.bg_percentile.setValue(defaults.bg_percentile)
         self.bg_percentile.setEnabled(defaults.bg_mode == BgMode.PERCENTILE_PER_SLICE)
         self.bg_percentile.valueChanged.connect(lambda val: self.param_changed.emit("bg_percentile", val))
-        self.add_widget(
-            labeled_row(
-                texts.LABEL_PREPROC_BG_PERCENTILE,
-                self.bg_percentile,
-                texts.PREPROC_BG_PERCENTILE_TOOLTIP,
-            )
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_BG_PERCENTILE,
+            self.bg_percentile,
+            texts.PREPROC_BG_PERCENTILE_TOOLTIP,
         )
 
         self.bg_sigma_xy_um = QDoubleSpinBox()
@@ -256,22 +267,21 @@ class PreprocessingInspector(AccordionSection):
         self.bg_sigma_xy_um.setValue(defaults.bg_sigma_xy_um)
         self.bg_sigma_xy_um.setEnabled(defaults.bg_mode == BgMode.WIDE_GAUSSIAN)
         self.bg_sigma_xy_um.valueChanged.connect(lambda val: self.param_changed.emit("bg_sigma_xy_um", val))
-        self.add_widget(
-            labeled_row(
-                texts.LABEL_PREPROC_BG_SIGMA_XY,
-                self.bg_sigma_xy_um,
-                texts.PREPROC_BG_WIDE_GAUSSIAN_TOOLTIP,
-            )
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_BG_SIGMA_XY,
+            self.bg_sigma_xy_um,
+            texts.PREPROC_BG_WIDE_GAUSSIAN_TOOLTIP,
         )
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         self.normalization_enabled = QCheckBox(texts.LABEL_PREPROC_NORMALIZATION_ENABLED)
         self.normalization_enabled.setToolTip(texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP)
         self.normalization_enabled.setChecked(defaults.normalization_enabled)
         self.normalization_enabled.setObjectName(names.PREPROC_NORMALIZATION_ENABLED_FIELD)
         self.normalization_enabled.toggled.connect(self._on_normalization_toggled)
-        self.add_widget(self.normalization_enabled)
+        form.addRow(self.normalization_enabled)
 
         # 3. Intensity Windowing
         self.lowest_instensity = QDoubleSpinBox()
@@ -284,12 +294,11 @@ class PreprocessingInspector(AccordionSection):
         self.lowest_instensity.valueChanged.connect(
             lambda val: self.param_changed.emit("lowest_intensity", val)
         )
-        self.add_widget(
-            labeled_row(
-                texts.LABEL_PREPROC_LOWEST_INTENSITY,
-                self.lowest_instensity,
-                texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP,
-            )
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_LOWEST_INTENSITY,
+            self.lowest_instensity,
+            texts.PREPROC_NORMALIZATION_TOGGLE_TOOLTIP,
         )
 
         self.highest_intensity = QDoubleSpinBox()
@@ -302,16 +311,16 @@ class PreprocessingInspector(AccordionSection):
         self.highest_intensity.valueChanged.connect(
             lambda val: self.param_changed.emit("highest_intensity", val)
         )
-        self.add_widget(labeled_row(texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity))
+        self._add_field(form, texts.LABEL_PREPROC_HIGHEST_INTENSITY, self.highest_intensity)
 
         self.suggest_window_btn = QPushButton(texts.PREPROC_SUGGEST_WINDOW)
         self.suggest_window_btn.setObjectName(names.PREPROC_SUGGEST_WINDOW)
         self.suggest_window_btn.setToolTip(texts.PREPROC_SUGGEST_WINDOW_TOOLTIP)
         self.suggest_window_btn.setEnabled(defaults.normalization_enabled)
         self.suggest_window_btn.clicked.connect(self.suggest_window_clicked.emit)
-        self.add_widget(self.suggest_window_btn)
+        form.addRow(self.suggest_window_btn)
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         # 4. Logarithmic compression
         self.logarithmic_compression_enabled = QCheckBox(texts.LABEL_PREPROC_LOG_COMPRESSION)
@@ -321,9 +330,9 @@ class PreprocessingInspector(AccordionSection):
         self.logarithmic_compression_enabled.toggled.connect(
             lambda checked: self.param_changed.emit("logarithmic_compression_enabled", checked)
         )
-        self.add_widget(self.logarithmic_compression_enabled)
+        form.addRow(self.logarithmic_compression_enabled)
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         # 5. Gamma
         gamma_container = QWidget()
@@ -347,9 +356,14 @@ class PreprocessingInspector(AccordionSection):
         gamma_layout.addWidget(self.gamma_correction_to_apply, stretch=1)
         gamma_layout.addWidget(self.gamma_value_label)
 
-        self.add_widget(labeled_row(texts.LABEL_PREPROC_GAMMA, gamma_container, texts.PREPROC_GAMMA_TOOLTIP))
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_GAMMA,
+            gamma_container,
+            texts.PREPROC_GAMMA_TOOLTIP,
+        )
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         # 6. CLAHE
         self.clahe_enabled = QCheckBox(texts.LABEL_PREPROC_CLAHE)
@@ -358,7 +372,7 @@ class PreprocessingInspector(AccordionSection):
         self.clahe_enabled.setChecked(defaults.clahe_enabled)
         self.clahe_enabled.toggled.connect(self._on_clahe_toggled)
         self.clahe_enabled.setEnabled(defaults.normalization_enabled)
-        self.add_widget(self.clahe_enabled)
+        form.addRow(self.clahe_enabled)
 
         self.clahe_clip = QDoubleSpinBox()
         self.clahe_clip.setObjectName(names.PREPROC_CLAHE_CLIP_FIELD)
@@ -368,8 +382,11 @@ class PreprocessingInspector(AccordionSection):
         self.clahe_clip.setValue(defaults.clahe_clip)
         self.clahe_clip.setEnabled(defaults.clahe_enabled)
         self.clahe_clip.valueChanged.connect(lambda val: self.param_changed.emit("clahe_clip", val))
-        self.add_widget(
-            labeled_row(texts.LABEL_PREPROC_CLAHE_CLIP, self.clahe_clip, texts.PREPROC_CLAHE_CLIP_TOOLTIP)
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_CLAHE_CLIP,
+            self.clahe_clip,
+            texts.PREPROC_CLAHE_CLIP_TOOLTIP,
         )
 
         self.clahe_kernel_xy_um = QDoubleSpinBox()
@@ -382,20 +399,34 @@ class PreprocessingInspector(AccordionSection):
         self.clahe_kernel_xy_um.valueChanged.connect(
             lambda val: self.param_changed.emit("clahe_kernel_xy_um", val)
         )
-        self.add_widget(
-            labeled_row(
-                texts.LABEL_PREPROC_CLAHE_KERNEL_XY,
-                self.clahe_kernel_xy_um,
-                texts.PREPROC_CLAHE_KERNEL_TOOLTIP,
-            )
+        self._add_field(
+            form,
+            texts.LABEL_PREPROC_CLAHE_KERNEL_XY,
+            self.clahe_kernel_xy_um,
+            texts.PREPROC_CLAHE_KERNEL_TOOLTIP,
         )
 
-        self.add_widget(VSeparator())
+        form.addRow(VSeparator())
 
         self.reset_btn = QPushButton(texts.PREPROC_RESET)
         self.reset_btn.setObjectName(names.PREPROC_RESET)
         self.reset_btn.clicked.connect(lambda: self._on_reset(defaults))
-        self.add_widget(self.reset_btn)
+        form.addRow(self.reset_btn)
+
+        self.add_widget(form_widget)
+
+    @staticmethod
+    def _add_field(
+        form: QFormLayout,
+        label_text: str,
+        widget: QWidget,
+        tooltip: str | None = None,
+    ) -> None:
+        label = QLabel(label_text)
+        if tooltip:
+            label.setToolTip(tooltip)
+            widget.setToolTip(tooltip)
+        form.addRow(label, widget)
 
     def _on_reset(self, defaults: PreprocessingConfig):
         self.set_preproc_params(defaults)

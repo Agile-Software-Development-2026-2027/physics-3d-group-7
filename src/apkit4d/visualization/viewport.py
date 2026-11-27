@@ -1,6 +1,6 @@
 import time
 from enum import Enum, auto
-from typing import override
+from typing import Any, override
 
 import numpy as np
 import pyvista as pv
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 from vtkmodules.vtkCommonCore import vtkCommand
 from vtkmodules.vtkInteractionWidgets import vtkBoxRepresentation, vtkBoxWidget2
+from vtkmodules.vtkRenderingCore import vtkPolyDataMapper
 
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.visualization.fps_counter import FpsCounter
@@ -55,8 +56,11 @@ DEFAULT_VOLUME_OPACITY = 1.0
 DEFAULT_BACKGROUND = "gray"
 DEFAULT_OUTLINE_COLOR = "white"
 DEFAULT_TEXT_COLOR = "black"
+VIS_SUB_ROI_PREVIEW_COLOR = "#f59e0b"
 
 TRANSLATION_TOLERANCE = 1e-5  # tolerance for translation in ROI editing
+
+DEFAULT_VELOCITY_SCALAR_BAR_TITLE = "Velocity (µm/s)"
 
 
 class RoiMode(Enum):
@@ -66,12 +70,30 @@ class RoiMode(Enum):
     EDITING = auto()
 
 
+class VisSubRoiMode(Enum):
+    INACTIVE = auto()
+    WAITING_FIRST_POINT = auto()
+    DRAGGING = auto()
+    EDITING = auto()
+
+
+class ScalarBarMode(Enum):
+    VOLUME = auto()
+    VELOCITY = auto()
+
+
 class Viewport(QWidget):
     # signals emitted in the Roi selection
     roi_selection_started = Signal()
     roi_updated = Signal(object)
     roi_accepted = Signal(object)
     roi_cancelled = Signal()
+
+    # signals emitted for displayed volume bounds and Visualization Sub-ROI interaction
+    displayed_volume_bounds_updated = Signal(object)
+    vis_sub_roi_selection_started = Signal()
+    vis_sub_roi_bounds_changed = Signal(object)
+    vis_sub_roi_interaction_ended = Signal()
 
     """ 
         the idea is to use a GLSL shader, that is if you do not know a small program run on GPU
@@ -114,6 +136,11 @@ class Viewport(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         self._volume_grid: pv.ImageData | None = None
+        self._volume_visible: bool = True
+
+        """Strong Python reference to the volume mapper so that PyVista does not delete '_lut' 
+        (which is the lookup table) after removing the `"values"` scalar bar or replacing 'plotter.mapper'"""
+        self._volume_mapper: Any = None
 
         self._blobs_poly: pv.PolyData | None = None
         self._blobs_visible: bool = True
@@ -169,12 +196,28 @@ class Viewport(QWidget):
         # opacity unit distance that PyVista gives to the volume, set_volume_opacity scales it
         self._base_opacity_unit_distance: float = 1.0
 
+        # scalar bar state: switches from volume intensities ("values") to trajectory velocity
+        self._scalar_bar_mode: ScalarBarMode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title: str | None = None
+        self._velocity_lut: pv.LookupTable | None = None
+        self._velocity_bar_mapper: vtkPolyDataMapper | None = None
+
         # visualization-only Sub-ROI state (does not modify volume data or DATA ROI)
         self._vis_sub_roi_state: VisSubRoiState = VisSubRoiState(
             enabled=False,
             bounds=None,
             outside_opacity=DEFAULT_OUTSIDE_OPACITY,
         )
+
+        # separate interaction state and 3D box widget for Visualization Sub-ROI
+        self._vis_sub_roi_mode: VisSubRoiMode = VisSubRoiMode.INACTIVE
+        self._vis_sub_roi_start_point: Vec3D | None = None
+        self._vis_sub_roi_drag_bounds: Bounds6D | None = None
+        self._vis_sub_roi_box_poly: pv.PolyData | None = None
+        self._vis_sub_roi_box_rep: vtkBoxRepresentation | None = None
+        self._vis_sub_roi_box_widget: vtkBoxWidget2 | None = None
+        self._vis_sub_roi_widget_bounds: Bounds6D | None = None
+        self._vis_sub_roi_virtual_bounds: Bounds6D | None = None
 
         # they are used in the zoom acceleration function
         self.last_zoom_time: float = 0.0
@@ -319,15 +362,25 @@ class Viewport(QWidget):
             self._volume_grid.point_data.Modified()
             self._volume_grid.Modified()
 
-            # Aggiorna il range min, max della colormap/opacità e della scalar bar
+            # update the scalar range of the volume mapper and the volume scalar bar,
+            # so that the colors are correct
             vmin, vmax = float(np.min(values)), float(np.max(values))
-            self.plotter.actors["volume"].mapper.scalar_range = (vmin, vmax)
-            self.plotter.update_scalar_bar_range((vmin, vmax))
+            vol_mapper = self._volume_mapper or self.plotter.actors["volume"].mapper
+            vol_mapper.scalar_range = (vmin, vmax)
+            if self._scalar_bar_mode == ScalarBarMode.VOLUME and "values" in self.plotter.scalar_bars:
+                self.plotter.update_scalar_bar_range((vmin, vmax), name="values")
+
+            # if is none we set it to the bounds of the volume
+            # so that we can use it to clamp the sub-ROI bounds
+            # in the shader and in the box widget
+            if self.volume_bounds is None:
+                self.volume_bounds = self._volume_grid.bounds
 
             if reset_camera:
                 self.plotter.camera_position = self._initial_camera_position
                 self.plotter.renderer.reset_camera(render=False)
             self._request_render()
+            self.displayed_volume_bounds_updated.emit(self.volume_bounds)
             return
 
         self._volume_grid = grid.copy()
@@ -342,8 +395,14 @@ class Viewport(QWidget):
             name="volume",
             mapper="gpu",
             render=False,
+            show_scalar_bar=(self._scalar_bar_mode == ScalarBarMode.VOLUME),
             scalar_bar_args={"render": False},
         )
+        actor.SetVisibility(self._volume_visible)
+
+        # Keep a strong Python reference so PyVista's _BaseVolumeMapper.__del__ does not delete _lut
+        # when the "values" scalar bar is removed or another actor replaces plotter.mapper.
+        self._volume_mapper = actor.mapper
 
         # the gpu mapper lets us draw the moving frames at a lower resolution (see _set_volume_quality),
         # the smart one (PyVista's default) does not. with the sample distance taken from the voxel
@@ -375,6 +434,19 @@ class Viewport(QWidget):
         self._sync_blobs_sub_roi()
         self._sync_trajectories_sub_roi()
 
+        # Keep an already-visible VIS_SUB_ROI box clamped inside the newly displayed grid bounds.
+        if (
+            self._vis_sub_roi_mode == VisSubRoiMode.EDITING
+            and self._vis_sub_roi_state.bounds is not None
+            and self.volume_bounds is not None
+        ):
+            clamped = RegionOfInterest.from_bounds(
+                self._vis_sub_roi_state.bounds,
+                volume_bounds=self.volume_bounds,
+            ).bounds
+            self._update_vis_sub_roi_preview_box(clamped)
+            self._enable_vis_sub_roi_box_widget(clamped)
+
         # i think setting max and min zoom only the first time we show the volume or when we reset
         # should work, that kinda depends on how we are going to handle future ROIs
         if self.max_zoom_dist == float("inf") or reset_camera:
@@ -390,6 +462,15 @@ class Viewport(QWidget):
             self.plotter.renderer.reset_camera(render=False)
 
         self._request_render()
+        self.displayed_volume_bounds_updated.emit(self.volume_bounds)
+
+    def set_volume_visible(self, visible: bool) -> None:
+        """Show or hide the volume without discarding its current data."""
+        self._volume_visible = bool(visible)
+        actor = self.plotter.actors.get("volume")
+        if actor is not None:
+            actor.SetVisibility(self._volume_visible)
+            self._request_render()
 
     def set_colormap(self, name: str) -> None:
         """
@@ -413,7 +494,8 @@ class Viewport(QWidget):
         actor = self.plotter.actors.get("volume")
         if actor is not None:
             # the lookup table builds the new colors and keeps the opacity it already has
-            actor.mapper.lookup_table.cmap = name
+            vol_mapper = self._volume_mapper or actor.mapper
+            vol_mapper.lookup_table.cmap = name
             self._request_render()
 
     def set_volume_opacity(self, opacity: float) -> None:
@@ -483,6 +565,87 @@ class Viewport(QWidget):
         self._paint_text()
         self._request_render()
 
+    @property
+    def scalar_bar_mode(self) -> ScalarBarMode:
+        """Whether the viewport scalar bar currently represents volume intensities or velocity."""
+        return self._scalar_bar_mode
+
+    def show_velocity_scalar_bar(
+        self,
+        vmin: float,
+        vmax: float,
+        colormap: str,
+        *,
+        visible: bool = True,
+        title: str = DEFAULT_VELOCITY_SCALAR_BAR_TITLE,
+    ) -> None:
+        """Switch the viewport scalar bar to trajectory velocity with an independent lookup table."""
+        cmap = colormap if colormap in colormaps else "turbo"
+        lo = float(vmin) if np.isfinite(vmin) else 0.0
+        hi = float(vmax) if np.isfinite(vmax) and vmax > lo else lo + 1.0
+
+        # the lookup table is used to color the scalar bar and the trajectories, so we keep it here
+        lut = pv.LookupTable(cmap=cmap)
+        lut.scalar_range = (lo, hi)
+
+        if self._velocity_bar_mapper is None:
+            self._velocity_bar_mapper = vtkPolyDataMapper()
+        # use the mapper to set the lookup table and the scalar range for the scalar bar
+        self._velocity_bar_mapper.SetLookupTable(lut)
+        self._velocity_bar_mapper.SetScalarRange(lo, hi)
+
+        if "values" in self.plotter.scalar_bars:
+            self.plotter.remove_scalar_bar("values", render=False)
+
+        if (
+            self._velocity_scalar_bar_title is not None
+            and self._velocity_scalar_bar_title != title
+            and self._velocity_scalar_bar_title in self.plotter.scalar_bars
+        ):
+            self.plotter.remove_scalar_bar(self._velocity_scalar_bar_title, render=False)
+
+        if title in self.plotter.scalar_bars:
+            self.plotter.scalar_bars[title].SetLookupTable(lut)
+        else:
+            self.plotter.add_scalar_bar(
+                title=title, mapper=self._velocity_bar_mapper, fmt="%.1f", render=False
+            )
+
+        self._scalar_bar_mode = ScalarBarMode.VELOCITY
+        self._velocity_scalar_bar_title = title
+        self._velocity_lut = lut
+        self.plotter.scalar_bars[title].SetVisibility(bool(visible))
+        self._paint_text()
+        self._request_render()
+
+    def restore_volume_scalar_bar(self) -> None:
+        """Remove the velocity scalar bar and restore the volume intensity ('values') scalar bar."""
+        vol_actor = self.plotter.actors.get("volume")
+        had_velocity_bar = (
+            self._velocity_scalar_bar_title is not None
+            and self._velocity_scalar_bar_title in self.plotter.scalar_bars
+        )
+        if (
+            self._scalar_bar_mode == ScalarBarMode.VOLUME
+            and not had_velocity_bar
+            and (vol_actor is None or "values" in self.plotter.scalar_bars)
+        ):
+            return
+
+        if had_velocity_bar and self._velocity_scalar_bar_title is not None:
+            self.plotter.remove_scalar_bar(self._velocity_scalar_bar_title, render=False)
+
+        self._scalar_bar_mode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title = None
+        self._velocity_lut = None
+
+        if vol_actor is not None and "values" not in self.plotter.scalar_bars:
+            vol_mapper = self._volume_mapper or vol_actor.mapper
+            self.plotter.add_scalar_bar(title="values", mapper=vol_mapper, fmt="%.1f", render=False)
+            self._paint_text()
+
+        self._request_render()
+
     def _apply_volume_opacity(self, actor: pv.Actor) -> None:
         """
         This function gives the volume the opacity chosen by the user.
@@ -504,6 +667,19 @@ class Viewport(QWidget):
     def vis_sub_roi_state(self) -> VisSubRoiState:
         """Current visualization-only Sub-ROI state for the volume actor."""
         return self._vis_sub_roi_state
+
+    @property
+    def vis_sub_roi_mode(self) -> VisSubRoiMode:
+        """Current interactive selection/editing mode for the Visualization Sub-ROI."""
+        return self._vis_sub_roi_mode
+
+    @property
+    def vis_sub_roi_box_visible(self) -> bool:
+        """Whether the Visualization Sub-ROI 3D wireframe or box handles are currently visible."""
+        widget_enabled = (
+            self._vis_sub_roi_box_widget is not None and self._vis_sub_roi_box_widget.GetEnabled() != 0
+        )
+        return "vis_sub_roi_preview" in self.plotter.actors or widget_enabled
 
     def _configure_volume_sub_roi_shader(self, actor: pv.Actor) -> None:
         """Attach the code GLSL we wrote to the shader"""
@@ -576,14 +752,19 @@ class Viewport(QWidget):
             return self._vis_sub_roi_state.with_clamped_bounds(self._volume_grid.bounds)
         return self._vis_sub_roi_state
 
-    def set_vis_sub_roi_state(self, state: VisSubRoiState) -> None:
-        """Apply a `VisSubRoiState` across volume, blobs, and trajectories without mutating data."""
+    def _apply_vis_sub_roi_state(self, state: VisSubRoiState) -> VisSubRoiState:
+        """Update `_vis_sub_roi_state` and sync volume, blobs, and trajectories without rendering."""
         grid_bounds = self._volume_grid.bounds if self._volume_grid is not None else None
         clamped = state.with_clamped_bounds(grid_bounds) if grid_bounds is not None else state
         self._vis_sub_roi_state = clamped
         self._sync_volume_sub_roi_uniforms()
         self._sync_blobs_sub_roi()
         self._sync_trajectories_sub_roi()
+        return clamped
+
+    def set_vis_sub_roi_state(self, state: VisSubRoiState) -> None:
+        """Apply a `VisSubRoiState` across volume, blobs, and trajectories without mutating data."""
+        self._apply_vis_sub_roi_state(state)
         self._request_render()
 
     def set_vis_sub_roi_enabled(self, enabled: bool) -> None:
@@ -618,6 +799,7 @@ class Viewport(QWidget):
 
     def clear_vis_sub_roi(self) -> None:
         """Clear Sub-ROI bounds and disable attenuation while preserving `outside_opacity`."""
+        self.stop_vis_sub_roi_interaction()
         self.set_vis_sub_roi_state(
             VisSubRoiState(
                 enabled=False,
@@ -625,6 +807,321 @@ class Viewport(QWidget):
                 outside_opacity=self._vis_sub_roi_state.outside_opacity,
             )
         )
+
+    def reset_vis_sub_roi_state(self) -> None:
+        """Stop VIS_SUB_ROI interaction and reset state to defaults (including outside opacity)."""
+        self.stop_vis_sub_roi_interaction()
+        self.set_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=False,
+                bounds=None,
+                outside_opacity=DEFAULT_OUTSIDE_OPACITY,
+            )
+        )
+
+    # Visualization Sub-ROI interactive 3D selection and box handle methods
+    # mirrored from ROI selection
+
+    def start_vis_sub_roi_selection(self) -> None:
+        """Enter click-and-drag selection mode for the Visualization Sub-ROI.
+
+        Does nothing if no volume is currently displayed. If a DATA_ROI interaction is still
+        active on the viewport, cancels it defensively so the two modes never overlap.
+        """
+        if self.volume_bounds is None:
+            return
+
+        if self._roi_mode != RoiMode.INACTIVE:
+            self.cancel_roi_selection()
+
+        self._disable_vis_sub_roi_box_widget()
+        self._remove_vis_sub_roi_preview_actor()
+        self._vis_sub_roi_start_point = None
+        self._vis_sub_roi_drag_bounds = None
+        self._vis_sub_roi_mode = VisSubRoiMode.WAITING_FIRST_POINT
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self._request_render()
+        self.vis_sub_roi_selection_started.emit()
+
+    def stop_vis_sub_roi_interaction(self) -> None:
+        """Exit VIS_SUB_ROI 3D selection/editing and hide its wireframe and handles.
+
+        Preserves `_vis_sub_roi_state` (enabled flag, bounds, and outside opacity).
+        """
+        was_waiting_or_dragging = self._vis_sub_roi_mode in (
+            VisSubRoiMode.WAITING_FIRST_POINT,
+            VisSubRoiMode.DRAGGING,
+        )
+        had_interaction = self._vis_sub_roi_mode != VisSubRoiMode.INACTIVE or self.vis_sub_roi_box_visible
+
+        self._vis_sub_roi_mode = VisSubRoiMode.INACTIVE
+        self._vis_sub_roi_start_point = None
+        self._vis_sub_roi_drag_bounds = None
+        self._disable_vis_sub_roi_box_widget()
+        self._remove_vis_sub_roi_preview_actor()
+
+        if was_waiting_or_dragging and self._roi_mode == RoiMode.INACTIVE:
+            self.unsetCursor()
+
+        if had_interaction:
+            self._full_quality_timer.stop()
+            self._request_full_quality_render()
+            self.vis_sub_roi_interaction_ended.emit()
+
+    def show_vis_sub_roi_box(self, bounds: Bounds6D | None = None) -> None:
+        """Display the VIS_SUB_ROI 3D wireframe and editing handles without altering effect state.
+
+        Does nothing if no volume is displayed, no bounds are available, or DATA_ROI is active.
+        """
+        target_bounds = bounds if bounds is not None else self._vis_sub_roi_state.bounds
+        if self.volume_bounds is None or target_bounds is None or self._roi_mode != RoiMode.INACTIVE:
+            return
+
+        clamped_bounds = RegionOfInterest.from_bounds(
+            target_bounds,
+            volume_bounds=self.volume_bounds,
+        ).bounds
+        self._vis_sub_roi_start_point = None
+        self._vis_sub_roi_drag_bounds = None
+        self._vis_sub_roi_mode = VisSubRoiMode.EDITING
+        self.unsetCursor()
+        self._update_vis_sub_roi_preview_box(clamped_bounds)
+        self._enable_vis_sub_roi_box_widget(clamped_bounds)
+        self._request_full_quality_render()
+
+    def set_vis_sub_roi_box_visible(self, visible: bool, bounds: Bounds6D | None = None) -> None:
+        """Show or hide the VIS_SUB_ROI 3D editing box independently of visualization state."""
+        if visible:
+            self.show_vis_sub_roi_box(bounds)
+        else:
+            self.stop_vis_sub_roi_interaction()
+
+    def _remove_vis_sub_roi_preview_actor(self) -> None:
+        """Remove the Visualization Sub-ROI wireframe actor from the plotter if it exists."""
+        if "vis_sub_roi_preview" in self.plotter.actors:
+            self.plotter.remove_actor("vis_sub_roi_preview", render=False)
+        self._vis_sub_roi_box_poly = None
+
+    def _update_vis_sub_roi_preview_box(self, bounds: Bounds6D) -> None:
+        """Create or update in-place the Visualization Sub-ROI 3D wireframe box."""
+        box_edges = pv.Box(bounds=bounds).extract_all_edges()
+
+        if self._vis_sub_roi_box_poly is not None and "vis_sub_roi_preview" in self.plotter.actors:
+            self._vis_sub_roi_box_poly.shallow_copy(box_edges)
+            self._vis_sub_roi_box_poly.Modified()
+            return
+
+        self._vis_sub_roi_box_poly = pv.PolyData(box_edges)
+        self.plotter.add_mesh(
+            self._vis_sub_roi_box_poly,
+            color=VIS_SUB_ROI_PREVIEW_COLOR,
+            line_width=2.5,
+            name="vis_sub_roi_preview",
+            render=False,
+        )
+
+    def _ensure_vis_sub_roi_box_widget(self) -> None:
+        """Lazily create a dedicated axis-aligned VTK box widget for Visualization Sub-ROI."""
+        if self._vis_sub_roi_box_widget is not None and self._vis_sub_roi_box_rep is not None:
+            return
+
+        iren = self.plotter.iren.interactor
+        if iren is None:
+            return
+
+        rep = vtkBoxRepresentation()
+        rep.SetPlaceFactor(1.0)
+        rep.InsideOutOn()
+        rep.SetHandleSize(14.0)
+        rep.GetOutlineProperty().SetColor(*pv.Color(VIS_SUB_ROI_PREVIEW_COLOR).float_rgb)
+
+        widget = vtkBoxWidget2()
+        widget.SetInteractor(iren)
+        widget.SetRepresentation(rep)
+        widget.SetRotationEnabled(False)
+
+        widget.AddObserver(vtkCommand.StartInteractionEvent, self._on_vis_sub_roi_box_start_interaction)
+        widget.AddObserver(vtkCommand.InteractionEvent, self._on_vis_sub_roi_box_interaction)
+        widget.AddObserver(vtkCommand.EndInteractionEvent, self._on_vis_sub_roi_box_end_interaction)
+
+        self._vis_sub_roi_box_rep = rep
+        self._vis_sub_roi_box_widget = widget
+
+    def _enable_vis_sub_roi_box_widget(self, bounds: Bounds6D) -> None:
+        """Place the VIS_SUB_ROI box widget on `bounds` and enable handle interaction."""
+        self._ensure_vis_sub_roi_box_widget()
+        rep = self._vis_sub_roi_box_rep
+        if rep is None or self._vis_sub_roi_box_widget is None:
+            return
+
+        rep.PlaceWidget(list(bounds))
+        self._vis_sub_roi_box_widget.On()
+        self._vis_sub_roi_virtual_bounds = None
+        self._vis_sub_roi_widget_bounds = self._read_widget_bounds(rep)
+
+    def _disable_vis_sub_roi_box_widget(self) -> None:
+        """Turn off the VIS_SUB_ROI box widget handles if active."""
+        if self._vis_sub_roi_box_widget is not None:
+            self._vis_sub_roi_box_widget.Off()
+
+        self._vis_sub_roi_virtual_bounds = None
+        self._vis_sub_roi_widget_bounds = None
+
+    # Sub-ROI selection and editing mouse event handlers
+
+    def _on_vis_sub_roi_left_button_press(self) -> None:
+        self._stop_wheel_event(self._left_press_tag)
+
+        hit = self.pick_volume_bounds_point(clamp_if_outside=False)
+        if hit is None:
+            return
+
+        self._vis_sub_roi_start_point = hit
+        self._vis_sub_roi_drag_bounds = None
+        self._vis_sub_roi_mode = VisSubRoiMode.DRAGGING
+
+    def _on_vis_sub_roi_mouse_move(self) -> None:
+        if self._vis_sub_roi_start_point is None or self.volume_bounds is None:
+            return
+
+        self._stop_wheel_event(self._mouse_move_tag)
+
+        second_point = self.pick_volume_bounds_point(clamp_if_outside=True)
+        if second_point is None:
+            return
+
+        view_dir = self._get_camera_view_direction()
+        drag_bounds = RegionOfInterest.from_points(
+            self._vis_sub_roi_start_point,
+            second_point,
+            volume_bounds=self.volume_bounds,
+            view_direction=view_dir,
+        ).bounds
+
+        applied = self._apply_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=True,
+                bounds=drag_bounds,
+                outside_opacity=self._vis_sub_roi_state.outside_opacity,
+            )
+        )
+        assert applied.bounds is not None
+        self._vis_sub_roi_drag_bounds = applied.bounds
+        self._update_vis_sub_roi_preview_box(applied.bounds)
+        self._request_moving_render()
+        self.vis_sub_roi_bounds_changed.emit(applied.bounds)
+
+    def _on_vis_sub_roi_left_button_release(self) -> None:
+        self._stop_wheel_event(self._left_release_tag)
+
+        if (
+            self._vis_sub_roi_drag_bounds is None
+            and self._vis_sub_roi_start_point is not None
+            and self.volume_bounds is not None
+        ):
+            view_dir = self._get_camera_view_direction()
+            click_bounds = RegionOfInterest.from_points(
+                self._vis_sub_roi_start_point,
+                self._vis_sub_roi_start_point,
+                volume_bounds=self.volume_bounds,
+                view_direction=view_dir,
+            ).bounds
+            applied = self._apply_vis_sub_roi_state(
+                VisSubRoiState(
+                    enabled=True,
+                    bounds=click_bounds,
+                    outside_opacity=self._vis_sub_roi_state.outside_opacity,
+                )
+            )
+            assert applied.bounds is not None
+            self._vis_sub_roi_drag_bounds = applied.bounds
+            self._update_vis_sub_roi_preview_box(applied.bounds)
+
+        final_bounds = self._vis_sub_roi_drag_bounds
+        self._vis_sub_roi_start_point = None
+        self._vis_sub_roi_drag_bounds = None
+
+        if final_bounds is not None:
+            self._enable_vis_sub_roi_box_widget(final_bounds)
+            self._vis_sub_roi_mode = VisSubRoiMode.EDITING
+        else:
+            self._vis_sub_roi_mode = VisSubRoiMode.INACTIVE
+
+        self.unsetCursor()
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
+        if final_bounds is not None:
+            self.vis_sub_roi_bounds_changed.emit(final_bounds)
+
+    def _on_vis_sub_roi_box_start_interaction(self, _obj: object, _event: str) -> None:
+        self._vis_sub_roi_virtual_bounds = None
+
+    def _on_vis_sub_roi_box_interaction(self, _obj: object, _event: str) -> None:
+        if (
+            self._vis_sub_roi_mode != VisSubRoiMode.EDITING
+            or self._roi_mode != RoiMode.INACTIVE
+            or self._vis_sub_roi_box_rep is None
+            or self.volume_bounds is None
+        ):
+            return
+
+        rep = self._vis_sub_roi_box_rep
+        volume = self.volume_bounds
+
+        new_bounds = self._read_widget_bounds(rep)
+        previous_bounds = self._vis_sub_roi_widget_bounds or self._vis_sub_roi_state.bounds or new_bounds
+        virtual_prev = self._vis_sub_roi_virtual_bounds or previous_bounds
+
+        movement = np.subtract(new_bounds, previous_bounds)
+        virtual_arr = np.add(virtual_prev, movement)
+        virtual: Bounds6D = (
+            float(virtual_arr[0]),
+            float(virtual_arr[1]),
+            float(virtual_arr[2]),
+            float(virtual_arr[3]),
+            float(virtual_arr[4]),
+            float(virtual_arr[5]),
+        )
+
+        biggest_side = max(volume[1] - volume[0], volume[3] - volume[2], volume[5] - volume[4])
+        tol = TRANSLATION_TOLERANCE * biggest_side
+
+        if self._is_pure_translation(new_bounds, previous_bounds, tol):
+            size = (
+                previous_bounds[1] - previous_bounds[0],
+                previous_bounds[3] - previous_bounds[2],
+                previous_bounds[5] - previous_bounds[4],
+            )
+            shown = self._slide_inside_volume(virtual, size, volume)
+        else:
+            shown = virtual
+
+        self._vis_sub_roi_virtual_bounds = virtual
+        clamped_bounds = RegionOfInterest.from_bounds(shown, volume_bounds=volume).bounds
+
+        rep.PlaceWidget(list(clamped_bounds))
+        self._vis_sub_roi_widget_bounds = self._read_widget_bounds(rep)
+
+        applied = self._apply_vis_sub_roi_state(
+            VisSubRoiState(
+                enabled=self._vis_sub_roi_state.enabled,
+                bounds=clamped_bounds,
+                outside_opacity=self._vis_sub_roi_state.outside_opacity,
+            )
+        )
+        assert applied.bounds is not None
+        self._update_vis_sub_roi_preview_box(applied.bounds)
+        self._request_moving_render()
+        self.vis_sub_roi_bounds_changed.emit(applied.bounds)
+
+    def _on_vis_sub_roi_box_end_interaction(self, _obj: object, _event: str) -> None:
+        self._vis_sub_roi_virtual_bounds = None
+
+        if self._vis_sub_roi_mode != VisSubRoiMode.EDITING:
+            return
+
+        self._full_quality_timer.stop()
+        self._request_full_quality_render()
 
     def _paint_text(self) -> None:
         """
@@ -801,6 +1298,7 @@ class Viewport(QWidget):
             None
         """
         self._volume_grid = None
+        self._volume_mapper = None
         self._blobs_source_poly = None
         self._trajectories_source_poly = None
         self._blobs_poly = None
@@ -815,6 +1313,11 @@ class Viewport(QWidget):
             outside_opacity=DEFAULT_OUTSIDE_OPACITY,
         )
         self._disable_roi_box_widget()
+        self._disable_vis_sub_roi_box_widget()
+        self._scalar_bar_mode = ScalarBarMode.VOLUME
+        self._velocity_scalar_bar_title = None
+        self._velocity_lut = None
+        self._velocity_bar_mapper = None
         self.plotter.clear()
         # the reset_camera of the renderer as in show_volume, so the view is drawn only once, below
         self.plotter.renderer.reset_camera(render=False)
@@ -829,6 +1332,12 @@ class Viewport(QWidget):
         self._roi_start_point = None
         self._current_roi = None
         self._roi_box_poly = None
+
+        # clear the Visualization Sub-ROI interaction state
+        self._vis_sub_roi_mode = VisSubRoiMode.INACTIVE
+        self._vis_sub_roi_start_point = None
+        self._vis_sub_roi_drag_bounds = None
+        self._vis_sub_roi_box_poly = None
         self.unsetCursor()
 
     def clamp_point_to_bounds(self, point: Vec3D, bounds: Bounds6D | None) -> Vec3D:
@@ -1489,6 +1998,7 @@ class Viewport(QWidget):
         if self.volume_bounds is None:
             return
 
+        self.stop_vis_sub_roi_interaction()
         self._disable_roi_box_widget()
         self._remove_roi_preview_actor()
         self._roi_start_point = None
@@ -1571,23 +2081,25 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != RoiMode.WAITING_FIRST_POINT:
+        if self._roi_mode == RoiMode.WAITING_FIRST_POINT:
+            # just for comodity, i use stop_wheel_event here and in the func below,
+            # to abort the default vtk event, we could refactor the func and make it more generic
+            # but it is not a big deal for now
+            self._stop_wheel_event(self._left_press_tag)
+
+            # we pick the 3D point on the volume bounds under the cursor, without clamping it
+            # if the user clicks outside the volume, we don't start the ROI selection as i said
+            # in the function pick_volume_bounds_point
+            hit = self.pick_volume_bounds_point(clamp_if_outside=False)
+            if hit is None:
+                return
+
+            self._roi_start_point = hit
+            self._roi_mode = RoiMode.DRAGGING
             return
 
-        # just for comodity, i use stop_wheel_event here and in the func below,
-        # to abort the default vtk event, we could refactor the func and make it more generic
-        # but it is not a big deal for now
-        self._stop_wheel_event(self._left_press_tag)
-
-        # we pick the 3D point on the volume bounds under the cursor, without clamping it
-        # if the user clicks outside the volume, we don't start the ROI selection as i said
-        # in the function pick_volume_bounds_point
-        hit = self.pick_volume_bounds_point(clamp_if_outside=False)
-        if hit is None:
-            return
-
-        self._roi_start_point = hit
-        self._roi_mode = RoiMode.DRAGGING
+        if self._roi_mode == RoiMode.INACTIVE and self._vis_sub_roi_mode == VisSubRoiMode.WAITING_FIRST_POINT:
+            self._on_vis_sub_roi_left_button_press()
 
     def _on_mouse_move(self, _obj: object, _event: str) -> None:
         """
@@ -1601,27 +2113,32 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != RoiMode.DRAGGING or self._roi_start_point is None or self.volume_bounds is None:
+        if self._roi_mode == RoiMode.DRAGGING:
+            if self._roi_start_point is None or self.volume_bounds is None:
+                return
+
+            self._stop_wheel_event(self._mouse_move_tag)
+
+            # we pick the 3D point on the volume bounds under the cursor, clamping it if it's outside
+            second_point = self.pick_volume_bounds_point(clamp_if_outside=True)
+            if second_point is None:
+                return
+
+            # we construct the ROI with the two points and the current view direction
+            view_dir = self._get_camera_view_direction()
+            self._current_roi = RegionOfInterest.from_points(
+                self._roi_start_point,
+                second_point,
+                volume_bounds=self.volume_bounds,
+                view_direction=view_dir,
+            )
+            self._update_roi_preview_box(self._current_roi.bounds)
+            self._request_moving_render()
+            self.roi_updated.emit(self._current_roi)
             return
 
-        self._stop_wheel_event(self._mouse_move_tag)
-
-        # we pick the 3D point on the volume bounds under the cursor, clamping it if it's outside
-        second_point = self.pick_volume_bounds_point(clamp_if_outside=True)
-        if second_point is None:
-            return
-
-        # we construct the ROI with the two points and the current view direction
-        view_dir = self._get_camera_view_direction()
-        self._current_roi = RegionOfInterest.from_points(
-            self._roi_start_point,
-            second_point,
-            volume_bounds=self.volume_bounds,
-            view_direction=view_dir,
-        )
-        self._update_roi_preview_box(self._current_roi.bounds)
-        self._request_moving_render()
-        self.roi_updated.emit(self._current_roi)
+        if self._roi_mode == RoiMode.INACTIVE and self._vis_sub_roi_mode == VisSubRoiMode.DRAGGING:
+            self._on_vis_sub_roi_mouse_move()
 
     def _on_left_button_release(self, _obj: object, _event: str) -> None:
         """
@@ -1635,31 +2152,37 @@ class Viewport(QWidget):
         Returns:
             None
         """
-        if self._roi_mode != RoiMode.DRAGGING:
+        if self._roi_mode == RoiMode.DRAGGING:
+            self._stop_wheel_event(self._left_release_tag)
+
+            # if the user did not move the mouse, we still create a valid initial ROI around the clicked point
+            # we are covered by the min size of the ROI, so we don't need to worry about it being too small
+            # the user could restart the selection it is his fault don't blame me for that
+            if (
+                self._current_roi is None
+                and self._roi_start_point is not None
+                and self.volume_bounds is not None
+            ):
+                view_dir = self._get_camera_view_direction()
+                self._current_roi = RegionOfInterest.from_points(
+                    self._roi_start_point,
+                    self._roi_start_point,
+                    volume_bounds=self.volume_bounds,
+                    view_direction=view_dir,
+                )
+                self._update_roi_preview_box(self._current_roi.bounds)
+
+            if self._current_roi is not None:
+                self._enable_roi_box_widget(self._current_roi.bounds)
+            self._roi_mode = RoiMode.EDITING
+            self.unsetCursor()
+            self._full_quality_timer.stop()
+            self._request_full_quality_render()
+            self.roi_updated.emit(self._current_roi)
             return
 
-        self._stop_wheel_event(self._left_release_tag)
-
-        # if the user did not move the mouse, we still create a valid initial ROI around the clicked point
-        # we are covered by the min size of the ROI, so we don't need to worry about it being too small
-        # the user could restart the selection it is his fault don't blame me for that
-        if self._current_roi is None and self._roi_start_point is not None and self.volume_bounds is not None:
-            view_dir = self._get_camera_view_direction()
-            self._current_roi = RegionOfInterest.from_points(
-                self._roi_start_point,
-                self._roi_start_point,
-                volume_bounds=self.volume_bounds,
-                view_direction=view_dir,
-            )
-            self._update_roi_preview_box(self._current_roi.bounds)
-
-        if self._current_roi is not None:
-            self._enable_roi_box_widget(self._current_roi.bounds)
-        self._roi_mode = RoiMode.EDITING
-        self.unsetCursor()
-        self._full_quality_timer.stop()
-        self._request_full_quality_render()
-        self.roi_updated.emit(self._current_roi)
+        if self._roi_mode == RoiMode.INACTIVE and self._vis_sub_roi_mode == VisSubRoiMode.DRAGGING:
+            self._on_vis_sub_roi_left_button_release()
 
     def _ensure_roi_box_widget(self) -> None:
         """
@@ -1918,6 +2441,7 @@ class Viewport(QWidget):
         if self.volume_bounds is None:
             return
 
+        self.stop_vis_sub_roi_interaction()
         self._current_roi = RegionOfInterest.from_bounds(
             roi.bounds,
             volume_bounds=self.volume_bounds,

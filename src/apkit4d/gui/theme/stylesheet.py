@@ -222,6 +222,30 @@ def _fields(palette: QPalette) -> str:
     )
 
 
+def _drop_surface(palette: QPalette) -> str:
+    """Dashed, rounded file drop area with a button-like hover state."""
+    window = palette.color(ColorRole.Window)
+    ink = palette.color(ColorRole.WindowText)
+    border = mix(window, ink, tokens.BORDER_MIX)
+    hovered, _, _ = plain_button_colors(palette, enabled=True, down=False, hovered=True)
+    selector = f"QLabel#{names.CENTER_PLACEHOLDER}"
+    drag_selector = f'{selector}[dragActive="true"]'
+    return f"""
+{selector} {{
+    background-color: {_css(palette.color(ColorRole.Base))};
+    color: {_css(palette.color(ColorRole.PlaceholderText))};
+    border: 2px dashed {_css(border)};
+    border-radius: {tokens.BUTTON_RADIUS}px;
+    padding: {tokens.GROUP_SPACING * 2}px;
+}}
+{drag_selector} {{
+    background-color: {_css(hovered)};
+    color: {_css(ink)};
+    border-color: {_css(palette.color(ColorRole.Highlight))};
+}}
+"""
+
+
 def _group_boxes(palette: QPalette) -> str:
     """Frames around a group of controls, with a title: the border of a control, but larger."""
     window = palette.color(ColorRole.Window)
@@ -425,5 +449,11 @@ def build_stylesheet(palette: QPalette, theme: Theme) -> str:
     Returns:
         The stylesheet, to set on the application together with the same palette.
     """
-    parts = (_buttons(palette), _fields(palette), _group_boxes(palette), _feedback(palette))
+    parts = (
+        _buttons(palette),
+        _fields(palette),
+        _drop_surface(palette),
+        _group_boxes(palette),
+        _feedback(palette),
+    )
     return "".join(parts) + _scroll_bars(palette) + _sections(palette, theme) + _right_panel(palette)

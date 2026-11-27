@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton, QWidget
 
+from apkit4d.core.frame_range import FrameRange
+from apkit4d.core.models import RoiConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -15,6 +17,7 @@ from apkit4d.gui.models.pipeline_model import PipelineModel, PipelineStep, StepS
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
+from apkit4d.visualization.viewport import RoiMode
 
 
 class FakeRoiView(QObject):
@@ -26,24 +29,29 @@ class FakeRoiView(QObject):
         super().__init__(parent)
         self.started = 0
         self.cancelled = 0
+        self.roi_mode: RoiMode = RoiMode.INACTIVE
         self.previews: list[RegionOfInterest] = []
         self.pending_accept_roi: RegionOfInterest | None = None
 
     def start_roi_selection(self) -> None:
         self.started += 1
+        self.roi_mode = RoiMode.WAITING_FIRST_POINT
 
     def set_roi_preview(self, roi: RegionOfInterest) -> None:
         self.previews.append(roi)
         self.pending_accept_roi = roi
+        self.roi_mode = RoiMode.EDITING
 
     def accept_roi_selection(self) -> RegionOfInterest | None:
         roi = self.pending_accept_roi
         self.pending_accept_roi = None
+        self.roi_mode = RoiMode.INACTIVE
         return roi
 
     def cancel_roi_selection(self) -> None:
         self.cancelled += 1
         self.pending_accept_roi = None
+        self.roi_mode = RoiMode.INACTIVE
 
 
 def _make_harness(qtbot, *, with_source: bool = True):
@@ -101,6 +109,7 @@ def _make_harness(qtbot, *, with_source: bool = True):
         model=pipeline_model,
         pipeline=pipeline_controller,
         playback_bar=playback_bar,
+        playback=playback_controller,
         file_controller=file_controller,
     )
 
@@ -167,8 +176,13 @@ def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     _accept_bounds(h, accepted_roi)
     h.pipeline.complete_stage(PipelineStep.PREPROCESSING)
 
-    assert h.model.get_step_params(PipelineStep.ROI) == accepted_roi.to_dict()
+    assert h.model.get_roi_params().region == accepted_roi
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
+
+    assert h.model.get_roi_params().frame_range == selected_range
 
     reset_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_RESET_BUTTON)
     assert reset_btn is not None
@@ -179,9 +193,10 @@ def test_reset_to_full_volume_syncs_pipeline_model(qtbot) -> None:
     assert h.inspector.get_roi() == RegionOfInterest(
         x_min=0.0, x_max=100.0, y_min=0.0, y_max=80.0, z_min=0.0, z_max=40.0
     )
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params() == RoiConfig()
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+    assert h.model.get_roi_params().frame_range is None
 
 
 def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None:
@@ -200,7 +215,7 @@ def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None
     # First undo restores roi_1 and invalidates downstream stages
     undo_btn.click()
     assert h.vol.roi == roi_1
-    assert h.model.get_step_params(PipelineStep.ROI) == roi_1.to_dict()
+    assert h.model.get_roi_params().region == roi_1
     assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
     assert h.controller.has_undo
 
@@ -208,7 +223,7 @@ def test_undo_roi_restores_previous_crop_and_full_volume_in_model(qtbot) -> None
     undo_btn.click()
     assert h.vol.roi is None
     assert not h.controller.has_undo
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params().region is None
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
 
 
@@ -231,7 +246,7 @@ def test_select_roi_and_viewport_update_workflow(qtbot) -> None:
     accept_btn.click()
 
     assert h.vol.roi == drawn_roi
-    assert h.model.get_step_params(PipelineStep.ROI) == drawn_roi.to_dict()
+    assert h.model.get_roi_params().region == drawn_roi
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
     assert h.playback_bar.isEnabled()
 
@@ -255,7 +270,7 @@ def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
     h.pipeline.run_up_to(PipelineStep.ROI)
 
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
-    assert h.model.get_step_params(PipelineStep.ROI) == {}
+    assert h.model.get_roi_params().region is None
     assert h.vol.roi is None
 
     crop = RegionOfInterest(x_min=5.0, x_max=45.0, y_min=5.0, y_max=35.0, z_min=2.0, z_max=18.0)
@@ -264,4 +279,181 @@ def test_run_up_to_roi_commits_full_volume_and_active_crop(qtbot) -> None:
     h.pipeline.run_up_to(PipelineStep.ROI)
 
     assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
-    assert h.model.get_step_params(PipelineStep.ROI) == crop.to_dict()
+    assert h.model.get_roi_params().region == crop
+
+
+# ensure that the roi_interaction_started signal is emitted when the user starts an interaction
+# if one of the 2 ways to start do not work, the sub-roi would be active, overlapping it
+def test_roi_interaction_started_emitted_on_select_and_spinbox_edit(qtbot) -> None:
+    h = _make_harness(qtbot)
+    started_events: list[bool] = []
+    h.controller.roi_interaction_started.connect(lambda: started_events.append(True))
+
+    select_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_SELECT_BUTTON)
+    assert select_btn is not None
+    select_btn.click()
+    assert len(started_events) == 1
+
+    x_min_spin = h.inspector.findChild(QDoubleSpinBox, names.ROI_INSPECTOR_X_MIN)
+    assert x_min_spin is not None
+    x_min_spin.setValue(15.0)
+    assert len(started_events) == 2
+
+    # Ignored when no source is loaded
+    h_empty = _make_harness(qtbot, with_source=False)
+    empty_events: list[bool] = []
+    h_empty.controller.roi_interaction_started.connect(lambda: empty_events.append(True))
+    h_empty.controller._on_start_roi_selection()
+    h_empty.controller._on_inspector_bounds_edited(
+        RegionOfInterest(x_min=1.0, x_max=5.0, y_min=1.0, y_max=5.0, z_min=1.0, z_max=5.0)
+    )
+    assert empty_events == []
+
+
+# ensure that cancelling an active ROI editing restores
+# the inspector to the last accepted ROI and unlocks the playback bar
+def test_cancel_active_roi_editing_restores_inspector_and_unlocks_playback_bar(qtbot) -> None:
+    h = _make_harness(qtbot)
+    accepted_roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+    _accept_bounds(h, accepted_roi)
+
+    select_btn = h.inspector.findChild(QPushButton, names.ROI_INSPECTOR_SELECT_BUTTON)
+    assert select_btn is not None
+    select_btn.click()
+    assert not h.playback_bar.isEnabled()
+    assert h.roi_view.roi_mode == RoiMode.WAITING_FIRST_POINT
+
+    h.controller.cancel_active_roi_editing()
+
+    assert h.roi_view.cancelled == 1
+    assert h.roi_view.roi_mode == RoiMode.INACTIVE
+    assert h.playback_bar.isEnabled()
+    assert h.vol.roi == accepted_roi
+    assert h.inspector.get_roi() == accepted_roi
+
+
+# ensure that cancelling an active ROI editing do not call cancel_roi_selection
+# when the roi_view is inactive, and does not unlock the playback bar
+def test_cancel_active_roi_editing_is_noop_when_inactive(qtbot) -> None:
+    h = _make_harness(qtbot)
+    h.playback_bar.setEnabled(False)
+
+    h.controller.cancel_active_roi_editing()
+
+    assert h.roi_view.cancelled == 0
+    assert not h.playback_bar.isEnabled()
+
+
+def test_selected_frames_are_propagated_to_model_and_playback(qtbot, monkeypatch):
+    h = _make_harness(qtbot)
+    selected_range = FrameRange(1, 3)
+
+    set_frame_range = MagicMock()
+    monkeypatch.setattr(h.playback, "set_frame_range", set_frame_range)
+
+    with qtbot.waitSignal(h.inspector.selected_frames_confirmed) as confirmed:
+        h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
+
+    assert confirmed.args == [selected_range]
+    assert h.model.get_roi_params().frame_range == selected_range
+
+    set_frame_range.assert_called_once_with(selected_range)
+
+
+def test_frame_range_update_preserves_existing_roi(qtbot) -> None:
+    h = _make_harness(qtbot)
+
+    accepted_roi = RegionOfInterest(
+        x_min=10.0,
+        x_max=50.0,
+        y_min=10.0,
+        y_max=40.0,
+        z_min=5.0,
+        z_max=25.0,
+    )
+    _accept_bounds(h, accepted_roi)
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
+
+    params = h.model.get_roi_params()
+
+    assert params.region == accepted_roi
+    assert params.frame_range == selected_range
+
+
+def test_accepting_roi_preserves_selected_frame_range(qtbot) -> None:
+    h = _make_harness(qtbot)
+
+    selected_range = FrameRange(1, 3)
+    h.inspector.frames_selector.selected_frames_confirmed.emit(selected_range)
+
+    accepted_roi = RegionOfInterest(
+        x_min=10.0,
+        x_max=50.0,
+        y_min=10.0,
+        y_max=40.0,
+        z_min=5.0,
+        z_max=25.0,
+    )
+    _accept_bounds(h, accepted_roi)
+
+    params = h.model.get_roi_params()
+
+    assert params.region == accepted_roi
+    assert params.frame_range == selected_range
+
+
+def test_narrowing_frame_range_keeps_stages_but_widening_invalidates_them(qtbot) -> None:
+    h = _make_harness(qtbot)
+    full_range = FrameRange.full(5)
+    roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+
+    # Start from a known range so the later changes are narrowing/widening, not None -> range
+    h.inspector.frames_selector.selected_frames_confirmed.emit(full_range)
+    _accept_bounds(h, roi)
+    h.pipeline.complete_stage(PipelineStep.PREPROCESSING)
+
+    # Narrowing: the new range is contained in the old one, so existing results stay valid
+    h.inspector.frames_selector.selected_frames_confirmed.emit(FrameRange(1, 3))
+
+    assert h.model.get_roi_params().frame_range == FrameRange(1, 3)
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+    assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.COMPLETED
+
+    # Widening: the new range is not contained in the old one, so Stage 1 and downstream are invalidated
+    h.inspector.frames_selector.selected_frames_confirmed.emit(full_range)
+
+    assert h.model.get_roi_params().frame_range == full_range
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+    assert h.model.get_status(PipelineStep.PREPROCESSING) == StepStatus.IDLE
+
+
+def test_clearing_frame_range_invalidates_stages(qtbot) -> None:
+    h = _make_harness(qtbot)
+    roi = RegionOfInterest(x_min=10.0, x_max=50.0, y_min=10.0, y_max=40.0, z_min=5.0, z_max=25.0)
+
+    h.inspector.frames_selector.selected_frames_confirmed.emit(FrameRange(1, 3))
+    _accept_bounds(h, roi)
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.COMPLETED
+
+    h.inspector.frames_selector.selected_frames_confirmed.emit(None)
+
+    assert h.model.get_roi_params().frame_range is None
+    assert h.model.get_roi_params().region == roi
+    assert h.model.get_status(PipelineStep.ROI) == StepStatus.IDLE
+
+
+def test_set_enabled_state_updates_frames_selector(qtbot, monkeypatch) -> None:
+    h = _make_harness(qtbot)
+
+    disable = MagicMock()
+    monkeypatch.setattr(h.inspector.frames_selector, "disable", disable)
+
+    h.inspector.set_enabled_state(False)
+    h.inspector.set_enabled_state(True)
+
+    assert [call.args for call in disable.call_args_list] == [
+        (True,),
+        (False,),
+    ]

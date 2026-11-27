@@ -1,10 +1,11 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from PySide6.QtCore import QEvent
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QScrollArea, QWidget
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
+from PySide6.QtGui import QAction, QDragEnterEvent, QDragLeaveEvent, QDropEvent
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QScrollArea, QWidget
 
 from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui import app as gui_app
@@ -12,6 +13,10 @@ from apkit4d.gui.app import run
 from apkit4d.gui.constants import application, names, shortcuts, texts
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.controllers.task_runner import wait_for_background_tasks
+from apkit4d.gui.models.frame_loading_config import (
+    FrameLoadingConfig,
+    FrameLoadingMode,
+)
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.io.mock import MockConfig, MockFrameSource
@@ -58,6 +63,98 @@ def test_open_action_opens_the_chosen_file(window, qtbot, czi_file, monkeypatch)
     assert blocker.args == [czi_file]
 
 
+def test_drop_surface_opens_a_czi_file(window, qtbot, czi_file):
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    assert not surface.property("dragActive")
+    mime_data = QMimeData()
+    mime_data.setUrls([QUrl.fromLocalFile(str(czi_file))])
+
+    drag_event = QDragEnterEvent(
+        QPoint(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(surface, drag_event)
+    assert drag_event.isAccepted()
+    assert surface.property("dragActive")
+
+    QApplication.sendEvent(surface, QDragLeaveEvent())
+    assert not surface.property("dragActive")
+
+    QApplication.sendEvent(
+        surface,
+        QDragEnterEvent(
+            QPoint(0, 0),
+            Qt.DropAction.CopyAction,
+            mime_data,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    assert surface.property("dragActive")
+
+    drop_event = QDropEvent(
+        QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(window.file_opened) as blocker:
+        QApplication.sendEvent(surface, drop_event)
+    assert blocker.args == [czi_file]
+    assert not surface.property("dragActive")
+
+
+def test_drop_surface_opens_json_results(window, qtbot, tmp_path):
+    results_file = tmp_path / "sample_blobs_params.json"
+    results_file.write_text("{}")
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    mime_data = QMimeData()
+    mime_data.setUrls([QUrl.fromLocalFile(str(results_file))])
+    drag_event = QDragEnterEvent(
+        QPoint(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(surface, drag_event)
+    assert drag_event.isAccepted()
+    drop_event = QDropEvent(
+        QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime_data,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    with qtbot.waitSignal(window.results_opened) as blocker:
+        QApplication.sendEvent(surface, drop_event)
+
+    assert blocker.args == [results_file]
+
+
+def test_center_switches_between_drop_surface_and_view_when_file_loads(window):
+    view = QWidget()
+    window.set_view(view)
+    window.show()
+
+    surface = window.findChild(QLabel, names.CENTER_PLACEHOLDER)
+    assert surface.isVisible()
+    assert not view.isVisible()
+
+    window.set_current_file(Path("sample.czi"))
+    assert view.isVisible()
+    assert not surface.isVisible()
+
+    window.set_current_file(None)
+    assert surface.isVisible()
+    assert not view.isVisible()
+
+
 def test_quit_action_closes_the_window(window):
     window.show()
     window.findChild(QAction, "quit_action").trigger()
@@ -68,9 +165,31 @@ def test_export_video_action_requests_export(window, qtbot):
     action = window.findChild(QAction, names.EXPORT_VIDEO_ACTION)
     assert action is not None
     assert action.shortcut().toString() == shortcuts.EXPORT_VIDEO
+    assert not action.isEnabled()
 
+    with qtbot.assertNotEmitted(window.video_export_requested):
+        action.trigger()
+
+    window.set_current_file(Path("sample.czi"))
+    assert action.isEnabled()
     with qtbot.waitSignal(window.video_export_requested):
         action.trigger()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [names.SHOW_VOLUME_ACTION, names.SHOW_BLOBS_ACTION, names.SHOW_TRAJECTORIES_ACTION],
+)
+def test_layer_actions_are_disabled_without_a_loaded_file(window, name):
+    action = window.findChild(QAction, name)
+    assert action is not None
+    assert not action.isEnabled()
+
+    window.set_current_file(Path("sample.czi"))
+    assert action.isEnabled()
+
+    window.set_current_file(None)
+    assert not action.isEnabled()
 
 
 def test_export_video_action_opens_dialog(window, qapp, monkeypatch):
@@ -80,11 +199,28 @@ def test_export_video_action_opens_dialog(window, qapp, monkeypatch):
     dialog_class = MagicMock(return_value=dialog)
     monkeypatch.setattr(main_controller, "VideoExportDialog", dialog_class)
     controller = MainController(window, qapp, window, view=MagicMock())
+    window.set_current_file(Path("sample.czi"))
 
     window.findChild(QAction, names.EXPORT_VIDEO_ACTION).trigger()
 
     dialog_class.assert_called_once_with(controller._video_export_controller, window)
     dialog.exec.assert_called_once_with()
+
+
+def test_volume_layer_action_toggles_volume_visibility(window, qapp):
+    view = MagicMock()
+    MainController(window, qapp, window, view=view)
+    action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
+
+    assert action is not None
+    assert action.isChecked()
+    assert not action.isEnabled()
+    window.set_current_file(Path("sample.czi"))
+    action.setChecked(False)
+    action.setChecked(True)
+
+    view.set_volume_visible.assert_any_call(False)
+    view.set_volume_visible.assert_any_call(True)
 
 
 def test_run_returns_the_exit_code_of_the_application(qapp, czi_file, monkeypatch):
@@ -146,6 +282,7 @@ def test_main_controller_open_mock_loads_source_and_playback(qtbot, qapp, window
     source = controller.file_controller.source
     assert isinstance(source, MockFrameSource)
     assert controller.playback_controller.frame_count == 6
+    assert window.findChild(QAction, names.EXPORT_VIDEO_ACTION).isEnabled()
     assert window.playback_bar.isEnabled()
     assert texts.MOCK_SOURCE_NAME in window.windowTitle()
 
@@ -176,6 +313,7 @@ def test_main_controller_open_mock_loads_source_and_playback(qtbot, qapp, window
 
     # Closing the mock source resets the session pipeline and trajectory state cleanly
     controller.file_controller.close()
+    assert not window.findChild(QAction, names.EXPORT_VIDEO_ACTION).isEnabled()
     assert controller.pipeline_model.get_status(PipelineStep.ROI) == StepStatus.IDLE
     assert controller.tracking_result is None
     assert view.clear_trajectories.called
@@ -297,3 +435,58 @@ def test_side_panels_start_without_cropping_their_controls(qapp, qtbot) -> None:
         scroll_area = panel.findChild(QScrollArea)
         visible_width = scroll_area.width() - scroll_area.verticalScrollBar().sizeHint().width()
         assert visible_width >= scroll_area.widget().minimumSizeHint().width()
+
+
+def test_performance_action_requests_settings(window, qtbot):
+    action = window.findChild(QAction, names.PERFORMANCE_ACTION)
+
+    assert action is not None
+    assert action.isEnabled()
+
+    with qtbot.waitSignal(window.performance_settings_requested):
+        action.trigger()
+
+
+def test_performance_action_updates_config(window, qapp, monkeypatch):
+    from apkit4d.gui.controllers import main_controller
+
+    config = FrameLoadingConfig(
+        mode=FrameLoadingMode.MANUAL,
+        cache_limit_gb=32.0,
+    )
+
+    dialog = MagicMock()
+    dialog.exec.return_value = QDialog.DialogCode.Accepted
+    dialog.config.return_value = config
+
+    dialog_class = MagicMock(return_value=dialog)
+    monkeypatch.setattr(main_controller, "PerformanceSettingsDialog", dialog_class)
+
+    controller = MainController(window, qapp, window, view=MagicMock())
+
+    window.findChild(QAction, names.PERFORMANCE_ACTION).trigger()
+
+    dialog_class.assert_called_once_with(FrameLoadingConfig(), window)
+    dialog.exec.assert_called_once_with()
+    assert controller._frame_loading_config == config
+
+
+def test_performance_action_cancel_preserves_config(window, qapp, monkeypatch):
+    from apkit4d.gui.controllers import main_controller
+
+    dialog = MagicMock()
+    dialog.exec.return_value = QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(
+        main_controller,
+        "PerformanceSettingsDialog",
+        MagicMock(return_value=dialog),
+    )
+
+    controller = MainController(window, qapp, window, view=MagicMock())
+    original_config = controller._frame_loading_config
+
+    window.findChild(QAction, names.PERFORMANCE_ACTION).trigger()
+
+    assert controller._frame_loading_config == original_config
+    dialog.config.assert_not_called()

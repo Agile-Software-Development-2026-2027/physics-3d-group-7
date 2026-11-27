@@ -8,7 +8,9 @@ I remembered teh final `.` here :) not gonna happen often.
 import pytest
 from pydantic import ValidationError
 
-from apkit4d.core.models import BatchConfig, TrackingConfig
+from apkit4d.core.frame_range import FrameRange
+from apkit4d.core.models import BatchConfig, RoiConfig, TrackingConfig
+from apkit4d.core.roi import RegionOfInterest
 
 
 def test_tracking_config_defaults() -> None:
@@ -181,3 +183,197 @@ def test_tracking_config_resolve_for_dt_invalid_inputs() -> None:
 
     with pytest.raises(ValidationError):
         cfg.resolve_for_dt(0.1, explicit_gap_dist=0.0)
+
+
+@pytest.fixture
+def region() -> RegionOfInterest:
+    return RegionOfInterest(
+        x_min=10.0,
+        x_max=100.0,
+        y_min=20.0,
+        y_max=200.0,
+        z_min=5.0,
+        z_max=50.0,
+    )
+
+
+@pytest.fixture
+def frame_range() -> FrameRange:
+    return FrameRange(start=10, end=100)
+
+
+@pytest.fixture
+def roi_config() -> RoiConfig:
+    return RoiConfig()
+
+
+def test_default_values():
+    config = RoiConfig()
+
+    assert config.x_min is None
+    assert config.x_max is None
+    assert config.y_min is None
+    assert config.y_max is None
+    assert config.z_min is None
+    assert config.z_max is None
+    assert config.t0 is None
+    assert config.t1 is None
+
+
+def test_model_is_frozen(roi_config: RoiConfig):
+    with pytest.raises(ValidationError):
+        roi_config.x_min = 10.0
+
+
+def test_with_region(
+    roi_config: RoiConfig,
+    region: RegionOfInterest,
+):
+    updated = roi_config.with_region(region)
+
+    assert updated.x_min == region.x_min
+    assert updated.x_max == region.x_max
+    assert updated.y_min == region.y_min
+    assert updated.y_max == region.y_max
+    assert updated.z_min == region.z_min
+    assert updated.z_max == region.z_max
+
+
+def test_with_region_none_clears_spatial_bounds(
+    region: RegionOfInterest,
+):
+    config = RoiConfig().with_region(region)
+
+    updated = config.with_region(None)
+
+    assert updated.x_min is None
+    assert updated.x_max is None
+    assert updated.y_min is None
+    assert updated.y_max is None
+    assert updated.z_min is None
+    assert updated.z_max is None
+
+
+def test_with_region_preserves_frame_range(
+    frame_range: FrameRange,
+    region: RegionOfInterest,
+):
+    config = RoiConfig().with_frame_range(frame_range)
+
+    updated = config.with_region(region)
+
+    assert updated.frame_range == frame_range
+
+
+def test_with_region_does_not_modify_original(
+    roi_config: RoiConfig,
+    region: RegionOfInterest,
+):
+    updated = roi_config.with_region(region)
+
+    assert updated is not roi_config
+    assert roi_config.region is None
+    assert updated.region == region
+
+
+def test_with_frame_range(
+    roi_config: RoiConfig,
+    frame_range: FrameRange,
+):
+    updated = roi_config.with_frame_range(frame_range)
+
+    assert updated.t0 == frame_range.start
+    assert updated.t1 == frame_range.end
+
+
+def test_with_frame_range_none_clears_temporal_bounds(
+    frame_range: FrameRange,
+):
+    config = RoiConfig().with_frame_range(frame_range)
+
+    updated = config.with_frame_range(None)
+
+    assert updated.t0 is None
+    assert updated.t1 is None
+
+
+def test_with_frame_range_preserves_spatial_region(
+    frame_range: FrameRange,
+    region: RegionOfInterest,
+):
+    config = RoiConfig().with_region(region)
+
+    updated = config.with_frame_range(frame_range)
+
+    assert updated.region == region
+
+
+def test_with_frame_range_does_not_modify_original(
+    roi_config: RoiConfig,
+    frame_range: FrameRange,
+):
+    updated = roi_config.with_frame_range(frame_range)
+
+    assert updated is not roi_config
+    assert roi_config.frame_range is None
+    assert updated.frame_range == frame_range
+
+
+def test_region_returns_none_when_bounds_are_unset(
+    roi_config: RoiConfig,
+):
+    assert roi_config.region is None
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "z_min",
+        "z_max",
+    ],
+)
+def test_region_returns_none_when_a_bound_is_missing(
+    region: RegionOfInterest,
+    missing_field: str,
+):
+    config = RoiConfig().with_region(region).model_copy(update={missing_field: None})
+
+    assert config.region is None
+
+
+def test_region_returns_region_of_interest(
+    region: RegionOfInterest,
+):
+    config = RoiConfig().with_region(region)
+
+    assert config.region == region
+    assert isinstance(config.region, RegionOfInterest)
+
+
+def test_frame_range_returns_none_when_bounds_are_unset(
+    roi_config: RoiConfig,
+) -> None:
+    assert roi_config.frame_range is None
+
+
+@pytest.mark.parametrize("missing_field", ["t0", "t1"])
+def test_frame_range_returns_none_when_a_bound_is_missing(
+    frame_range: FrameRange,
+    missing_field: str,
+):
+    config = RoiConfig().with_frame_range(frame_range).model_copy(update={missing_field: None})
+
+    assert config.frame_range is None
+
+
+def test_frame_range_returns_frame_range(
+    frame_range: FrameRange,
+):
+    config = RoiConfig().with_frame_range(frame_range)
+
+    assert config.frame_range == frame_range
+    assert isinstance(config.frame_range, FrameRange)

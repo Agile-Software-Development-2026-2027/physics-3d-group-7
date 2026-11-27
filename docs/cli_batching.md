@@ -1,5 +1,20 @@
 # Batch CLI
 
+Pass multiple CZI files to `apkit4d pipeline` to process them in one run.
+
+```bash
+apkit4d pipeline first.czi second.czi --params params.json --out results
+apkit4d pipeline --input-dir recordings --params params.json --out results
+```
+
+The recordings use one shared configuration. Without `--params`, a multi-file run uses
+the default settings. Each input gets a fresh result folder under `--out` or, if omitted,
+next to its recording. If a recording fails, processing continues with the remaining
+inputs and the command exits with a nonzero status.
+
+`--input-dir` processes CZI files directly inside the directory in filename order.
+It applies the same batch behavior even if the directory contains only one recording.
+
 ## JSON parameters (`params.json`)
 
 The `--params` option accepts a JSON file containing processing settings.
@@ -31,7 +46,7 @@ Example:
 - `preproc` – preprocessing settings: `denoise_xy_scale_um`, `denoise_z_scale_um`, `bg_mode`, `bg_percentile`, `bg_sigma_xy_um`, `lowest_intensity`, `highest_intensity`, `logarithmic_compression_enabled`, `gamma_correction_to_apply`, `clahe_enabled`, `clahe_clip`, `clahe_kernel_xy_um`.
 - `blob` – blob detection settings: `diameter_xy_um`, `diameter_z_um`, `threshold`, `split`, `grow_frac`, `min_volume_um3`, `max_volume_um3`.
 
-Missing fields use their default values. If `--params` is omitted, saved parameters are used, or defaults if none exist.
+Missing fields use their default values. For a single recording, omitting `--params` uses saved parameters when available.
 
 CLI frame options (`--first-frame`, `--last-frame`) override the JSON values. If both new and legacy frame keys are present, the new keys take precedence.
 
@@ -57,4 +72,4 @@ Export integration can be tested with synthetic results without a real CZI.
 
 Saved frame indices remain zero-based. If no detections are found, only JSON
 metadata is saved. Existing matching files are overwritten; use another output
-folder to retain previous exports. CLI batch processing is unchanged.
+folder to retain previous exports.

@@ -12,9 +12,8 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
-from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.appearance_controller import AppearanceController, AppearanceView
 from apkit4d.gui.controllers.batch_controller import BatchController
@@ -35,7 +34,9 @@ from apkit4d.gui.controllers.video_export_controller import (
     VideoExportController,
     VideoExportView,
 )
+from apkit4d.gui.controllers.vis_sub_roi_controller import VisSubRoiController
 from apkit4d.gui.controllers.volume_controller import VolumeController, VolumeView
+from apkit4d.gui.models.frame_loading_config import FrameLoadingConfig
 from apkit4d.gui.models.pipeline_model import (
     PIPELINE_STEP_ORDER,
     PipelineModel,
@@ -44,6 +45,9 @@ from apkit4d.gui.models.pipeline_model import (
 )
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.stages.preprocessing_inspector import PreprocessingInspector
+from apkit4d.gui.views.widgets.dialogs.performance_settings_dialog import (
+    PerformanceSettingsDialog,
+)
 from apkit4d.gui.views.widgets.dialogs.video_export_dialog import VideoExportDialog
 from apkit4d.io.czi import CziSource
 from apkit4d.io.mock import MockConfig, create_mock_source
@@ -79,6 +83,7 @@ class MainController(QObject):
     ) -> None:
         super().__init__(parent)
         self._window = window
+        self._frame_loading_config = FrameLoadingConfig()
         self._file_controller = FileController(window, open_source, self)
         self._playback_controller = PlaybackController(window.playback_bar, self)
         self._theme_controller = ThemeController(app, self)
@@ -90,6 +95,7 @@ class MainController(QObject):
             # the volume controller must know the new recording before the playback goes back to frame 0
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
+            window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
             window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
@@ -128,6 +134,8 @@ class MainController(QObject):
                 file_controller=self._file_controller,
                 volume_controller=self._volume_controller,
             )
+            if self._volume_controller is not None:
+                self._blob_controller.detection_completed.connect(self._on_detection_completed)
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
             self._blob_controller.params_changed.connect(
@@ -158,14 +166,14 @@ class MainController(QObject):
         if self._appearance_controller is not None:
             self._theme_controller.theme_changed.connect(self._appearance_controller.set_theme)
 
-        window.left_panel.theme_switch_requested.connect(self._theme_controller.toggle)
+        window.left_panel.appearance_section.theme_switch_requested.connect(self._theme_controller.toggle)
         self._theme_controller.theme_changed.connect(window.right_panel.set_theme)
         window.right_panel.set_theme(self._theme_controller.theme)
         self._theme_controller.theme_changed.connect(window.left_panel.set_theme)
         window.left_panel.set_theme(self._theme_controller.theme)
 
         self._trajectory_controller: TrajectoryController | None = (
-            TrajectoryController(window.left_panel, view, parent=self) if view is not None else None
+            TrajectoryController(window, view, parent=self) if view is not None else None
         )
         if self._trajectory_controller is not None:
             self._playback_controller.frame_changed.connect(self._trajectory_controller.on_set_frame)
@@ -192,19 +200,30 @@ class MainController(QObject):
             view=view,
             parent=self,
         )
+
+        left_panel = getattr(window, "left_panel", None)
+        vis_sub_roi_section = (
+            getattr(left_panel, "vis_sub_roi_section", None) if left_panel is not None else None
+        )
+        self._vis_sub_roi_controller = VisSubRoiController(
+            section=vis_sub_roi_section,
+            pipeline_model=self._pipeline_model,
+            file_controller=self._file_controller,
+            view=view,
+            parent=self,
+        )
+        # connect the ROI and VisSubROI controllers so that they don't interfere with each other
+        self._vis_sub_roi_controller.interaction_starting.connect(
+            self._roi_controller.cancel_active_roi_editing
+        )
+        self._roi_controller.roi_interaction_started.connect(self._vis_sub_roi_controller.stop_interaction)
+
         self._batch_controller = BatchController(
             window,
             self.file_controller,
             self.pipeline_controller,
             self,
             tracking=self._tracking_controller,
-        )
-        self._multi_file_controller = MultiFileController(
-            window,
-            self._file_controller,
-            self._pipeline_model,
-            self._get_current_roi,
-            self,
         )
         self._video_export_controller = VideoExportController(
             playback_controller=self._playback_controller,
@@ -215,6 +234,8 @@ class MainController(QObject):
         )
         window.video_export_requested.connect(self._show_video_export_dialog)
 
+        window.performance_settings_requested.connect(self._show_performance_settings_dialog)
+
         self._has_precomputed_session = False
         self._window.right_panel.set_stages_enabled(False)
         self._pipeline_controller.set_stage_runner(
@@ -224,6 +245,13 @@ class MainController(QObject):
         # Connected after child controllers so source/blob/trajectory resets happen before session hydration
         self._file_controller.loaded.connect(self._on_file_loaded)
         self._file_controller.closed.connect(self._on_file_closed)
+        self._multi_file_controller = MultiFileController(
+            window,
+            self._file_controller,
+            self._pipeline_model,
+            self,
+            show_roi=self._roi_controller.show_roi,
+        )
 
     @property
     def file_controller(self) -> FileController:
@@ -261,6 +289,11 @@ class MainController(QObject):
         return self._roi_controller
 
     @property
+    def vis_sub_roi_controller(self) -> VisSubRoiController:
+        """Controller coordinating the Visualization Sub-ROI workflow."""
+        return self._vis_sub_roi_controller
+
+    @property
     def blob_controller(self) -> BlobDetectionController | None:
         """Controller managing single-frame and Stage 3 blob detection."""
         return self._blob_controller
@@ -283,6 +316,16 @@ class MainController(QObject):
     def _show_video_export_dialog(self) -> None:
         dialog = VideoExportDialog(self._video_export_controller, self._window)
         dialog.exec()
+
+    def _show_performance_settings_dialog(self) -> None:
+        """Open the performance settings dialog."""
+        dialog = PerformanceSettingsDialog(
+            self._frame_loading_config,
+            self._window,
+        )
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._frame_loading_config = dialog.config()
 
     @property
     def trajectory_controller(self) -> TrajectoryController | None:
@@ -386,6 +429,9 @@ class MainController(QObject):
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error
 
+    def _on_detection_completed(self) -> None:
+        self._window.set_volume_visible(False)
+
     def _commit_preprocessing_stage(self) -> None:
         """Auto-commit the active preprocessing configuration and complete Stage 2."""
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
@@ -405,8 +451,3 @@ class MainController(QObject):
     def _on_window_suggested(self, lo: float, hi: float) -> None:
         if preproc_sec := self.pipeline_controller.view.get_section(PipelineStep.PREPROCESSING):
             cast(PreprocessingInspector, preproc_sec).set_intensity_window(lo, hi)
-
-    def _get_current_roi(self) -> RegionOfInterest | None:
-        if self._volume_controller is None:
-            return None
-        return self._volume_controller.roi

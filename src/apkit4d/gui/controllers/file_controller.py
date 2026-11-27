@@ -128,6 +128,7 @@ class FileController(QObject):
         if self._source is not None:
             self._source.close()
             self._source = None
+            self._window.set_current_file(None)
             self.closed.emit()
 
     def _on_opened(self, task_id: int, source: FrameSource) -> None:
@@ -155,4 +156,4 @@ class FileController(QObject):
         if channel != results.channel:
             source.close()
             raise ValueError(texts.RESULTS_OTHER_CHANNEL.format(saved=results.channel, opened=channel))
-        return PrecomputedFrameSource(source, session)
+        return PrecomputedFrameSource(source, session, params_path=results.params_path.resolve())

@@ -272,7 +272,7 @@ class VideoExportDialog(QDialog):
         self._height_spin.setValue(height)
         self._encoder_combo.setCurrentText(self._controller._encoder)
         self._preset_combo.setCurrentText(self._controller.preset)
-        self._reset_resolution.setEnabled(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
+        self._reset_resolution.setVisible(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
 
         path = self._controller.output_path
         self._output_path_label.setText(str(path) if path is not None else "")
@@ -343,7 +343,7 @@ class VideoExportDialog(QDialog):
         width = self._width_spin.value()
         height = self._height_spin.value()
         self._controller.set_resolution(width, height)
-        self._reset_resolution.setEnabled(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
+        self._reset_resolution.setVisible(width != DEFAULT_RESOLUTION[0] or height != DEFAULT_RESOLUTION[1])
         if self._controller.total_frames > 0:
             self._controller.request_preview_frame(self._controller.first_frame)
 

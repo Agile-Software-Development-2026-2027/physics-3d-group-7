@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -6,6 +7,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QWidget,
 )
+
+from apkit4d.gui.constants import texts
 
 
 class MultiFilePanel(QWidget):
@@ -19,13 +22,18 @@ class MultiFilePanel(QWidget):
         super().__init__()
         layout = QFormLayout(self)
         self.recordings = QListWidget()
+        self.recordings.setToolTip(texts.MULTI_FILE_REORDER_HINT)
         layout.addRow(self.recordings)
-        self.tracking = QCheckBox("Include tracking")
+        self.remove = QPushButton(texts.MULTI_FILE_REMOVE)
+        self.remove.setEnabled(False)
+        layout.addRow(self.remove)
+        layout.setAlignment(self.remove, Qt.AlignmentFlag.AlignLeft)
+        self.tracking = QCheckBox(texts.MULTI_FILE_TRACKING)
         self.tracking.setChecked(True)
-        self.run = QPushButton("Run")
+        self.run = QPushButton(texts.MULTI_FILE_RUN)
         self.run.setEnabled(False)
         self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addRow(self.tracking, self.run)
         layout.addRow(self.status)
-        layout.addRow(QLabel("Export settings are in step 5, Batch Export."))
+        layout.addRow(QLabel(texts.MULTI_FILE_EXPORT_HINT))

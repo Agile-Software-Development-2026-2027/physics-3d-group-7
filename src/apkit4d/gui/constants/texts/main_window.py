@@ -2,10 +2,10 @@
 Texts of the main window: placeholder, menus and status bar.
 """
 
-from apkit4d.gui.constants.application import CZI_SUFFIX
+from apkit4d.gui.constants.application import CZI_SUFFIX, JSON_SUFFIX
 
 # center panel
-PLACEHOLDER: str = f"Open a {CZI_SUFFIX} file to start (File > Open)"
+PLACEHOLDER: str = f"Drop a {CZI_SUFFIX} recording or a {JSON_SUFFIX} results file here"
 # main window
 MOCK_SOURCE_NAME: str = "Mock Algae Session"
 WINDOW_TITLE_WITH_FILE: str = "{name} - {app}"
@@ -34,3 +34,9 @@ ACTION_QUIT: str = "&Quit"
 MENU_VIEW: str = "&View"
 ACTION_SHOW_FPS: str = "Show &FPS Counter"
 FPS_READOUT: str = "QT: {qt_fps:4.1f} FPS | VTK: {render_fps:4.1f} FPS"
+LAYERS_MENU: str = "&Layers"
+ACTION_SHOW_VOLUME: str = "&Volume"
+ACTION_SHOW_BLOBS: str = "&Blobs"
+ACTION_SHOW_TRAJECTORIES: str = "&Trajectories"
+MENU_SETTINGS: str = "&Settings"
+ACTION_PERFORMANCE: str = "&Performance..."

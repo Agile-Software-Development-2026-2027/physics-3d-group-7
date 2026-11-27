@@ -12,6 +12,7 @@ from apkit4d.gui.constants.names.detection import *  # noqa: F403
 from apkit4d.gui.constants.names.histograms import *  # noqa: F403
 from apkit4d.gui.constants.names.left_panel import *  # noqa: F403
 from apkit4d.gui.constants.names.main_window import *  # noqa: F403
+from apkit4d.gui.constants.names.performance import *  # noqa: F403
 from apkit4d.gui.constants.names.playback import *  # noqa: F403
 from apkit4d.gui.constants.names.preprocessing import *  # noqa: F403
 from apkit4d.gui.constants.names.right_panel import *  # noqa: F403

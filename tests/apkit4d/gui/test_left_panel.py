@@ -2,15 +2,25 @@
 Unit tests for LeftPanel.
 """
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QSpinBox, QWidget
+from PySide6.QtGui import QAction, QColor
+from PySide6.QtWidgets import (
+    QColorDialog,
+    QComboBox,
+    QFormLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+)
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.main_window import MainWindow
+from apkit4d.gui.views.panels.appearance_section import AppearanceSection
 from apkit4d.gui.views.panels.left_panel import LeftPanel
 from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
@@ -26,17 +36,18 @@ def panel(qtbot) -> LeftPanel:
     return left_panel
 
 
-def test_left_panel_has_the_two_sections(panel) -> None:
+def test_left_panel_has_appearance_and_visualization_sections(panel) -> None:
     assert panel.objectName() == names.LEFT_PANEL
     assert panel.findChild(AccordionSection, names.APPEARANCE_SECTION) is panel.appearance_section
-    assert panel.findChild(AccordionSection, names.LAYERS_SECTION) is panel.layers_section
+    assert panel.findChild(AccordionSection, names.VIS_SUB_ROI_SECTION) is panel.vis_sub_roi_section
+    assert isinstance(panel.appearance_section, AppearanceSection)
     assert panel.appearance_section.title == texts.SECTION_APPEARANCE
-    assert panel.layers_section.title == texts.SECTION_LAYERS
+    assert panel.vis_sub_roi_section.title == texts.SECTION_VIS_SUB_ROI
 
 
 def test_only_the_appearance_section_starts_open(panel) -> None:
     assert panel.appearance_section.is_expanded()
-    assert not panel.layers_section.is_expanded()
+    assert not panel.vis_sub_roi_section.is_expanded()
 
 
 def test_open_section_is_tall_enough_for_its_content(panel) -> None:
@@ -56,21 +67,20 @@ def test_open_section_is_tall_enough_for_its_content(panel) -> None:
         (names.TRAJECTORY_TAIL_BOX, texts.BOX_TRAJECTORY_TAIL),
     ],
 )
-def test_appearance_section_has_a_box_for_each_setting(panel, name, title) -> None:
-    box = panel.appearance_section.findChild(QWidget, name)
-    assert box.findChild(QLabel).text() == title
+def test_appearance_section_has_a_form_label_for_each_setting(panel, name, title) -> None:
+    label = panel.appearance_section.findChild(QLabel, name)
+    assert label.text() == title
 
 
-def test_box_properties_give_the_boxes_of_the_section(panel) -> None:
-    assert panel.appearance_section.findChild(QWidget, names.COLORMAP_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.OPACITY_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.BACKGROUND_BOX) is not None
-    assert panel.appearance_section.findChild(QWidget, names.OUTLINE_BOX) is not None
+def test_appearance_section_uses_one_form_layout(panel) -> None:
+    layouts = panel.appearance_section.findChildren(QFormLayout)
+    assert len(layouts) == 1
+    assert layouts[0].rowCount() == 8
 
 
 def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:
     button = panel.findChild(QPushButton, names.THEME_BUTTON)
-    with qtbot.waitSignal(panel.theme_switch_requested, timeout=1000):
+    with qtbot.waitSignal(panel.appearance_section.theme_switch_requested, timeout=1000):
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
@@ -99,15 +109,15 @@ def test_each_box_holds_its_control(panel) -> None:
 def test_colormap_combo_offers_the_colormaps_and_starts_on_the_first(panel) -> None:
     combo = panel.findChild(QComboBox, names.COLORMAP_COMBO)
     assert [combo.itemText(index) for index in range(combo.count())] == list(view_style.COLORMAPS)
-    assert panel.colormap == view_style.COLORMAPS[0]
+    assert panel.appearance_section.colormap == view_style.COLORMAPS[0]
 
 
 def test_choosing_a_colormap_emits_its_name(panel, qtbot) -> None:
     combo = panel.findChild(QComboBox, names.COLORMAP_COMBO)
-    with qtbot.waitSignal(panel.colormap_chosen, timeout=1000) as blocker:
+    with qtbot.waitSignal(panel.appearance_section.colormap_chosen, timeout=1000) as blocker:
         combo.setCurrentIndex(1)
     assert blocker.args == [view_style.COLORMAPS[1]]
-    assert panel.colormap == view_style.COLORMAPS[1]
+    assert panel.appearance_section.colormap == view_style.COLORMAPS[1]
 
 
 def test_opacity_slider_starts_at_the_default_look(panel) -> None:
@@ -115,16 +125,16 @@ def test_opacity_slider_starts_at_the_default_look(panel) -> None:
     assert slider.minimum() == view_style.OPACITY_MIN_PERCENT
     assert slider.maximum() == view_style.OPACITY_MAX_PERCENT
     assert slider.value() == view_style.OPACITY_DEFAULT_PERCENT
-    assert panel.volume_opacity == 1.0
+    assert panel.appearance_section.volume_opacity == 1.0
     assert panel.findChild(QLabel, names.OPACITY_VALUE).text() == texts.OPACITY_VALUE.format(percent=100)
 
 
 def test_moving_the_opacity_slider_emits_the_factor_and_shows_the_percent(panel, qtbot) -> None:
     slider = panel.findChild(FrameSlider, names.OPACITY_SLIDER)
-    with qtbot.waitSignal(panel.opacity_changed, timeout=1000) as blocker:
+    with qtbot.waitSignal(panel.appearance_section.opacity_changed, timeout=1000) as blocker:
         slider.setValue(250)
     assert blocker.args == [2.5]
-    assert panel.volume_opacity == 2.5
+    assert panel.appearance_section.volume_opacity == 2.5
     assert panel.findChild(QLabel, names.OPACITY_VALUE).text() == texts.OPACITY_VALUE.format(percent=250)
 
 
@@ -143,7 +153,7 @@ def test_color_buttons_emit_the_color_chosen_in_the_dialog(
     # the user picks #123456 in the color dialog
     monkeypatch.setattr(QColorDialog, "getColor", lambda *args: QColor("#123456"))
     button = panel.findChild(ColorButton, button_name)
-    with qtbot.waitSignal(getattr(panel, signal_name), timeout=1000) as blocker:
+    with qtbot.waitSignal(getattr(panel.appearance_section, signal_name), timeout=1000) as blocker:
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert blocker.args == ["#123456"]
 
@@ -152,7 +162,7 @@ def test_closing_the_color_dialog_emits_nothing(panel, qtbot, monkeypatch) -> No
     # an invalid color is what the dialog returns when it is closed without choosing
     monkeypatch.setattr(QColorDialog, "getColor", lambda *args: QColor())
     button = panel.findChild(ColorButton, names.BACKGROUND_BUTTON)
-    with qtbot.assertNotEmitted(panel.background_chosen):
+    with qtbot.assertNotEmitted(panel.appearance_section.background_chosen):
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
@@ -163,39 +173,53 @@ def test_set_colors_shows_them_on_the_buttons(panel) -> None:
     assert panel.findChild(ColorButton, names.OUTLINE_BUTTON).color == "#ffffff"
 
 
-def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, qtbot) -> None:
-    traj_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
-    blobs_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
+def test_layer_actions_emit_visibility_signals(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.set_current_file(Path("sample.czi"))
+
+    volume_action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
+    blobs_action = window.findChild(QAction, names.SHOW_BLOBS_ACTION)
+    trajectories_action = window.findChild(QAction, names.SHOW_TRAJECTORIES_ACTION)
+
+    assert volume_action is not None and volume_action.isChecked()
+    assert blobs_action is not None and blobs_action.isChecked()
+    assert trajectories_action is not None and trajectories_action.isChecked()
+
+    with qtbot.waitSignal(window.show_volume_toggled, timeout=1000) as blocker:
+        volume_action.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(window.left_panel.show_blobs_toggled, timeout=1000) as blocker:
+        blobs_action.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(window.left_panel.show_trajectories_toggled, timeout=1000) as blocker:
+        trajectories_action.setChecked(False)
+    assert blocker.args == [False]
+
+
+def test_appearance_section_holds_trajectory_controls(panel, qtbot) -> None:
     tail_spin = panel.appearance_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
     mode_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
     cmap_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
 
-    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO) is None
-    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO) is None
-    assert traj_cb is not None and traj_cb.isHidden() and panel.show_trajectories is True
-    assert blobs_cb is not None and blobs_cb.isHidden() and panel.show_blobs is True
     assert tail_spin is not None and tail_spin.specialValueText() == texts.TRAJECTORY_TAIL_ALL
-    assert panel.trajectory_tail_length == view_style.TRAJECTORY_TAIL_DEFAULT
-    assert mode_combo is not None and panel.trajectory_color_mode == TrajectoryColorMode.SPEED
-    assert cmap_combo is not None and panel.trajectory_colormap == view_style.TRAJECTORY_COLORMAPS[0]
+    assert panel.appearance_section.trajectory_tail_length == view_style.TRAJECTORY_TAIL_DEFAULT
+    assert mode_combo is not None
+    assert panel.appearance_section.trajectory_color_mode == TrajectoryColorMode.SPEED
+    assert cmap_combo is not None
+    assert panel.appearance_section.trajectory_colormap == view_style.TRAJECTORY_COLORMAPS[0]
     assert cmap_combo.isEnabled()
 
-    with qtbot.waitSignal(panel.trajectory_tail_changed, timeout=1000) as blocker:
+    with qtbot.waitSignal(panel.appearance_section.trajectory_tail_changed, timeout=1000) as blocker:
         tail_spin.setValue(25)
     assert blocker.args == [25]
 
-    with qtbot.waitSignal(panel.trajectory_color_mode_changed, timeout=1000) as blocker:
+    with qtbot.waitSignal(panel.appearance_section.trajectory_color_mode_changed, timeout=1000) as blocker:
         mode_combo.setCurrentIndex(1)
     assert blocker.args == [TrajectoryColorMode.TRACK_ID]
     assert not cmap_combo.isEnabled()
-
-    with qtbot.waitSignal(panel.show_trajectories_toggled, timeout=1000) as blocker:
-        traj_cb.setChecked(False)
-    assert blocker.args == [False]
-
-    with qtbot.waitSignal(panel.show_blobs_toggled, timeout=1000) as blocker:
-        blobs_cb.setChecked(False)
-    assert blocker.args == [False]
 
 
 def test_left_panel_includes_collapsed_vis_sub_roi_section(panel) -> None:

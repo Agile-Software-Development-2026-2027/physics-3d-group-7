@@ -2,11 +2,13 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QDoubleSpinBox, QLabel, QPushButton
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep
 from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
+from apkit4d.gui.views.widgets.frames_selector import FramesSelector
 
 
 @pytest.fixture
@@ -168,3 +170,71 @@ class TestRoiInspector:
 
         panel.clear_sections()
         assert panel.roi_inspector is None
+
+
+class TestRoiInspectorFrames:
+    @pytest.fixture
+    def with_frames(self, inspector: RoiInspector) -> RoiInspector:
+        """An inspector whose selector offers the 10 frames of a recording."""
+        inspector.frames_selector.set_frame_range(FrameRange.full(10), True)
+        return inspector
+
+    def test_inspector_has_a_selector_of_frames_with_its_label(self, inspector: RoiInspector):
+        assert isinstance(inspector.frames_selector, FramesSelector)
+        labels = [label.text() for label in inspector.findChildren(QLabel)]
+        assert texts.INSPECTOR_LABEL_SELECT_FRAMES in labels
+
+    def test_selecting_frames_is_announced_from_zero(
+        self,
+        with_frames: RoiInspector,
+    ):
+        selected: list[FrameRange | None] = []
+        selector = with_frames.frames_selector
+        selector.selected_frames_confirmed.connect(selected.append)
+
+        selector._start_frame.setValue(3)
+        selector._start_frame.editingFinished.emit()
+
+        selector._end_frame.setValue(7)
+        selector._end_frame.editingFinished.emit()
+
+        assert selected == [FrameRange(2, 9), FrameRange(2, 6)]
+
+    def test_no_frames_is_announced_as_none(self, with_frames: RoiInspector):
+        selected: list[FrameRange | None] = []
+        with_frames.selected_frames_confirmed.connect(selected.append)
+
+        with_frames.frames_selector.set_frame_range(None, True)
+
+        assert selected == [None]
+
+    def test_frames_follow_the_enabled_state_of_the_inspector(self, with_frames: RoiInspector):
+        selector = with_frames.frames_selector
+
+        with_frames.set_enabled_state(False)
+        assert not selector._start_frame.isEnabled()
+        assert not selector._end_frame.isEnabled()
+
+        with_frames.set_enabled_state(True)
+        assert selector._start_frame.isEnabled()
+        assert selector._end_frame.isEnabled()
+
+    def test_frames_stay_disabled_without_a_recording(self, inspector: RoiInspector):
+        inspector.frames_selector.set_frame_range(None, True)
+
+        inspector.set_enabled_state(True)
+
+        assert not inspector.frames_selector._start_frame.isEnabled()
+        assert not inspector.frames_selector._end_frame.isEnabled()
+
+    def test_right_panel_blocks_the_frames_until_stages_are_enabled(self, qtbot):
+        panel = RightPanel()
+        qtbot.addWidget(panel)
+        assert panel.roi_inspector is not None
+        selector = panel.roi_inspector.frames_selector
+
+        panel.set_stages_enabled(False)
+        assert not selector._start_frame.isEnabled()
+
+        panel.set_stages_enabled(True)
+        assert selector._start_frame.isEnabled()
