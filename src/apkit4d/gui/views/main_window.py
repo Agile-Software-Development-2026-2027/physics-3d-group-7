@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
     results_opened = Signal(Path)
     video_export_requested = Signal()
     show_volume_toggled = Signal(bool)
+    show_outline_toggled = Signal(bool)
     performance_settings_requested = Signal()
 
     def __init__(self) -> None:
@@ -128,7 +129,12 @@ class MainWindow(QMainWindow):
             path: The open file, or None to show only the name of the application.
         """
         self._export_video_action.setEnabled(path is not None)
-        for action in (self._show_volume_action, self._show_blobs_action, self._show_trajectories_action):
+        for action in (
+            self._show_volume_action,
+            self._show_outline_action,
+            self._show_blobs_action,
+            self._show_trajectories_action,
+        ):
             action.setEnabled(path is not None)
         self._center.set_file_loaded(path is not None)
         if path is None:
@@ -247,6 +253,14 @@ class MainWindow(QMainWindow):
         self._show_volume_action.setEnabled(False)
         self._show_volume_action.toggled.connect(self.show_volume_toggled)
         menu.addAction(self._show_volume_action)
+
+        self._show_outline_action = QAction(texts.ACTION_SHOW_OUTLINE, self)
+        self._show_outline_action.setObjectName(names.SHOW_OUTLINE_ACTION)
+        self._show_outline_action.setCheckable(True)
+        self._show_outline_action.setChecked(True)
+        self._show_outline_action.setEnabled(False)
+        self._show_outline_action.toggled.connect(self.show_outline_toggled)
+        menu.addAction(self._show_outline_action)
 
         self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
         self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)

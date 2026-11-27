@@ -97,6 +97,17 @@ class TestViewport:
         viewport.set_volume_visible(True)
         assert viewport.plotter.actors["volume"].GetVisibility() == 1
 
+    def test_outline_visibility_is_preserved_when_volume_is_added_or_replaced(self, viewport):
+        viewport.set_outline_visible(False)
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert viewport.plotter.actors["outline"].GetVisibility() == 0
+
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        assert viewport.plotter.actors["outline"].GetVisibility() == 0
+
+        viewport.set_outline_visible(True)
+        assert viewport.plotter.actors["outline"].GetVisibility() == 1
+
     def test_show_volume_with_none_does_nothing(self, viewport):
         viewport.show_volume(None)
         assert "volume" not in viewport.plotter.actors

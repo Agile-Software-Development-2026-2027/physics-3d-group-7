@@ -137,6 +137,7 @@ class Viewport(QWidget):
 
         self._volume_grid: pv.ImageData | None = None
         self._volume_visible: bool = True
+        self._outline_visible: bool = True
 
         """Strong Python reference to the volume mapper so that PyVista does not delete '_lut' 
         (which is the lookup table) after removing the `"values"` scalar bar or replacing 'plotter.mapper'"""
@@ -416,13 +417,14 @@ class Viewport(QWidget):
         self._paint_text()
 
         # with this we can see the cube borders
-        self.plotter.add_mesh(
+        outline = self.plotter.add_mesh(
             self._volume_grid.outline(),
             color=self._outline_color,
             line_width=2,
             name="outline",
             render=False,
         )
+        outline.SetVisibility(self._outline_visible)
 
         # store the center and bounds
         self.volume_center = np.array(self._volume_grid.center, dtype=np.float64)
@@ -470,6 +472,14 @@ class Viewport(QWidget):
         actor = self.plotter.actors.get("volume")
         if actor is not None:
             actor.SetVisibility(self._volume_visible)
+            self._request_render()
+
+    def set_outline_visible(self, visible: bool) -> None:
+        """Show or hide the outline of the volume."""
+        self._outline_visible = bool(visible)
+        actor = self.plotter.actors.get("outline")
+        if actor is not None:
+            actor.SetVisibility(self._outline_visible)
             self._request_render()
 
     def set_colormap(self, name: str) -> None:
