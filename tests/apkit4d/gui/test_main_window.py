@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import QEvent
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QLabel, QScrollArea, QWidget
 
 from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui import app as gui_app
@@ -286,3 +286,14 @@ def test_fps_event_filter_coalesces_multiple_child_paints_per_frame(window, monk
     QApplication.processEvents()
 
     assert window._qt_fps_ticker.fps() == pytest.approx(20.0)
+
+
+def test_side_panels_start_without_cropping_their_controls(qapp, qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    MainController(window, qapp, window)
+    window.show()
+    for panel in (window.left_panel, window.right_panel):
+        scroll_area = panel.findChild(QScrollArea)
+        visible_width = scroll_area.width() - scroll_area.verticalScrollBar().sizeHint().width()
+        assert visible_width >= scroll_area.widget().minimumSizeHint().width()
