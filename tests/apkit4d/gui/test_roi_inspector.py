@@ -200,17 +200,9 @@ class TestRoiInspectorFrames:
 
         assert selected == [FrameRange(2, 9), FrameRange(2, 6)]
 
-    def test_no_frames_is_announced_as_none(self, with_frames: RoiInspector):
-        selected: list[FrameRange | None] = []
-        with_frames.selected_frames_confirmed.connect(selected.append)
-
-        with_frames.frames_selector.set_frame_range(None, True)
-
-        assert selected == [None]
-
     def test_frames_follow_the_enabled_state_of_the_inspector(self, with_frames: RoiInspector):
         selector = with_frames.frames_selector
-
+        with_frames.has_recording = True
         with_frames.set_enabled_state(False)
         assert not selector._start_frame.isEnabled()
         assert not selector._end_frame.isEnabled()
@@ -231,6 +223,7 @@ class TestRoiInspectorFrames:
         panel = RightPanel()
         qtbot.addWidget(panel)
         assert panel.roi_inspector is not None
+        panel.roi_inspector.has_recording = True
         selector = panel.roi_inspector.frames_selector
 
         panel.set_stages_enabled(False)

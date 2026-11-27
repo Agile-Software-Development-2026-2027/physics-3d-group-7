@@ -30,5 +30,5 @@ MULTI_FILE_DIMENSION_ERROR = "Volume dimensions differ from the reference {shape
 MULTI_FILE_FRAME_LIMIT_ERROR = "Export ends at frame {last}; recording has {frames} frames."
 MULTI_FILE_REPLACEMENT_ERROR = "Could not open the replacement recording."
 MULTI_FILE_OUTPUT_ERROR = "Choose an existing output folder in Batch Export."
-MULTI_FILE_FRAME_ORDER_ERROR = "First frame cannot be greater than last frame in Batch Export."
+MULTI_FILE_NO_FRAMES_ERROR = "Select the frames to export in Batch Export."
 MULTI_FILE_START_ERROR = "Could not start processing: {error}"

@@ -1,5 +1,6 @@
 """Unit tests for RoiStageController workflow, preview preservation, and model sync."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -18,6 +19,15 @@ from apkit4d.gui.views.panels.right_panel import RightPanel
 from apkit4d.gui.views.playback.playback_bar import PlaybackBar
 from apkit4d.gui.views.stages.roi_inspector import RoiInspector
 from apkit4d.visualization.viewport import RoiMode
+
+
+class FakeFileController(QObject):
+    loaded = Signal(object, object)
+    closed = Signal()
+
+    def __init__(self, source=None):
+        super().__init__()
+        self.source = source
 
 
 class FakeRoiView(QObject):
@@ -67,8 +77,8 @@ def _make_harness(qtbot, *, with_source: bool = True):
     pipeline_controller = PipelineController(pipeline_model, right_panel)
     playback_controller = PlaybackController(playback_bar)
 
-    file_controller = MagicMock()
-    file_controller.source = SimpleNamespace(info=SimpleNamespace(n_t=5)) if with_source else None
+    source = SimpleNamespace(info=SimpleNamespace(n_t=5)) if with_source else None
+    file_controller = FakeFileController(source)
 
     volume_controller = MagicMock()
     volume_controller.roi = None
@@ -95,7 +105,7 @@ def _make_harness(qtbot, *, with_source: bool = True):
         pipeline_model=pipeline_model,
         pipeline_controller=pipeline_controller,
         playback_controller=playback_controller,
-        file_controller=file_controller,
+        file_controller=file_controller,  # type: ignore[arg-type]
         playback_bar=playback_bar,
         view=roi_view,
     )
@@ -446,6 +456,7 @@ def test_clearing_frame_range_invalidates_stages(qtbot) -> None:
 
 def test_set_enabled_state_updates_frames_selector(qtbot, monkeypatch) -> None:
     h = _make_harness(qtbot)
+    h.inspector.has_recording = True
 
     disable = MagicMock()
     monkeypatch.setattr(h.inspector.frames_selector, "disable", disable)
@@ -457,3 +468,24 @@ def test_set_enabled_state_updates_frames_selector(qtbot, monkeypatch) -> None:
         (True,),
         (False,),
     ]
+
+
+def test_roi_controller_set_roi_inspector_has_recording_to_true_when_a_recording_is_loaded(qtbot):
+    h = _make_harness(qtbot)
+    h.inspector.has_recording = False
+
+    path = Path("test.czi")
+    source = h.file_controller.source
+
+    h.file_controller.loaded.emit(path, source)
+
+    assert h.inspector.has_recording
+
+
+def test_roi_controller_set_roi_inspector_has_recording_to_false_when_a_recording_is_closed(qtbot):
+    h = _make_harness(qtbot)
+    h.inspector.has_recording = True
+
+    h.controller._file_controller.closed.emit()
+
+    assert not h.inspector.has_recording

@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.roi import Bounds6D, RegionOfInterest
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.views.widgets.frames_selector import FramesSelector
@@ -47,6 +46,7 @@ class RoiInspector(QWidget):
         self._volume_bounds: Bounds6D | None = None
         self._editing_mode: bool = False
         self._has_undo: bool = False
+        self.has_recording: bool = False
 
         self._main_layout = QVBoxLayout(self)
         self._main_layout.setContentsMargins(0, 0, 0, 0)
@@ -151,7 +151,7 @@ class RoiInspector(QWidget):
         save_layout.setSpacing(8)
 
         save_layout.addWidget(QLabel(texts.INSPECTOR_LABEL_SELECT_FRAMES))
-        self.frames_selector = FramesSelector(FrameRange(0, 0))
+        self.frames_selector = FramesSelector(None)
         self.frames_selector.selected_frames_confirmed.connect(self.selected_frames_confirmed.emit)
         save_layout.addWidget(self.frames_selector)
 
@@ -276,4 +276,4 @@ class RoiInspector(QWidget):
         self._accept_btn.setEnabled(enabled and self._editing_mode)
         self._cancel_btn.setEnabled(enabled and self._editing_mode)
         self._undo_btn.setEnabled(enabled and self._has_undo)
-        self.frames_selector.disable(not enabled)
+        self.frames_selector.disable(not enabled or not self.has_recording)

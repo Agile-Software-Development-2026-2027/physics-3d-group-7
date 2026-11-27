@@ -9,6 +9,7 @@ from PySide6.QtCore import QObject, Signal
 
 from apkit4d.batching.export import save_batch_results
 from apkit4d.batching.processor import BatchResult
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.models import TrackingConfig
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
@@ -24,6 +25,9 @@ class BatchController(QObject):
 
     The blobs are always saved. The tracks are saved too, with their configuration, when the
     Tracking stage is completed and `tracking` holds its result.
+
+    Only the frames selected in the Batch stage are saved. They can only be chosen among the
+    frames of the ROI, since those are the only ones the previous stages processed.
     """
 
     progress_changed = Signal(int, int)
@@ -43,6 +47,8 @@ class BatchController(QObject):
         self._pipeline = pipeline
         self._tracking = tracking
         self._source: tuple[Path, int] | None = None
+        self._n_frames: int = 0
+        self._frame_bounds: FrameRange | None = None
         self._task: int | None = None
         self._batch_started_at: float = 0.0
         self._runner = TaskRunner(self)
@@ -50,6 +56,7 @@ class BatchController(QObject):
         self._runner.failed.connect(self._failed)
         self.progress_changed.connect(self._progress)
         pipeline.set_stage_runner(PipelineStep.BATCH, self.run)
+        pipeline.model.step_params_changed.connect(self._on_step_params_changed)
         files.loaded.connect(self.set_source)
         files.closed.connect(self.clear_source)
         self._set_enabled()
@@ -59,20 +66,54 @@ class BatchController(QObject):
         self._source = (path, getattr(source, "channel", 0)) if source.info.n_t > 0 else None
         self._view.set_default_output_dir(str(path.parent))
         self._view.output_dir.setText(str(path.parent))
-        for field in (self._view.first_frame, self._view.last_frame):
-            field.setRange(1, max(1, source.info.n_t))
-        self._view.first_frame.setValue(1)
-        self._view.last_frame.setValue(max(1, source.info.n_t))
+        self._n_frames = max(0, source.info.n_t)
+        self._sync_frame_bounds(force=True)  # a new recording starts with all the frames selected
+
         if self._task is None:
             self._pipeline.clear_batch_status()
+
         self._set_enabled()
 
     def clear_source(self) -> None:
         self._pipeline.reset_pipeline()
         self._source = None
+        self._n_frames = 0
+        self._sync_frame_bounds()
+
         if self._task is None:
             self._pipeline.clear_batch_status()
+
         self._set_enabled()
+
+    def _on_step_params_changed(self, step: PipelineStep) -> None:
+        if (
+            step == PipelineStep.ROI
+            and self._pipeline.model.get_roi_params().frame_range != self._frame_bounds
+        ):
+            self._sync_frame_bounds()
+
+    def _roi_frame_bounds(self) -> FrameRange | None:
+        """The frames of the ROI: the only ones that were processed. None without a recording."""
+        if self._source is None or self._n_frames <= 0:
+            return None
+
+        roi_frames = self._pipeline.model.get_roi_params().frame_range
+        return roi_frames if roi_frames is not None else FrameRange.full(self._n_frames)
+
+    def _sync_frame_bounds(self, force: bool = False) -> None:
+        """Limit the frames to export to those of the ROI.
+
+        When the frames of the ROI change, all of them are selected again: the previous choice
+        refers to a different set of frames.
+
+        Args:
+            force: Select all the frames even if the frames of the ROI did not change.
+        """
+        bounds = self._roi_frame_bounds()
+        if bounds == self._frame_bounds and not force:
+            return
+        self._frame_bounds = bounds
+        self._view.set_frames_range(bounds)
 
     def _set_enabled(self) -> None:
         enabled = self._source is not None and self._task is None
@@ -102,10 +143,11 @@ class BatchController(QObject):
                 raise ValueError("Processed results do not belong to the current source and channel.")
             if not self._view.output_dir.text().strip():
                 raise ValueError("Choose an output folder.")
-            first = self._view.first_frame.value() - 1
-            last = self._view.last_frame.value() - 1
-            if first > last:
-                raise ValueError("First frame cannot be greater than last frame.")
+
+            frames = self._view.selected_frames
+            if frames is None:
+                raise ValueError("Select the frames to export.")
+
             tracks, tracking_config = self._tracks_to_save()
             job = partial(
                 save_batch_results,
@@ -113,8 +155,8 @@ class BatchController(QObject):
                 metadata=metadata,
                 out_dir=Path(self._view.output_dir.text()),
                 fmt=self._view.format.currentText(),
-                first=first,
-                last=last,
+                first=frames.start,
+                last=frames.end,
                 progress=self.progress_changed.emit,
                 tracks=tracks,
                 tracking_config=tracking_config,

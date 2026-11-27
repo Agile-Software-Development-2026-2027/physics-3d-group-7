@@ -85,43 +85,35 @@ def test_confirming_end_announces_frames(selector):
     assert selected == [FrameRange(9, 16)]
 
 
-def test_confirming_start_uses_with_start_clamping(
-    selector: FramesSelector,
-):
-    # First confirm the end frame.
+def test_confirming_start_uses_with_start_clamping(selector: FramesSelector):
     selector._end_frame.setValue(12)
     selector._end_frame.editingFinished.emit()
 
     emitted = record(selector.selected_frames_confirmed)
 
-    # Then move the start beyond the confirmed end.
     selector._start_frame.setValue(15)
     selector._start_frame.editingFinished.emit()
 
     expected = FrameRange(9, 11).with_start(14)
 
-    assert selector._frame_range == expected
+    assert selector.selected_frames == expected
     assert emitted == [expected]
     assert selector._start_frame.value() == expected.start_display
     assert selector._end_frame.value() == expected.end_display
 
 
-def test_confirming_end_uses_with_end_clamping(
-    selector: FramesSelector,
-):
-    # First confirm the start frame.
+def test_confirming_end_uses_with_end_clamping(selector: FramesSelector):
     selector._start_frame.setValue(18)
     selector._start_frame.editingFinished.emit()
 
     emitted = record(selector.selected_frames_confirmed)
 
-    # Then move the end before the confirmed start.
     selector._end_frame.setValue(14)
     selector._end_frame.editingFinished.emit()
 
     expected = FrameRange(17, 19).with_end(13)
 
-    assert selector._frame_range == expected
+    assert selector.selected_frames == expected
     assert emitted == [expected]
     assert selector._start_frame.value() == expected.start_display
     assert selector._end_frame.value() == expected.end_display
@@ -136,8 +128,29 @@ def test_confirming_single_frame(selector: FramesSelector):
     selector._end_frame.setValue(15)
     selector._end_frame.editingFinished.emit()
 
-    assert selector._frame_range == FrameRange(14, 14)
+    assert selector.selected_frames == FrameRange(14, 14)
     assert emitted[-1] == FrameRange(14, 14)
+
+
+def test_bounds_change_does_not_reset_selection_on_confirm(selector: FramesSelector):
+    selector.set_frame_range(FrameRange(9, 19), True)
+
+    # The user raises the start of the selection.
+    selector._start_frame.setValue(12)
+    selector._start_frame.editingFinished.emit()
+    assert selector.selected_frames == FrameRange(11, 19)
+
+    # The bounds widen from outside (e.g. the ROI start is lowered).
+    selector.set_frame_range(FrameRange(6, 19), False)
+    assert selector.selected_frames == FrameRange(11, 19)
+
+    # Lowering the end must not touch the start.
+    selector._end_frame.setValue(17)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(11, 16)
+    assert selector._start_frame.value() == 12
+    assert selector._frame_range == FrameRange(6, 19)  # bounds untouched
 
 
 def test_confirming_does_not_emit_twice(
@@ -171,22 +184,14 @@ def test_set_frame_range_preserves_values_without_adjustment(
     selector: FramesSelector,
 ):
     selector._start_frame.setValue(12)
+    selector._start_frame.editingFinished.emit()
     selector._end_frame.setValue(18)
+    selector._end_frame.editingFinished.emit()
 
     selector.set_frame_range(FrameRange(9, 19))
 
     assert selector._start_frame.value() == 12
     assert selector._end_frame.value() == 18
-
-
-def test_set_frame_range_emits_current_selection(
-    selector: FramesSelector,
-):
-    emitted = record(selector.selected_frames_confirmed)
-
-    selector.set_frame_range(FrameRange(9, 19), adjust_frames=True)
-
-    assert emitted == [FrameRange(9, 19)]
 
 
 def test_set_frame_range_none_disables_spinboxes(
@@ -266,4 +271,220 @@ def test_disabling_does_not_emit_selection(
 
     selector.disable()
 
+    assert emitted == []
+
+
+def test_selected_frames_returns_initial_selection(selector: FramesSelector):
+    assert selector.selected_frames == FrameRange(9, 19)
+
+
+def test_selected_frames_reflects_start_spinbox_value(selector: FramesSelector):
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(14, 19)
+
+
+def test_selected_frames_reflects_end_spinbox_value(selector: FramesSelector):
+    selector._end_frame.setValue(17)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(9, 16)
+
+
+def test_selected_frames_reflects_both_spinbox_values(selector: FramesSelector):
+    selector._start_frame.setValue(12)
+    selector._start_frame.editingFinished.emit()
+    selector._end_frame.setValue(18)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(11, 17)
+
+
+def test_selected_frames_reflects_values_after_confirmation(
+    selector: FramesSelector,
+):
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(14, 19)
+
+
+def test_selected_frames_returns_single_frame(selector: FramesSelector):
+    selector._start_frame.setValue(15)
+    selector._start_frame.editingFinished.emit()
+    selector._end_frame.setValue(15)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(14, 14)
+
+
+def test_selected_frames_returns_none_without_available_frames(
+    selector: FramesSelector,
+):
+    selector.set_frame_range(None)
+
+    assert selector.selected_frames is None
+
+
+@pytest.mark.parametrize(
+    ("selection", "bounds", "expected"),
+    [
+        # The new bounds cut the start of the selection.
+        ((11, 16), (13, 19), (13, 16)),
+        # The new bounds cut the end of the selection.
+        ((11, 16), (9, 14), (11, 14)),
+        # The new bounds cut both ends.
+        ((11, 16), (13, 14), (13, 14)),
+        # The selection is entirely before the new bounds.
+        ((11, 13), (15, 19), (15, 15)),
+        # The selection is entirely after the new bounds.
+        ((16, 19), (9, 12), (12, 12)),
+    ],
+)
+def test_set_frame_range_clamps_selection_outside_bounds(
+    selector: FramesSelector,
+    selection: tuple[int, int],
+    bounds: tuple[int, int],
+    expected: tuple[int, int],
+):
+    selector._start_frame.setValue(selection[0] + 1)
+    selector._start_frame.editingFinished.emit()
+    selector._end_frame.setValue(selection[1] + 1)
+    selector._end_frame.editingFinished.emit()
+
+    selector.set_frame_range(FrameRange(*bounds))
+
+    assert selector.selected_frames == FrameRange(*expected)
+    assert selector._start_frame.value() == expected[0] + 1
+    assert selector._end_frame.value() == expected[1] + 1
+
+
+def test_set_selected_frames_sets_both_ends(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    assert selector.selected_frames == FrameRange(11, 17)
+    assert selector._start_frame.value() == 12
+    assert selector._end_frame.value() == 18
+
+
+def test_set_selected_frames_converts_to_zero_based(selector: FramesSelector):
+    selector.set_selected_frames(11, 11)
+
+    assert selector.selected_frames == FrameRange(10, 10)
+
+
+def test_set_selected_frames_only_start_keeps_the_end(selector: FramesSelector):
+    selector.set_selected_frames(start=15)
+
+    assert selector.selected_frames == FrameRange(14, 19)
+    assert selector._end_frame.value() == 20
+
+
+def test_set_selected_frames_only_end_keeps_the_start(selector: FramesSelector):
+    selector.set_selected_frames(end=17)
+
+    assert selector.selected_frames == FrameRange(9, 16)
+    assert selector._start_frame.value() == 10
+
+
+def test_set_selected_frames_without_values_keeps_the_selection(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    selector.set_selected_frames()
+
+    assert selector.selected_frames == FrameRange(11, 17)
+
+
+def test_set_selected_frames_announces_the_selection_once(selector: FramesSelector):
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector.set_selected_frames(12, 18)
+
+    assert emitted == [FrameRange(11, 17)]
+
+
+def test_set_selected_frames_single_frame(selector: FramesSelector):
+    selector.set_selected_frames(15, 15)
+
+    assert selector.selected_frames == FrameRange(14, 14)
+    assert selector._start_frame.value() == 15
+    assert selector._end_frame.value() == 15
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "expected"),
+    [
+        (5, 18, (9, 17)),  # start below the bounds
+        (12, 99, (11, 19)),  # end above the bounds
+        (0, 99, (9, 19)),  # both outside, on opposite sides
+        (-3, 18, (9, 17)),  # negative start
+        (99, 99, (19, 19)),  # entirely above the bounds
+        (3, 3, (9, 9)),  # entirely below the bounds
+    ],
+)
+def test_set_selected_frames_clamps_to_the_bounds(
+    selector: FramesSelector,
+    start: int,
+    end: int,
+    expected: tuple[int, int],
+):
+    selector.set_selected_frames(start, end)
+
+    assert selector.selected_frames == FrameRange(*expected)
+    assert selector._start_frame.value() == expected[0] + 1
+    assert selector._end_frame.value() == expected[1] + 1
+
+
+def test_set_selected_frames_start_above_end_collapses_on_the_end(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    selector.set_selected_frames(start=20)
+
+    assert selector.selected_frames == FrameRange(17, 17)
+
+
+def test_set_selected_frames_end_below_start_collapses_on_the_start(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    selector.set_selected_frames(end=10)
+
+    assert selector.selected_frames == FrameRange(11, 11)
+
+
+def test_set_selected_frames_does_not_change_the_bounds(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    assert selector._frame_range == FrameRange(9, 19)
+    assert (selector._start_frame.minimum(), selector._start_frame.maximum()) == (10, 20)
+    assert (selector._end_frame.minimum(), selector._end_frame.maximum()) == (10, 20)
+
+
+def test_set_selected_frames_is_used_by_next_confirmation(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    # Lowering the end must start from the programmatic selection, not from the full range.
+    selector._end_frame.setValue(16)
+    selector._end_frame.editingFinished.emit()
+
+    assert selector.selected_frames == FrameRange(11, 15)
+
+
+def test_set_selected_frames_survives_a_bounds_change(selector: FramesSelector):
+    selector.set_selected_frames(12, 18)
+
+    selector.set_frame_range(FrameRange(6, 25))
+
+    assert selector.selected_frames == FrameRange(11, 17)
+
+
+def test_set_selected_frames_without_frames_does_nothing(selector: FramesSelector):
+    selector.set_frame_range(None)
+    emitted = record(selector.selected_frames_confirmed)
+
+    selector.set_selected_frames(12, 18)
+
+    assert selector.selected_frames is None
+    assert selector._start_frame.value() == 0
+    assert selector._end_frame.value() == 0
     assert emitted == []

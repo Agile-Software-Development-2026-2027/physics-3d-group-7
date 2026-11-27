@@ -4,6 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import QModelIndex
 from PySide6.QtWidgets import QFileDialog
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.gui.controllers import multi_file_controller
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.models.pipeline_model import PipelineStep
@@ -64,7 +65,7 @@ def test_multi_file_menu_runs_independent_pipeline_exports(qapp, qtbot, tmp_path
     export = window.right_panel.batch_inspector
     export.output_dir.setText(str(output))
     export.format.setCurrentText("csv")
-    export.first_frame.setValue(2)
+    export.set_selected_frames(2, 2)
     panel.run.click()
     assert not panel.run.isEnabled()
     qtbot.waitUntil(panel.run.isEnabled, timeout=15000)
@@ -106,7 +107,7 @@ def test_multi_file_menu_runs_independent_pipeline_exports(qapp, qtbot, tmp_path
     controller.pipeline_model.update_step_params(PipelineStep.DETECTION, threshold=0.25)
     export.output_dir.setText(str(output))
     export.format.setCurrentText("csv")
-    export.first_frame.setValue(2)
+    export.set_selected_frames(2, 2)
     panel.recordings.setCurrentRow(1)
     with qtbot.waitSignal(files.loaded):
         panel.remove.click()
@@ -115,7 +116,7 @@ def test_multi_file_menu_runs_independent_pipeline_exports(qapp, qtbot, tmp_path
     assert controller.pipeline_model.get_step_params(PipelineStep.DETECTION)["threshold"] == 0.25
     assert export.output_dir.text() == str(output)
     assert export.format.currentText() == "csv"
-    assert export.first_frame.value() == 2
+    assert export.selected_frames == FrameRange(1, 1)
     assert all(result.params_path.is_file() for result in results)
     assert first.is_file()
     assert panel.recordings.count() == 1

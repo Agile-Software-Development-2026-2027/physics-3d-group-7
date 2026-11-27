@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.models import DetectionConfig, TrackingConfig
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
@@ -545,12 +546,7 @@ class RightPanel(SidePanel):
                     self.batch_inspector.format.currentTextChanged.connect(
                         lambda value: self.notify_param_changed(PipelineStep.BATCH, "format", value)
                     )
-                    self.batch_inspector.first_frame.valueChanged.connect(
-                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t0", value - 1)
-                    )
-                    self.batch_inspector.last_frame.valueChanged.connect(
-                        lambda value: self.notify_param_changed(PipelineStep.BATCH, "t1", value - 1)
-                    )
+                    self.batch_inspector.selected_frames_confirmed.connect(self._on_batch_frames_confirmed)
                     self.batch_inspector.reset_requested.connect(
                         lambda: self.step_params_reset.emit(PipelineStep.BATCH.value)
                     )
@@ -570,6 +566,10 @@ class RightPanel(SidePanel):
         """Register a stage section in lookup dictionary and add to layout."""
         self._stage_sections[stage_id] = section
         self.add_section(section)
+
+    def _on_batch_frames_confirmed(self, frames: FrameRange | None) -> None:
+        self.notify_param_changed(PipelineStep.BATCH, "t0", None if frames is None else frames.start)
+        self.notify_param_changed(PipelineStep.BATCH, "t1", None if frames is None else frames.end)
 
     def notify_param_changed(self, step: str, param: str, value: Any) -> None:
         """Notify listeners that a stage parameter changed."""

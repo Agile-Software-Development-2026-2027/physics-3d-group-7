@@ -22,8 +22,8 @@ def get_output_type_label(output_type: OutputType) -> str:
 BATCH_OUTPUT: str = "Output folder"
 BATCH_BROWSE: str = "Browse..."
 BATCH_FORMAT: str = "Table format"
-BATCH_FIRST_FRAME: str = "First frame (inclusive)"
-BATCH_LAST_FRAME: str = "Last frame (inclusive)"
+BATCH_FRAMES: str = "Frames to export"
+BATCH_FRAMES_TOOLTIP: str = "Frames to save, both ends included."
 BATCH_NO_SOURCE: str = "Open a CZI file to run batch processing."
 BATCH_READY: str = (
     "Results are saved automatically. Existing output files in this folder will be overwritten."

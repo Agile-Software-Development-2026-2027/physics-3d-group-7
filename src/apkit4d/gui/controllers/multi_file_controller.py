@@ -9,6 +9,7 @@ from PySide6.QtCore import QModelIndex, QObject, Qt, Signal
 from PySide6.QtWidgets import QAbstractItemView, QListWidgetItem
 
 from apkit4d.batching.export import save_batch_results
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig, TrackingConfig
 from apkit4d.core.roi import RegionOfInterest
 from apkit4d.gui.constants import texts
@@ -336,19 +337,10 @@ class MultiFileController(QObject):
         roi = self._current_roi
         folder = self._export.output_dir.text()
         fmt = self._export.format.currentText()
-        first = self._export.first_frame.value()
-        last = self._export.last_frame.value()
+        frames = self._export.selected_frames
 
         # Keep these values so we can restore them once the replacement recording opens
-        return partial(
-            self._restore_settings,
-            params=params,
-            roi=roi,
-            folder=folder,
-            fmt=fmt,
-            first=first,
-            last=last,
-        )
+        return partial(self._restore_settings, params=params, roi=roi, folder=folder, fmt=fmt, frames=frames)
 
     def _restore_settings(
         self,
@@ -356,8 +348,7 @@ class MultiFileController(QObject):
         roi: RegionOfInterest | None,
         folder: str,
         fmt: str,
-        first: int,
-        last: int,
+        frames: FrameRange | None,
     ) -> None:
         """Apply the previous settings to the newly loaded recording.
 
@@ -366,8 +357,7 @@ class MultiFileController(QObject):
             roi: Saved crop, if one was set.
             folder: Export output folder.
             fmt: Export table format.
-            first: First frame to export, as shown in the GUI.
-            last: Last frame to export, as shown in the GUI.
+            frames: Frames to export, if any were selected. They are clamped to the frames of the ROI.
         """
         for step, step_params in params.items():
             self._pipeline.update_step_params(step, **step_params)
@@ -376,8 +366,9 @@ class MultiFileController(QObject):
             self._show_roi(roi)
         self._export.output_dir.setText(folder)
         self._export.format.setCurrentText(fmt)
-        self._export.first_frame.setValue(first)
-        self._export.last_frame.setValue(last)
+
+        if frames is not None:
+            self._export.set_selected_frames(frames.start_display, frames.end_display)
 
     def _remove_row(self, row: int) -> None:
         self._recordings.pop(row)
@@ -399,11 +390,12 @@ class MultiFileController(QObject):
         if not output_dir.is_dir():
             self._panel.status.setText(texts.MULTI_FILE_OUTPUT_ERROR)
             return
-        first = self._export.first_frame.value() - 1
-        last = self._export.last_frame.value() - 1
-        if first > last:
-            self._panel.status.setText(texts.MULTI_FILE_FRAME_ORDER_ERROR)
+
+        frames = self._export.selected_frames
+        if frames is None:
+            self._panel.status.setText(texts.MULTI_FILE_NO_FRAMES_ERROR)
             return
+
         preproc = self._pipeline.get_preproc_params()
         if not preproc.normalization_enabled:
             self._panel.status.setText(texts.DETECTION_REQUIRES_NORMALIZATION)
@@ -420,8 +412,8 @@ class MultiFileController(QObject):
             tuple(self._recordings),
             output_dir,
             self._export.format.currentText(),
-            first,
-            last,
+            frames.start,
+            frames.end,
             (info.n_z, info.n_y, info.n_x),
             getattr(source, "channel", 0),
             self._current_roi,

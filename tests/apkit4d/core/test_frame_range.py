@@ -212,3 +212,22 @@ def test_frame_range_contains(
     expected: bool,
 ):
     assert outer.contains(inner) is expected
+
+
+@pytest.mark.parametrize(
+    ("value", "bounds", "expected"),
+    [
+        ((11, 16), (6, 25), (11, 16)),  # already inside: untouched
+        ((11, 16), (11, 16), (11, 16)),  # same as the bounds
+        ((11, 16), (13, 19), (13, 16)),  # start cut
+        ((11, 16), (9, 14), (11, 14)),  # end cut
+        ((11, 16), (13, 14), (13, 14)),  # both ends cut
+        ((11, 13), (15, 19), (15, 15)),  # entirely before the bounds
+        ((16, 19), (9, 12), (12, 12)),  # entirely after the bounds
+        ((11, 11), (11, 11), (11, 11)),  # single frame, single-frame bounds
+        ((5, 5), (9, 19), (9, 9)),  # single frame before the bounds
+        ((25, 25), (9, 19), (19, 19)),  # single frame after the bounds
+    ],
+)
+def test_clamp(value, bounds, expected):
+    assert FrameRange(*value).clamp(FrameRange(*bounds)) == FrameRange(*expected)
