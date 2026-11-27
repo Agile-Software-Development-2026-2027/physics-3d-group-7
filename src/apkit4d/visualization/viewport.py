@@ -199,7 +199,9 @@ class Viewport(QWidget):
 
         # scalar bar state: switches from volume intensities ("values") to trajectory velocity
         self._scalar_bar_mode: ScalarBarMode = ScalarBarMode.VOLUME
+        self._scalar_bar_visible: bool = True
         self._velocity_scalar_bar_title: str | None = None
+        self._velocity_scalar_bar_requested_visible: bool = True
         self._velocity_lut: pv.LookupTable | None = None
         self._velocity_bar_mapper: vtkPolyDataMapper | None = None
 
@@ -400,6 +402,8 @@ class Viewport(QWidget):
             scalar_bar_args={"render": False},
         )
         actor.SetVisibility(self._volume_visible)
+        if self._scalar_bar_mode == ScalarBarMode.VOLUME and "values" in self.plotter.scalar_bars:
+            self.plotter.scalar_bars["values"].SetVisibility(self._scalar_bar_visible)
 
         # Keep a strong Python reference so PyVista's _BaseVolumeMapper.__del__ does not delete _lut
         # when the "values" scalar bar is removed or another actor replaces plotter.mapper.
@@ -480,6 +484,24 @@ class Viewport(QWidget):
         actor = self.plotter.actors.get("outline")
         if actor is not None:
             actor.SetVisibility(self._outline_visible)
+            self._request_render()
+
+    def set_scalar_bar_visible(self, visible: bool) -> None:
+        """Show or hide the active scalar bar without changing its mode or lookup table."""
+        self._scalar_bar_visible = bool(visible)
+        if self._scalar_bar_mode == ScalarBarMode.VOLUME:
+            scalar_bar = None
+            if "values" in self.plotter.scalar_bars:
+                scalar_bar = self.plotter.scalar_bars["values"]
+            bar_visible = self._scalar_bar_visible
+        else:
+            title = self._velocity_scalar_bar_title
+            scalar_bar = None
+            if title is not None and title in self.plotter.scalar_bars:
+                scalar_bar = self.plotter.scalar_bars[title]
+            bar_visible = self._scalar_bar_visible and self._velocity_scalar_bar_requested_visible
+        if scalar_bar is not None:
+            scalar_bar.SetVisibility(bar_visible)
             self._request_render()
 
     def set_colormap(self, name: str) -> None:
@@ -623,8 +645,9 @@ class Viewport(QWidget):
 
         self._scalar_bar_mode = ScalarBarMode.VELOCITY
         self._velocity_scalar_bar_title = title
+        self._velocity_scalar_bar_requested_visible = bool(visible)
         self._velocity_lut = lut
-        self.plotter.scalar_bars[title].SetVisibility(bool(visible))
+        self.plotter.scalar_bars[title].SetVisibility(bool(visible) and self._scalar_bar_visible)
         self._paint_text()
         self._request_render()
 
@@ -651,7 +674,10 @@ class Viewport(QWidget):
 
         if vol_actor is not None and "values" not in self.plotter.scalar_bars:
             vol_mapper = self._volume_mapper or vol_actor.mapper
-            self.plotter.add_scalar_bar(title="values", mapper=vol_mapper, fmt="%.1f", render=False)
+            scalar_bar = self.plotter.add_scalar_bar(
+                title="values", mapper=vol_mapper, fmt="%.1f", render=False
+            )
+            scalar_bar.SetVisibility(self._scalar_bar_visible)
             self._paint_text()
 
         self._request_render()

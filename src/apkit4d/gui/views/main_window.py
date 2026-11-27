@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
     video_export_requested = Signal()
     show_volume_toggled = Signal(bool)
     show_outline_toggled = Signal(bool)
+    show_scalar_bar_toggled = Signal(bool)
     performance_settings_requested = Signal()
 
     def __init__(self) -> None:
@@ -132,6 +133,7 @@ class MainWindow(QMainWindow):
         for action in (
             self._show_volume_action,
             self._show_outline_action,
+            self._show_scalar_bar_action,
             self._show_blobs_action,
             self._show_trajectories_action,
         ):
@@ -261,6 +263,14 @@ class MainWindow(QMainWindow):
         self._show_outline_action.setEnabled(False)
         self._show_outline_action.toggled.connect(self.show_outline_toggled)
         menu.addAction(self._show_outline_action)
+
+        self._show_scalar_bar_action = QAction(texts.ACTION_SHOW_SCALAR_BAR, self)
+        self._show_scalar_bar_action.setObjectName(names.SHOW_SCALAR_BAR_ACTION)
+        self._show_scalar_bar_action.setCheckable(True)
+        self._show_scalar_bar_action.setChecked(True)
+        self._show_scalar_bar_action.setEnabled(False)
+        self._show_scalar_bar_action.toggled.connect(self.show_scalar_bar_toggled)
+        menu.addAction(self._show_scalar_bar_action)
 
         self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
         self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)

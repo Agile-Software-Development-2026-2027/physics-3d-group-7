@@ -108,6 +108,17 @@ class TestViewport:
         viewport.set_outline_visible(True)
         assert viewport.plotter.actors["outline"].GetVisibility() == 1
 
+    def test_scalar_bar_visibility_is_preserved_when_volume_is_added_or_replaced(self, viewport):
+        viewport.set_scalar_bar_visible(False)
+        viewport.show_volume(make_grid(), reset_camera=False)
+        assert viewport.plotter.scalar_bars["values"].GetVisibility() == 0
+
+        viewport.show_volume(make_grid(6), reset_camera=False)
+        assert viewport.plotter.scalar_bars["values"].GetVisibility() == 0
+
+        viewport.set_scalar_bar_visible(True)
+        assert viewport.plotter.scalar_bars["values"].GetVisibility() == 1
+
     def test_show_volume_with_none_does_nothing(self, viewport):
         viewport.show_volume(None)
         assert "volume" not in viewport.plotter.actors
@@ -1756,6 +1767,28 @@ class TestViewportVelocityScalarBar:
             viewport.plotter.scalar_bars["values"].GetLookupTable()
             is viewport.plotter.actors["volume"].mapper.lookup_table
         )
+
+    def test_scalar_bar_visibility_toggle_applies_to_velocity_bar_and_preserves_layer_state(self, viewport):
+        viewport.show_volume(make_grid(5), reset_camera=False)
+        viewport.show_velocity_scalar_bar(0.0, 42.5, "turbo", visible=True, title="Velocity")
+        velocity_bar = viewport.plotter.scalar_bars["Velocity"]
+
+        viewport.set_scalar_bar_visible(False)
+        assert velocity_bar.GetVisibility() == 0
+
+        viewport.show_velocity_scalar_bar(0.0, 42.5, "turbo", visible=True, title="Velocity")
+        assert velocity_bar.GetVisibility() == 0
+
+        viewport.set_scalar_bar_visible(True)
+        assert velocity_bar.GetVisibility() == 1
+
+        viewport.show_velocity_scalar_bar(0.0, 42.5, "turbo", visible=False, title="Velocity")
+        viewport.set_scalar_bar_visible(False)
+        viewport.set_scalar_bar_visible(True)
+        assert velocity_bar.GetVisibility() == 0
+
+        viewport.restore_volume_scalar_bar()
+        assert viewport.plotter.scalar_bars["values"].GetVisibility() == 1
 
     def test_volume_frame_update_and_colormap_survive_after_velocity_bar_and_trajectories_gc(self, viewport):
         first = make_grid(5)

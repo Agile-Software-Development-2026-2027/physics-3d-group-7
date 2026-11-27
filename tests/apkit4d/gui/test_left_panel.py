@@ -190,11 +190,13 @@ def test_layer_actions_emit_visibility_signals(qtbot) -> None:
 
     volume_action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
     outline_action = window.findChild(QAction, names.SHOW_OUTLINE_ACTION)
+    scalar_bar_action = window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION)
     blobs_action = window.findChild(QAction, names.SHOW_BLOBS_ACTION)
     trajectories_action = window.findChild(QAction, names.SHOW_TRAJECTORIES_ACTION)
 
     assert volume_action is not None and volume_action.isChecked()
     assert outline_action is not None and outline_action.isChecked()
+    assert scalar_bar_action is not None and scalar_bar_action.isChecked()
     assert blobs_action is not None and blobs_action.isChecked()
     assert trajectories_action is not None and trajectories_action.isChecked()
 
@@ -204,6 +206,10 @@ def test_layer_actions_emit_visibility_signals(qtbot) -> None:
 
     with qtbot.waitSignal(window.show_outline_toggled, timeout=1000) as blocker:
         outline_action.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(window.show_scalar_bar_toggled, timeout=1000) as blocker:
+        scalar_bar_action.setChecked(False)
     assert blocker.args == [False]
 
     with qtbot.waitSignal(window.left_panel.show_blobs_toggled, timeout=1000) as blocker:

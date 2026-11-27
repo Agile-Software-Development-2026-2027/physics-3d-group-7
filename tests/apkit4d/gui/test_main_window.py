@@ -181,6 +181,7 @@ def test_export_video_action_requests_export(window, qtbot):
     [
         names.SHOW_VOLUME_ACTION,
         names.SHOW_OUTLINE_ACTION,
+        names.SHOW_SCALAR_BAR_ACTION,
         names.SHOW_BLOBS_ACTION,
         names.SHOW_TRAJECTORIES_ACTION,
     ],
@@ -242,6 +243,22 @@ def test_outline_layer_action_toggles_outline_visibility(window, qapp):
 
     view.set_outline_visible.assert_any_call(False)
     view.set_outline_visible.assert_any_call(True)
+
+
+def test_scalar_bar_layer_action_toggles_scalar_bar_visibility(window, qapp):
+    view = MagicMock()
+    MainController(window, qapp, window, view=view)
+    action = window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION)
+
+    assert action is not None
+    assert action.isChecked()
+    assert not action.isEnabled()
+    window.set_current_file(Path("sample.czi"))
+    action.setChecked(False)
+    action.setChecked(True)
+
+    view.set_scalar_bar_visible.assert_any_call(False)
+    view.set_scalar_bar_visible.assert_any_call(True)
 
 
 def test_run_returns_the_exit_code_of_the_application(qapp, czi_file, monkeypatch):
