@@ -264,6 +264,22 @@ class PipelineModel(QObject):
         """Update preprocessing parameters from a PreprocessingConfig instance."""
         self.update_step_params(PipelineStep.PREPROCESSING, **params.model_dump())
 
+    def set_detection_params(self, params: DetectionConfig) -> None:
+        """Update the blob detection settings.
+
+        Args:
+            params: The detection configuration to apply.
+        """
+        self.update_step_params(PipelineStep.DETECTION, **params.model_dump())
+
+    def set_tracking_params(self, params: TrackingConfig) -> None:
+        """Update the trajectory linking settings.
+
+        Args:
+            params: The tracking configuration to apply.
+        """
+        self.update_step_params(PipelineStep.TRACKING, **params.model_dump())
+
     def plan_execution(
         self,
         from_step: PipelineStep | None = None,

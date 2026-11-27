@@ -38,6 +38,28 @@ type VoxelSize3D = tuple[float, float, float]
 type Origin3D = tuple[float, float, float]
 
 
+def voxel_center_bounds(shape: Shape3D, voxel_size: VoxelSize3D) -> Bounds6D:
+    """Return physical bounds in X, Y, Z order for a zero-origin volume.
+
+    Args:
+        shape: Number of voxels in Z, Y, X order.
+        voxel_size: Voxel spacing in micrometers in Z, Y, X order.
+
+    Returns:
+        Minimum and maximum voxel center coordinates for each axis.
+    """
+    nz, ny, nx = shape
+    sz, sy, sx = voxel_size
+    return (
+        0.0,
+        max(0, nx - 1) * sx,
+        0.0,
+        max(0, ny - 1) * sy,
+        0.0,
+        max(0, nz - 1) * sz,
+    )
+
+
 @dataclass(frozen=True)
 class RegionOfInterest:
     """

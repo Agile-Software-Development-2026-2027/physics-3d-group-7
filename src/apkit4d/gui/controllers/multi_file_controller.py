@@ -1,16 +1,17 @@
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import date
 from functools import partial
 from pathlib import Path
-from typing import Any
 
 from PySide6.QtCore import QModelIndex, QObject, Qt, Signal
 from PySide6.QtWidgets import QAbstractItemView, QListWidgetItem
 
 from apkit4d.batching.export import save_batch_results
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.core.models import DetectionConfig, PreprocessingConfig, RoiConfig, TrackingConfig
-from apkit4d.core.roi import RegionOfInterest
+from apkit4d.core.roi import RegionOfInterest, voxel_center_bounds
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FileController, FrameSource
 from apkit4d.gui.controllers.task_runner import TaskRunner
@@ -22,41 +23,49 @@ from apkit4d.io.session import PrecomputedFrameSource
 from apkit4d.tracking.linker import ParticleLinker
 
 _READY_ROLE = Qt.ItemDataRole.UserRole + 1
+_PERSONALIZED_SETTINGS_INDEX = 1
+
+
+@dataclass(frozen=True)
+class RecordingSettings:
+    """Hold the analysis settings for one recording.
+
+    Attributes:
+        preprocessing: Settings for preparing frames before detection.
+        detection: Settings for detecting blobs.
+        tracking: Settings for linking detections.
+        roi: Spatial crop in micrometers, or None to process the full volume.
+        first: First frame to process and export, numbered from 1.
+        last: Last frame to process and export, inclusive and numbered from 1.
+        include_tracking: Whether to run tracking for this recording.
+    """
+
+    preprocessing: PreprocessingConfig
+    detection: DetectionConfig
+    tracking: TrackingConfig
+    roi: RegionOfInterest | None
+    first: int
+    last: int
+    include_tracking: bool
 
 
 def _process_recordings(
-    recordings: tuple[Path, ...],
+    recordings: tuple[tuple[Path, RecordingSettings], ...],
     output_dir: Path,
     fmt: str,
-    first: int,
-    last: int,
-    shape: tuple[int, int, int],
     channel: int,
-    roi: RegionOfInterest | None,
-    preproc: PreprocessingConfig,
-    detection: DetectionConfig,
-    tracking: TrackingConfig | None,
     update: Callable[[int, str, str], None],
 ) -> int:
-    """Process each recording with the same pipeline settings.
+    """Process and export the selected frame range of each recording.
 
-    Detection and tracking use the full recording. The frame range limits the export.
-    Each recording gets its own output directory, including when input names match.
+    Each recording gets its own output directory, even when input names match.
 
     Args:
-        recordings: CZI paths in the order they appear in the batch.
+        recordings: Ordered pairs of input paths and their analysis settings.
         output_dir: Existing folder in which to create the batch output directory.
         fmt: Table format for exported detections and tracks.
-        first: First frame to export, as a zero-based inclusive index.
-        last: Last frame to export, as a zero-based inclusive index.
-        shape: Required volume dimensions in Z, Y, X order.
         channel: Zero-based channel index to read from every recording.
-        roi: Shared region in physical coordinates, or None to use the full volume.
-        preproc: Preprocessing settings for all recordings.
-        detection: Blob detection settings for all recordings.
-        tracking: Trajectory linking settings, or None to skip tracking.
-        update: Callback receiving the zero-based row index, status message, and
-            saved result path. The path is empty until export succeeds.
+        update: Callback receiving a row index, status, and optional result path.
 
     Returns:
         Number of recordings whose results were saved successfully.
@@ -73,13 +82,26 @@ def _process_recordings(
         else:
             break
     completed = 0
-    for row, path in enumerate(recordings):
+    for row, (path, settings) in enumerate(recordings):
         update(row, texts.MULTI_FILE_OPENING, "")
         try:
+            first = settings.first - 1
+            last = settings.last - 1
+            if first > last:
+                raise ValueError(texts.MULTI_FILE_FRAME_ORDER_ERROR)
+            preproc = settings.preprocessing
+            detection = settings.detection
+            tracking = settings.tracking if settings.include_tracking else None
             with closing(CziSource(path, channel=channel)) as source:
                 info = source.info
-                if (info.n_z, info.n_y, info.n_x) != shape:
-                    raise ValueError(texts.MULTI_FILE_DIMENSION_ERROR.format(shape=shape))
+                if settings.roi is not None:
+                    roi_bounds = settings.roi.bounds
+                    volume_bounds = voxel_center_bounds((info.n_z, info.n_y, info.n_x), info.voxel)
+                    if any(
+                        not (volume_bounds[i] <= roi_bounds[i] <= roi_bounds[i + 1] <= volume_bounds[i + 1])
+                        for i in (0, 2, 4)
+                    ):
+                        raise ValueError(texts.MULTI_FILE_ROI_BOUNDS_ERROR)
                 if last >= info.n_t:
                     raise ValueError(
                         texts.MULTI_FILE_FRAME_LIMIT_ERROR.format(last=last + 1, frames=info.n_t)
@@ -88,7 +110,7 @@ def _process_recordings(
                     source,
                     preproc,
                     detection,
-                    RoiConfig().with_region(roi),
+                    RoiConfig().with_region(settings.roi).with_frame_range(FrameRange(first, last)),
                     progress_callback=lambda done, total, row=row: update(
                         row, texts.MULTI_FILE_DETECTING.format(done=done, total=total), ""
                     ),
@@ -120,14 +142,13 @@ def _process_recordings(
 class MultiFileController(QObject):
     """Connect the File menu and the batch panel to background processing.
 
-    The active recording supplies the reference dimensions, channel, and ROI.
+    The active recording supplies the channel and the common analysis settings.
     The controller reads the current pipeline and export settings when Run is clicked.
 
     Args:
         window: Main window with the batch controls and export settings.
         files: Controller that opens the reference recording.
         pipeline: Model holding the current analysis parameters.
-        current_roi: Function returning the active ROI, if one is set.
         parent: Qt parent that owns this controller.
         show_roi: Function applying the inherited ROI to a replacement recording.
 
@@ -143,7 +164,7 @@ class MultiFileController(QObject):
         files: FileController,
         pipeline: PipelineModel,
         parent: QObject,
-        show_roi: Callable[[RegionOfInterest], None],
+        show_roi: Callable[[RegionOfInterest | None], None],
     ) -> None:
         super().__init__(parent)
         self._window = window
@@ -151,11 +172,13 @@ class MultiFileController(QObject):
         self._export = window.right_panel.batch_inspector
         self._files = files
         self._pipeline = pipeline
-        self._current_roi = self._pipeline.get_roi_params().region
         self._show_roi = show_roi
         # Store the new reference path, the row to remove if any, and the function
         # that restores the previous settings.
         self._replacement: tuple[Path, int | None, Callable[[], None]] | None = None
+        self._common_settings: RecordingSettings | None = None
+        self._recording_settings: dict[Path, RecordingSettings] = {}
+        self._personalized_recordings: set[Path] = set()
         # The active CZI path, if it can be used as the batch reference
         self._reference: Path | None = None
         # Paths selected via Open files while the first recording loads
@@ -171,8 +194,8 @@ class MultiFileController(QObject):
         self.recording_updated.connect(self._show_recording_status)
         window.files_selected.connect(self._open_files)
         window.files_added.connect(self._add_files)
-        window.file_opened.connect(self._clear_pending)
-        window.results_opened.connect(self._clear_pending)
+        window.file_opened.connect(self._on_external_open)
+        window.results_opened.connect(self._on_external_open)
         files.loaded.connect(self._loaded)
         files.closed.connect(self._closed)
         files.open_failed.connect(self._open_failed)
@@ -181,12 +204,14 @@ class MultiFileController(QObject):
         self._panel.recordings.itemSelectionChanged.connect(self._refresh)
         self._panel.recordings.model().rowsMoved.connect(self._reorder_recording)
         self._panel.remove.clicked.connect(self._remove_selected)
+        self._panel.settings_mode.activated.connect(self._change_settings_mode)
 
     def _open_files(self, paths: list[Path]) -> None:
         if not paths or self._task is not None:
             return
         # Keep the existing queue until the new reference opens successfully.
         resolved_paths = [path.resolve() for path in paths]
+        self._remember_active_settings()
         self._pending = tuple(dict.fromkeys(resolved_paths))
         self._refresh()
         self._files.open_file(self._pending[0])
@@ -220,6 +245,9 @@ class MultiFileController(QObject):
         )
         if self._pending and path == self._pending[0]:
             self._recordings = list(self._pending)
+            self._recording_settings.clear()
+            self._personalized_recordings.clear()
+            self._common_settings = self._capture_settings()
             self._pending = ()
             self._show_queue()
         # Restore settings after switching references, then remove the old row if requested
@@ -229,6 +257,9 @@ class MultiFileController(QObject):
             restore_settings()
             if row is not None:
                 self._remove_row(row)
+        elif self._common_settings is not None and path in self._recordings:
+            settings = self._settings_for_recording(path, self._common_settings)
+            self._restore_settings(settings)
         self._mark_active_recording()
         self._refresh()
 
@@ -244,6 +275,10 @@ class MultiFileController(QObject):
         if self._replacement is not None and path == self._replacement[0]:
             self._clear_pending()
             self._panel.status.setText(texts.MULTI_FILE_REPLACEMENT_ERROR)
+
+    def _on_external_open(self) -> None:
+        self._remember_active_settings()
+        self._clear_pending()
 
     def _clear_pending(self) -> None:
         self._pending = ()
@@ -268,6 +303,11 @@ class MultiFileController(QObject):
         self._window.add_files_action.setEnabled(idle and self._reference is not None)
         self._panel.run.setEnabled(idle and self._reference is not None and bool(self._recordings))
         self._panel.tracking.setEnabled(idle)
+        mode = self._panel.settings_mode
+        mode.setEnabled(idle and self._reference in self._recordings)
+        mode.setCurrentIndex(
+            _PERSONALIZED_SETTINGS_INDEX if self._reference in self._personalized_recordings else 0
+        )
         self._panel.remove.setEnabled(
             idle and len(self._recordings) > 1 and bool(self._panel.recordings.selectedItems())
         )
@@ -321,66 +361,105 @@ class MultiFileController(QObject):
             path: Recording to open as the new reference.
             row_to_remove: Queue row to remove after opening succeeds, if any.
         """
-        self._replacement = (path, row_to_remove, self._capture_settings())
+        self._remember_active_settings()
+        common = self._common_settings or self._capture_settings()
+        settings = self._settings_for_recording(path, common)
+        restore = partial(
+            self._restore_settings,
+            settings,
+            folder=self._export.output_dir.text(),
+            fmt=self._export.format.currentText(),
+        )
+        self._replacement = (path, row_to_remove, restore)
         self._refresh()
         self._files.open_file(path)
 
-    def _capture_settings(self) -> Callable[[], None]:
-        """Capture settings before loading a recording resets the controls.
-
-        Returns:
-            A callback that reapplies the captured pipeline, ROI, and export settings.
-        """
-        steps = (PipelineStep.PREPROCESSING, PipelineStep.DETECTION, PipelineStep.TRACKING)
-        params = {step: self._pipeline.get_step_params(step) for step in steps}
-        roi = self._current_roi
-        folder = self._export.output_dir.text()
-        fmt = self._export.format.currentText()
-        first = self._export.first_frame.value()
-        last = self._export.last_frame.value()
-
-        # Keep these values so we can restore them once the replacement recording opens
-        return partial(
-            self._restore_settings,
-            params=params,
-            roi=roi,
-            folder=folder,
-            fmt=fmt,
-            first=first,
-            last=last,
+    def _capture_settings(self) -> RecordingSettings:
+        """Read the current analysis settings and frame bounds from the controls."""
+        return RecordingSettings(
+            preprocessing=self._pipeline.get_preproc_params(),
+            detection=DetectionConfig(**self._pipeline.get_step_params(PipelineStep.DETECTION)),
+            tracking=TrackingConfig(**self._pipeline.get_step_params(PipelineStep.TRACKING)),
+            roi=self._pipeline.get_roi_params().region,
+            first=self._export.first_frame.value(),
+            last=self._export.last_frame.value(),
+            include_tracking=self._panel.tracking.isChecked(),
         )
 
-    def _restore_settings(
-        self,
-        params: dict[PipelineStep, dict[str, Any]],
-        roi: RegionOfInterest | None,
-        folder: str,
-        fmt: str,
-        first: int,
-        last: int,
-    ) -> None:
-        """Apply the previous settings to the newly loaded recording.
+    def _remember_active_settings(self) -> None:
+        """Save visible settings to the common profile or to the active recording."""
+        path = self._reference
+        if path is None or path not in self._recordings:
+            return
+        settings = self._capture_settings()
+        if path in self._personalized_recordings:
+            self._recording_settings[path] = settings
+        else:
+            self._common_settings = settings
+
+    def _settings_for_recording(self, path: Path, common: RecordingSettings) -> RecordingSettings:
+        """Choose the settings enabled for this recording.
 
         Args:
-            params: Saved parameter values for each analysis step.
-            roi: Saved crop, if one was set.
-            folder: Export output folder.
-            fmt: Export table format.
-            first: First frame to export, as shown in the GUI.
-            last: Last frame to export, as shown in the GUI.
+            path: Recording in the batch.
+            common: Shared analysis settings for the batch.
+
+        Returns:
+            The recording's own settings if enabled, otherwise the shared settings.
         """
-        for step, step_params in params.items():
-            self._pipeline.update_step_params(step, **step_params)
-        if roi is not None:
-            self._pipeline.update_step_params(PipelineStep.ROI, **roi.to_dict())
-            self._show_roi(roi)
-        self._export.output_dir.setText(folder)
-        self._export.format.setCurrentText(fmt)
-        self._export.first_frame.setValue(first)
-        self._export.last_frame.setValue(last)
+        if path in self._personalized_recordings:
+            return self._recording_settings.get(path, common)
+        return common
+
+    def _change_settings_mode(self, index: int) -> None:
+        """Switch the active recording between common and individual settings.
+
+        Args:
+            index: Index of the selected settings mode.
+        """
+        path = self._reference
+        if path is None or path not in self._recordings:
+            return
+        personalized = index == _PERSONALIZED_SETTINGS_INDEX
+        if personalized == (path in self._personalized_recordings):
+            return
+        self._remember_active_settings()
+        common = self._common_settings or self._capture_settings()
+        if personalized:
+            self._personalized_recordings.add(path)
+        else:
+            self._personalized_recordings.discard(path)
+        self._restore_settings(self._settings_for_recording(path, common))
+
+    def _restore_settings(
+        self, settings: RecordingSettings, *, folder: str | None = None, fmt: str | None = None
+    ) -> None:
+        """Apply saved settings to the active recording.
+
+        Args:
+            settings: Analysis settings and frame bounds to restore.
+            folder: Export folder to keep when changing recordings.
+            fmt: Export format to keep when changing recordings.
+        """
+        self._pipeline.set_preproc_params(settings.preprocessing)
+        self._pipeline.set_detection_params(settings.detection)
+        self._pipeline.set_tracking_params(settings.tracking)
+        roi = self._pipeline.get_roi_params()
+        if roi.region != settings.roi or settings.roi is not None:
+            self._pipeline.set_roi_params(roi.with_region(settings.roi))
+            self._show_roi(settings.roi)
+        if folder is not None:
+            self._export.output_dir.setText(folder)
+        if fmt is not None:
+            self._export.format.setCurrentText(fmt)
+        self._export.first_frame.setValue(settings.first)
+        self._export.last_frame.setValue(settings.last)
+        self._panel.tracking.setChecked(settings.include_tracking)
 
     def _remove_row(self, row: int) -> None:
-        self._recordings.pop(row)
+        path = self._recordings.pop(row)
+        self._recording_settings.pop(path, None)
+        self._personalized_recordings.discard(path)
         self._panel.recordings.takeItem(row)
         self._panel.status.clear()
         self._refresh()
@@ -399,35 +478,26 @@ class MultiFileController(QObject):
         if not output_dir.is_dir():
             self._panel.status.setText(texts.MULTI_FILE_OUTPUT_ERROR)
             return
-        first = self._export.first_frame.value() - 1
-        last = self._export.last_frame.value() - 1
-        if first > last:
-            self._panel.status.setText(texts.MULTI_FILE_FRAME_ORDER_ERROR)
-            return
-        preproc = self._pipeline.get_preproc_params()
-        if not preproc.normalization_enabled:
-            self._panel.status.setText(texts.DETECTION_REQUIRES_NORMALIZATION)
-            return
-        detection = DetectionConfig(**self._pipeline.get_step_params(PipelineStep.DETECTION))
-        tracking = (
-            TrackingConfig(**self._pipeline.get_step_params(PipelineStep.TRACKING))
-            if self._panel.tracking.isChecked()
-            else None
-        )
-        info = source.info
+        self._remember_active_settings()
+        common = self._common_settings or self._capture_settings()
+        # Validate the shared settings once when all recordings use them.
+        if not self._personalized_recordings:
+            if common.first > common.last:
+                self._panel.status.setText(texts.MULTI_FILE_FRAME_ORDER_ERROR)
+                return
+            if not common.preprocessing.normalization_enabled:
+                self._panel.status.setText(texts.DETECTION_REQUIRES_NORMALIZATION)
+                return
+        recordings = []
+        for path in self._recordings:
+            settings = self._settings_for_recording(path, common)
+            recordings.append((path, settings))
         job = partial(
             _process_recordings,
-            tuple(self._recordings),
+            tuple(recordings),
             output_dir,
             self._export.format.currentText(),
-            first,
-            last,
-            (info.n_z, info.n_y, info.n_x),
             getattr(source, "channel", 0),
-            self._current_roi,
-            preproc,
-            detection,
-            tracking,
             self.recording_updated.emit,
         )
         for row in range(len(self._recordings)):
@@ -461,6 +531,7 @@ class MultiFileController(QObject):
             return
         result = item.data(Qt.ItemDataRole.UserRole)
         if result:
+            self._remember_active_settings()
             self._files.open_results(Path(result))
         elif item.data(_READY_ROLE):
             row = self._panel.recordings.row(item)
