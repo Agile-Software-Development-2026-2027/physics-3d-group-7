@@ -5,7 +5,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QLabel, QPushButton
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
-from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.display.vis_sub_roi_section import VisSubRoiSection
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.visualization.vis_sub_roi import VisSubRoiState
@@ -132,11 +131,3 @@ def test_programmatic_setters_do_not_emit_signals(section: VisSubRoiSection, qtb
     assert section.bounds == pytest.approx((8.0, 20.0, 4.0, 14.0, 2.0, 10.0))
     assert section.outside_opacity == pytest.approx(0.15)
     assert section.findChild(QLabel, names.VIS_SUB_ROI_OPACITY_VALUE).text() == "15%"
-
-
-def test_apply_theme_updates_toggle_button_stylesheet(section: VisSubRoiSection) -> None:
-    section.apply_theme(LIGHT_COLORS)
-    assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
-
-    section.apply_theme(DARK_COLORS)
-    assert DARK_COLORS.button in section.toggle_button.styleSheet()

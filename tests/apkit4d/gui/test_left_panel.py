@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from apkit4d.gui.constants import appearance, names, texts, view_style
 from apkit4d.gui.controllers.main_controller import MainController
-from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS, Theme
+from apkit4d.gui.theme.themes import DARK_COLORS, LIGHT_COLORS
 from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.gui.views.panels.appearance_section import AppearanceSection
 from apkit4d.gui.views.panels.left_panel import LeftPanel
@@ -26,6 +26,7 @@ from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.color_button import ColorButton
 from apkit4d.gui.views.widgets.frame_slider import FrameSlider
 from apkit4d.visualization.data_mapper import TrajectoryColorMode
+from tests.apkit4d.gui.helper import painted_color
 
 
 @pytest.fixture
@@ -83,27 +84,16 @@ def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
-def test_set_theme_paints_the_sections(panel) -> None:
-    panel.set_theme(Theme.LIGHT)
-    assert LIGHT_COLORS.button in panel.appearance_section.toggle_button.styleSheet()
-    assert LIGHT_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
-
-    panel.set_theme(Theme.DARK)
-    assert DARK_COLORS.button in panel.appearance_section.toggle_button.styleSheet()
-    assert DARK_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
-
-
 def test_main_controller_keeps_the_left_panel_on_the_active_theme(qtbot, qapp) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     MainController(window, qapp, window)
-    toggle_button = window.left_panel._appearance_section.toggle_button
-    assert DARK_COLORS.button in toggle_button.styleSheet()
+    window.show()
+    header = window.left_panel.appearance_section.header_frame
+    assert painted_color(header, header.width() - 3, header.height() // 2) == DARK_COLORS.button
 
-    button = window.findChild(QPushButton, names.THEME_BUTTON)
-    assert button is not None
-    button.click()
-    assert LIGHT_COLORS.button in toggle_button.styleSheet()
+    window.findChild(QPushButton, names.THEME_BUTTON).click()
+    assert painted_color(header, header.width() - 3, header.height() // 2) == LIGHT_COLORS.button
 
 
 def test_each_box_holds_its_control(panel) -> None:
@@ -256,11 +246,3 @@ def test_left_panel_includes_collapsed_vis_sub_roi_section(panel) -> None:
     assert section.title == texts.SECTION_VIS_SUB_ROI
     assert not section.is_expanded()
     assert section.outside_opacity == pytest.approx(0.01)
-
-
-def test_set_theme_paints_vis_sub_roi_section(panel) -> None:
-    panel.set_theme(Theme.LIGHT)
-    assert LIGHT_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
-
-    panel.set_theme(Theme.DARK)
-    assert DARK_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()

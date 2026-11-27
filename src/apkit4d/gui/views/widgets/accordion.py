@@ -24,11 +24,11 @@ from apkit4d.gui.models.pipeline_model import StepStatus
 from apkit4d.gui.theme import (
     DEFAULT_THEME,
     THEME_COLORS,
-    AccordionStyler,
     Theme,
     ThemeColors,
     apply_theme,
 )
+from apkit4d.gui.theme.stylesheet import set_style_property
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 
 _NO_HEIGHT_LIMIT: int = 16777215  # the largest height of a widget in Qt (QWIDGETSIZE_MAX)
@@ -60,7 +60,6 @@ class AccordionSection(QWidget):
         super().__init__(parent)
         self._title: str = title
         self._status: StepStatus = StepStatus.IDLE
-        self._theme_colors: ThemeColors = THEME_COLORS[DEFAULT_THEME]
         self._right_widget: QWidget | None = None
         self._play_button: QPushButton | None = None
 
@@ -118,8 +117,7 @@ class AccordionSection(QWidget):
         elif show_play_button:
             self.enable_play_button()
 
-        # Initialize with default theme
-        self.apply_theme(THEME_COLORS[DEFAULT_THEME])
+        self._update_header_style()
 
     @property
     def play_button(self) -> QPushButton | None:
@@ -177,8 +175,7 @@ class AccordionSection(QWidget):
         if callback is not None:
             btn.clicked.connect(lambda _=False, cb=callback: cb())
         self.set_right_widget(btn)
-        if hasattr(self, "_theme_colors"):
-            btn.setStyleSheet(AccordionStyler.play_button_stylesheet(self._theme_colors, self._status))
+        set_style_property(btn, "status", self._status.value)
         return btn
 
     def enable_play_button(
@@ -224,7 +221,7 @@ class AccordionSection(QWidget):
         if self._status == status:
             return
         self._status = status
-        self.apply_theme(self._theme_colors)
+        self._update_header_style()
 
     @property
     def title(self) -> str:
@@ -255,19 +252,11 @@ class AccordionSection(QWidget):
         return self.toggle_button.isChecked()
 
     def _update_header_style(self) -> None:
-        """Refresh header frame and toggle button styles for expanded/collapsed state."""
-        if hasattr(self, "_theme_colors"):
-            is_expanded = self.toggle_button.isChecked()
-            self.header_frame.setStyleSheet(
-                AccordionStyler.header_frame_stylesheet(self._theme_colors, self._status, is_expanded)
-            )
-            self.toggle_button.setStyleSheet(
-                AccordionStyler.toggle_button_stylesheet(self._theme_colors, self._status, is_expanded)
-            )
-            if self._play_button is not None:
-                self._play_button.setStyleSheet(
-                    AccordionStyler.play_button_stylesheet(self._theme_colors, self._status)
-                )
+        """Give the header its status and whether it is open: the stylesheet of the theme reads them."""
+        set_style_property(self.header_frame, "expanded", self.toggle_button.isChecked())
+        for widget in (self.header_frame, self.toggle_button, self._play_button):
+            if widget is not None:
+                set_style_property(widget, "status", self._status.value)
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         """
@@ -323,23 +312,13 @@ class AccordionSection(QWidget):
 
     def apply_theme(self, colors: ThemeColors) -> None:
         """
-        Apply theme colors to header button, content area, and text.
-        Maintains active step status colors across theme changes.
+        Repaint what the stylesheet of the theme does not reach, such as the plots of a subclass.
+
+        The section itself follows the stylesheet of the application, so here there is nothing to do.
 
         Args:
             colors: Colors of the active theme.
         """
-        self._theme_colors = colors
-        is_expanded = self.toggle_button.isChecked()
-        AccordionStyler.apply(
-            self.toggle_button,
-            self.content_area,
-            colors,
-            self._status,
-            self._play_button,
-            self.header_frame,
-            is_expanded,
-        )
 
 
 class AccordionDemo(QWidget):
@@ -398,8 +377,6 @@ class AccordionDemo(QWidget):
         self.scroll_area.setWidget(scroll_content)
         window_layout.addWidget(self.scroll_area)
 
-        self.apply_theme_colors(THEME_COLORS[self._active_theme])
-
     @property
     def active_theme(self) -> Theme:
         """The currently displayed theme in the demo."""
@@ -421,21 +398,9 @@ class AccordionDemo(QWidget):
         if isinstance(app, QApplication):
             apply_theme(app, theme)
 
-        colors = THEME_COLORS[theme]
         self._theme_label.setText(f"Active Theme: {theme.value.title()}")
-        self.apply_theme_colors(colors)
-
-    def apply_theme_colors(self, colors: ThemeColors) -> None:
-        """
-        Update demo widget styles with the given theme colors.
-
-        Args:
-            colors: Colors of the active theme.
-        """
-        self.setStyleSheet(f"background-color: {colors.window}; color: {colors.window_text};")
-        self.scroll_area.apply_theme(colors)
         for section in self._sections:
-            section.apply_theme(colors)
+            section.apply_theme(THEME_COLORS[theme])
 
 
 if __name__ == "__main__":
