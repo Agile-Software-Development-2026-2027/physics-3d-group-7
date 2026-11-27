@@ -100,13 +100,13 @@ class LeftPanel(SidePanel):
 
     def set_theme(self, theme: Theme) -> None:
         """
-        Paint the sections with `theme`, because the palette of the application does not reach them.
+        Paint the plots of the sections with `theme`, because the stylesheet of the application does not
+        reach them.
 
         Args:
             theme: Theme to apply.
         """
         colors = THEME_COLORS[theme]
-        self._scroll_area.apply_theme(colors)
         self._appearance_section.apply_theme(colors)
         self._vis_sub_roi_section.apply_theme(colors)
         self._histograms_section.apply_theme(colors)

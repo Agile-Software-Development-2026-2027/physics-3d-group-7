@@ -4,6 +4,9 @@ Scroll container components.
 A modern slim scrollbar with seamless integration with the application theme.
 """
 
+from typing import override
+
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
@@ -11,12 +14,6 @@ from PySide6.QtWidgets import (
 )
 
 from apkit4d.gui.constants import names
-from apkit4d.gui.theme import (
-    DEFAULT_THEME,
-    THEME_COLORS,
-    ScrollAreaStyler,
-    ThemeColors,
-)
 
 __all__ = ["ModernScrollArea"]
 
@@ -33,14 +30,24 @@ class ModernScrollArea(QScrollArea):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setObjectName(names.MODERN_SCROLL_AREA)
-        self.apply_theme(THEME_COLORS[DEFAULT_THEME])
+        self.setObjectName(names.MODERN_SCROLL_AREA)  # the stylesheet of the theme removes its background
 
-    def apply_theme(self, colors: ThemeColors) -> None:
+    @override
+    def minimumSizeHint(self) -> QSize:
         """
-        Update scrollbar styles to match the given theme colors.
+        Smallest size, as wide as the content when the content scrolls only vertically.
 
-        Args:
-            colors: Colors of the active theme.
+        Qt lets a scroll area become narrower than its content, which is then cropped on the right. A
+        column that holds this scroll area cannot be made narrower than its controls, the vertical
+        scroll bar included, so the application never crops them.
         """
-        ScrollAreaStyler.apply(self, colors)
+        hint = super().minimumSizeHint()
+        content = self.widget()
+        if content is None or self.horizontalScrollBarPolicy() != Qt.ScrollBarPolicy.ScrollBarAlwaysOff:
+            return hint
+        width = (
+            content.minimumSizeHint().width()
+            + self.verticalScrollBar().sizeHint().width()
+            + 2 * self.frameWidth()
+        )
+        return QSize(max(hint.width(), width), hint.height())

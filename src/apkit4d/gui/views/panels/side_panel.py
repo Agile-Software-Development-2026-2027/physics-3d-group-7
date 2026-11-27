@@ -4,15 +4,13 @@ Base class of the side columns of the main window.
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from apkit4d.gui.constants import appearance
-
 
 class SidePanel(QWidget):
     """
     Column where controls are stacked from the top.
 
     The panel has no fixed width: the splitter of the main window sets the initial one, lets the user
-    resize it down to `SIDE_PANEL_MIN_WIDTH` and collapse it completely.
+    resize it down to the width of its controls and collapse it completely.
 
     Args:
         object_name: Name used by the tests to find the panel.
@@ -21,7 +19,6 @@ class SidePanel(QWidget):
     def __init__(self, object_name: str) -> None:
         super().__init__()
         self.setObjectName(object_name)
-        self.setMinimumWidth(appearance.SIDE_PANEL_MIN_WIDTH)
         self._layout = QVBoxLayout(self)
         self._layout.addStretch()
 

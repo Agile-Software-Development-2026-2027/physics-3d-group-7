@@ -10,8 +10,7 @@ WINDOW_WIDTH: int = 1200
 WINDOW_HEIGHT: int = 800
 
 # columns, from left to right: left panel, center panel, right panel
-SIDE_PANEL_WIDTH: int = 200  # initial width of the side columns
-SIDE_PANEL_MIN_WIDTH: int = 120  # narrower than this, a side column collapses
+SIDE_PANEL_WIDTH: int = 200  # initial width of the side columns, when their controls fit in it
 COLUMN_SIZES: tuple[int, int, int] = (
     SIDE_PANEL_WIDTH,
     WINDOW_WIDTH - 2 * SIDE_PANEL_WIDTH,
