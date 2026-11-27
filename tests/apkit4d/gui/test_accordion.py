@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
 from apkit4d.gui.constants import names
 from apkit4d.gui.models.pipeline_model import StepStatus
-from apkit4d.gui.theme.style import get_scrollbar_stylesheet
+from apkit4d.gui.theme import apply_theme
 from apkit4d.gui.theme.themes import (
     DARK_COLORS,
     DARK_STATUS_COLORS,
@@ -19,6 +19,7 @@ from apkit4d.gui.views.widgets.accordion import (
     AccordionSection,
 )
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
+from tests.apkit4d.gui.helper import painted_color
 
 
 def test_accordion_section_init(qtbot) -> None:
@@ -53,9 +54,6 @@ def test_accordion_section_add_widget_and_qlabel_styling(qtbot) -> None:
     section.add_widget(button)
 
     assert section.content_layout.count() == 2
-    # Ensure content_area has the isolated object name selector
-    assert f"QFrame#{names.ACCORDION_CONTENT_AREA}" in section.content_area.styleSheet()
-    assert "QLabel" in section.content_area.styleSheet()
     assert label.objectName() != names.ACCORDION_CONTENT_AREA
 
 
@@ -108,35 +106,40 @@ def test_accordion_section_toggle_animation(qtbot) -> None:
     assert section.toggle_button.text() == "▼ Anim Test"
 
 
-def test_accordion_section_theme_application(qtbot) -> None:
+def test_accordion_section_theme_application(qapp, qtbot) -> None:
     section = AccordionSection("Theme Section")
     qtbot.addWidget(section)
+    section.show()
+    header = section.header_frame
 
-    # Apply Dark
-    section.apply_theme(DARK_COLORS)
-    assert DARK_COLORS.button in section.toggle_button.styleSheet()
-    assert DARK_COLORS.raised_base in section.content_area.styleSheet()
+    # the stylesheet of the application paints the section: switching the theme repaints it
+    apply_theme(qapp, Theme.DARK)
+    assert painted_color(header, header.width() - 3, header.height() // 2) == DARK_COLORS.button
 
-    # Apply Light
-    section.apply_theme(LIGHT_COLORS)
-    assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
-    assert LIGHT_COLORS.raised_base in section.content_area.styleSheet()
+    apply_theme(qapp, Theme.LIGHT)
+    assert painted_color(header, header.width() - 3, header.height() // 2) == LIGHT_COLORS.button
 
 
-def test_accordion_section_status_colors(qtbot) -> None:
+def test_accordion_section_status_colors(qapp, qtbot) -> None:
+    apply_theme(qapp, Theme.DARK)
     section = AccordionSection("Status Section")
     qtbot.addWidget(section)
+    section.show()
+    header = section.header_frame
+
+    def header_color() -> str:
+        return painted_color(header, header.width() - 3, header.height() // 2)
 
     # Initially IDLE
     assert section.status == StepStatus.IDLE
+    assert header.property("status") == StepStatus.IDLE.value
 
     # Transition to PENDING (Muted Blue) in dark theme
-    section.apply_theme(DARK_COLORS)
     section.set_status(StepStatus.PENDING)
     assert section.status == StepStatus.PENDING
-    assert DARK_STATUS_COLORS.pending_bg in section.toggle_button.styleSheet()
-    # Confirm no left accent border
-    assert "border-left" not in section.toggle_button.styleSheet()
+    assert header.property("status") == StepStatus.PENDING.value
+    assert section.toggle_button.property("status") == StepStatus.PENDING.value
+    assert header_color() == DARK_STATUS_COLORS.pending_bg
 
     # Same status call is a no-op
     section.set_status(StepStatus.PENDING)
@@ -144,33 +147,42 @@ def test_accordion_section_status_colors(qtbot) -> None:
 
     # Transition to RUNNING (Muted Orange)
     section.set_status(StepStatus.RUNNING)
-    assert section.status == StepStatus.RUNNING
-    assert DARK_STATUS_COLORS.running_bg in section.toggle_button.styleSheet()
-    assert "border-left" not in section.toggle_button.styleSheet()
+    assert header_color() == DARK_STATUS_COLORS.running_bg
 
     # Transition to COMPLETED (Muted Green)
     section.set_status(StepStatus.COMPLETED)
-    assert section.status == StepStatus.COMPLETED
-    assert DARK_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
-    assert "border-left" not in section.toggle_button.styleSheet()
+    assert header_color() == DARK_STATUS_COLORS.completed_bg
 
     # Switch to Light theme while COMPLETED
-    section.apply_theme(LIGHT_COLORS)
-    assert LIGHT_STATUS_COLORS.completed_bg in section.toggle_button.styleSheet()
-    assert LIGHT_STATUS_COLORS.completed_text in section.toggle_button.styleSheet()
+    apply_theme(qapp, Theme.LIGHT)
+    assert header_color() == LIGHT_STATUS_COLORS.completed_bg
 
     # Back to IDLE
     section.set_status(StepStatus.IDLE)
-    assert section.status == StepStatus.IDLE
-    assert LIGHT_COLORS.button in section.toggle_button.styleSheet()
+    assert header_color() == LIGHT_COLORS.button
 
 
-def test_modern_scrollbar_stylesheet() -> None:
-    qss = get_scrollbar_stylesheet(DARK_COLORS)
-    assert "QScrollBar:vertical" in qss
-    assert "QScrollBar:horizontal" in qss
-    assert DARK_COLORS.placeholder_text in qss
-    assert DARK_COLORS.highlight in qss
+def test_expanded_section_header_joins_its_content(qtbot) -> None:
+    section = AccordionSection("Expand Test")
+    qtbot.addWidget(section)
+    assert section.header_frame.property("expanded") is False
+
+    section.set_expanded(True, animate=False)
+    assert section.header_frame.property("expanded") is True
+
+    section.toggle_button.click()
+    assert section.header_frame.property("expanded") is False
+
+
+def test_play_button_follows_the_status_of_the_section(qtbot) -> None:
+    section = AccordionSection("Play Test")
+    qtbot.addWidget(section)
+    section.set_status(StepStatus.RUNNING)
+    play_btn = section.enable_play_button()
+    assert play_btn.property("status") == StepStatus.RUNNING.value
+
+    section.set_status(StepStatus.COMPLETED)
+    assert play_btn.property("status") == StepStatus.COMPLETED.value
 
 
 def test_modern_scroll_area(qtbot) -> None:
@@ -183,9 +195,6 @@ def test_modern_scroll_area(qtbot) -> None:
     assert scroll_area.frameShape() == QFrame.Shape.NoFrame
     assert scroll_area.widgetResizable()
     assert scroll_area.objectName() == names.MODERN_SCROLL_AREA
-
-    scroll_area.apply_theme(LIGHT_COLORS)
-    assert LIGHT_COLORS.placeholder_text in scroll_area.styleSheet()
 
 
 def test_accordion_demo(qtbot) -> None:

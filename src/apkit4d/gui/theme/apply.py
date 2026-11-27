@@ -59,4 +59,4 @@ def apply_theme(app: QApplication, theme: Theme) -> None:
     app.setStyle(application.QT_STYLE)  # changing the style resets the palette, so it comes first
     palette = build_palette(THEME_COLORS[theme])
     app.setPalette(palette)
-    app.setStyleSheet(build_stylesheet(palette))  # the standard controls get the look of the playback bar
+    app.setStyleSheet(build_stylesheet(palette, theme))  # every control gets the look of the playback bar
