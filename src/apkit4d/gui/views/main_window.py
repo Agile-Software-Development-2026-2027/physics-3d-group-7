@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
     show_volume_toggled = Signal(bool)
     show_outline_toggled = Signal(bool)
     show_scalar_bar_toggled = Signal(bool)
+    show_axes_toggled = Signal(bool)
     performance_settings_requested = Signal()
 
     def __init__(self) -> None:
@@ -138,6 +139,7 @@ class MainWindow(QMainWindow):
             self._show_volume_action,
             self._show_outline_action,
             self._show_scalar_bar_action,
+            self._show_axes_action,
             self._show_blobs_action,
             self._show_trajectories_action,
         ):
@@ -275,6 +277,14 @@ class MainWindow(QMainWindow):
         self._show_scalar_bar_action.setEnabled(False)
         self._show_scalar_bar_action.toggled.connect(self.show_scalar_bar_toggled)
         menu.addAction(self._show_scalar_bar_action)
+
+        self._show_axes_action = QAction(texts.ACTION_SHOW_AXES, self)
+        self._show_axes_action.setObjectName(names.SHOW_AXES_ACTION)
+        self._show_axes_action.setCheckable(True)
+        self._show_axes_action.setChecked(True)
+        self._show_axes_action.setEnabled(False)
+        self._show_axes_action.toggled.connect(self.show_axes_toggled)
+        menu.addAction(self._show_axes_action)
 
         self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
         self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)

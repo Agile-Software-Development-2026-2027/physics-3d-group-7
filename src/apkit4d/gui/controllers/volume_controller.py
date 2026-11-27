@@ -50,6 +50,8 @@ class VolumeView(Protocol):
 
     def set_scalar_bar_visible(self, visible: bool) -> None: ...
 
+    def set_axes_visible(self, visible: bool) -> None: ...
+
 
 class _SignalLike(Protocol):
     def connect(self, slot: Callable[..., object]) -> object: ...
@@ -309,6 +311,10 @@ class VolumeController(QObject):
     def set_scalar_bar_visible(self, visible: bool) -> None:
         """Show or hide the active scalar bar in the 3D view."""
         self._view.set_scalar_bar_visible(visible)
+
+    def set_axes_visible(self, visible: bool) -> None:
+        """Show or hide the orientation axes in the 3D view."""
+        self._view.set_axes_visible(visible)
 
     def _start_reading(self, source: FrameSource, frame: int) -> None:
         self._busy = True

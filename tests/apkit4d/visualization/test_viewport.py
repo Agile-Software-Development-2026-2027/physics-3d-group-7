@@ -119,6 +119,17 @@ class TestViewport:
         viewport.set_scalar_bar_visible(True)
         assert viewport.plotter.scalar_bars["values"].GetVisibility() == 1
 
+    def test_axes_visibility_can_be_toggled(self, viewport):
+        axes = viewport.plotter.renderer.axes_actor
+        assert axes is not None
+        assert axes.GetVisibility() == 1
+
+        viewport.set_axes_visible(False)
+        assert axes.GetVisibility() == 0
+
+        viewport.set_axes_visible(True)
+        assert axes.GetVisibility() == 1
+
     def test_show_volume_with_none_does_nothing(self, viewport):
         viewport.show_volume(None)
         assert "volume" not in viewport.plotter.actors

@@ -98,6 +98,7 @@ class MainController(QObject):
             window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
             window.show_outline_toggled.connect(self._volume_controller.set_outline_visible)
             window.show_scalar_bar_toggled.connect(self._volume_controller.set_scalar_bar_visible)
+            window.show_axes_toggled.connect(self._volume_controller.set_axes_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
             window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)

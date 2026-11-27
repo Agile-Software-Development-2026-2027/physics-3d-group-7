@@ -504,6 +504,13 @@ class Viewport(QWidget):
             scalar_bar.SetVisibility(bar_visible)
             self._request_render()
 
+    def set_axes_visible(self, visible: bool) -> None:
+        """Show or hide the orientation axes indicator."""
+        axes = self.plotter.renderer.axes_actor
+        if axes is not None:
+            axes.SetVisibility(bool(visible))
+            self._request_render()
+
     def set_colormap(self, name: str) -> None:
         """
         This function changes the colors of the volume. the scalar bar uses the same colors,
