@@ -2,11 +2,12 @@
 Unit tests for LeftPanel.
 """
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
-    QCheckBox,
     QColorDialog,
     QComboBox,
     QFormLayout,
@@ -34,18 +35,18 @@ def panel(qtbot) -> LeftPanel:
     return left_panel
 
 
-def test_left_panel_has_the_two_sections(panel) -> None:
+def test_left_panel_has_appearance_and_visualization_sections(panel) -> None:
     assert panel.objectName() == names.LEFT_PANEL
     assert panel.findChild(AccordionSection, names.APPEARANCE_SECTION) is panel.appearance_section
-    assert panel.findChild(AccordionSection, names.LAYERS_SECTION) is panel.layers_section
+    assert panel.findChild(AccordionSection, names.VIS_SUB_ROI_SECTION) is panel.vis_sub_roi_section
     assert isinstance(panel.appearance_section, AppearanceSection)
     assert panel.appearance_section.title == texts.SECTION_APPEARANCE
-    assert panel.layers_section.title == texts.SECTION_LAYERS
+    assert panel.vis_sub_roi_section.title == texts.SECTION_VIS_SUB_ROI
 
 
 def test_only_the_appearance_section_starts_open(panel) -> None:
     assert panel.appearance_section.is_expanded()
-    assert not panel.layers_section.is_expanded()
+    assert not panel.vis_sub_roi_section.is_expanded()
 
 
 def test_open_section_is_tall_enough_for_its_content(panel) -> None:
@@ -85,11 +86,11 @@ def test_theme_button_asks_to_switch_the_theme(panel, qtbot) -> None:
 def test_set_theme_paints_the_sections(panel) -> None:
     panel.set_theme(Theme.LIGHT)
     assert LIGHT_COLORS.button in panel.appearance_section.toggle_button.styleSheet()
-    assert LIGHT_COLORS.button in panel.layers_section.toggle_button.styleSheet()
+    assert LIGHT_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
 
     panel.set_theme(Theme.DARK)
     assert DARK_COLORS.button in panel.appearance_section.toggle_button.styleSheet()
-    assert DARK_COLORS.button in panel.layers_section.toggle_button.styleSheet()
+    assert DARK_COLORS.button in panel.vis_sub_roi_section.toggle_button.styleSheet()
 
 
 def test_main_controller_keeps_the_left_panel_on_the_active_theme(qtbot, qapp) -> None:
@@ -182,17 +183,37 @@ def test_set_colors_shows_them_on_the_buttons(panel) -> None:
     assert panel.findChild(ColorButton, names.OUTLINE_BUTTON).color == "#ffffff"
 
 
-def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, qtbot) -> None:
-    traj_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
-    blobs_cb = panel.layers_section.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
+def test_layer_actions_emit_visibility_signals(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.set_current_file(Path("sample.czi"))
+
+    volume_action = window.findChild(QAction, names.SHOW_VOLUME_ACTION)
+    blobs_action = window.findChild(QAction, names.SHOW_BLOBS_ACTION)
+    trajectories_action = window.findChild(QAction, names.SHOW_TRAJECTORIES_ACTION)
+
+    assert volume_action is not None and volume_action.isChecked()
+    assert blobs_action is not None and blobs_action.isChecked()
+    assert trajectories_action is not None and trajectories_action.isChecked()
+
+    with qtbot.waitSignal(window.show_volume_toggled, timeout=1000) as blocker:
+        volume_action.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(window.left_panel.show_blobs_toggled, timeout=1000) as blocker:
+        blobs_action.setChecked(False)
+    assert blocker.args == [False]
+
+    with qtbot.waitSignal(window.left_panel.show_trajectories_toggled, timeout=1000) as blocker:
+        trajectories_action.setChecked(False)
+    assert blocker.args == [False]
+
+
+def test_appearance_section_holds_trajectory_controls(panel, qtbot) -> None:
     tail_spin = panel.appearance_section.findChild(QSpinBox, names.TRAJECTORY_TAIL_SPINBOX)
     mode_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO)
     cmap_combo = panel.appearance_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
 
-    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLOR_MODE_COMBO) is None
-    assert panel.layers_section.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO) is None
-    assert traj_cb is not None and traj_cb.isHidden() and traj_cb.isChecked()
-    assert blobs_cb is not None and blobs_cb.isHidden() and blobs_cb.isChecked()
     assert tail_spin is not None and tail_spin.specialValueText() == texts.TRAJECTORY_TAIL_ALL
     assert panel.appearance_section.trajectory_tail_length == view_style.TRAJECTORY_TAIL_DEFAULT
     assert mode_combo is not None
@@ -209,14 +230,6 @@ def test_layers_and_appearance_hold_trajectory_controls_and_emit_signals(panel, 
         mode_combo.setCurrentIndex(1)
     assert blocker.args == [TrajectoryColorMode.TRACK_ID]
     assert not cmap_combo.isEnabled()
-
-    with qtbot.waitSignal(panel.show_trajectories_toggled, timeout=1000) as blocker:
-        traj_cb.setChecked(False)
-    assert blocker.args == [False]
-
-    with qtbot.waitSignal(panel.show_blobs_toggled, timeout=1000) as blocker:
-        blobs_cb.setChecked(False)
-    assert blocker.args == [False]
 
 
 def test_left_panel_includes_collapsed_vis_sub_roi_section(panel) -> None:

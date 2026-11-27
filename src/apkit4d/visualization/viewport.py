@@ -136,6 +136,8 @@ class Viewport(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         self._volume_grid: pv.ImageData | None = None
+        self._volume_visible: bool = True
+
         """Strong Python reference to the volume mapper so that PyVista does not delete '_lut' 
         (which is the lookup table) after removing the `"values"` scalar bar or replacing 'plotter.mapper'"""
         self._volume_mapper: Any = None
@@ -396,6 +398,8 @@ class Viewport(QWidget):
             show_scalar_bar=(self._scalar_bar_mode == ScalarBarMode.VOLUME),
             scalar_bar_args={"render": False},
         )
+        actor.SetVisibility(self._volume_visible)
+
         # Keep a strong Python reference so PyVista's _BaseVolumeMapper.__del__ does not delete _lut
         # when the "values" scalar bar is removed or another actor replaces plotter.mapper.
         self._volume_mapper = actor.mapper
@@ -459,6 +463,14 @@ class Viewport(QWidget):
 
         self._request_render()
         self.displayed_volume_bounds_updated.emit(self.volume_bounds)
+
+    def set_volume_visible(self, visible: bool) -> None:
+        """Show or hide the volume without discarding its current data."""
+        self._volume_visible = bool(visible)
+        actor = self.plotter.actors.get("volume")
+        if actor is not None:
+            actor.SetVisibility(self._volume_visible)
+            self._request_render()
 
     def set_colormap(self, name: str) -> None:
         """

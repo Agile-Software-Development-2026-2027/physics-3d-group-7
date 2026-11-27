@@ -6,8 +6,6 @@ Texts of the left column: appearance and layers.
 SECTION_APPEARANCE: str = "Appearance"
 SECTION_LAYERS: str = "Layers"
 LAYERS_EMPTY: str = "No layers yet"
-LABEL_SHOW_TRAJECTORIES: str = "Show trajectories"
-LABEL_SHOW_BLOBS: str = "Show blobs"
 BOX_TRAJECTORY_TAIL: str = "Trail length (frames)"
 TRAJECTORY_TAIL_ALL: str = "All (-1)"
 BOX_TRAJECTORY_COLOR_MODE: str = "Path color by"

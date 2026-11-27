@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
     file_opened = Signal(Path)
     results_opened = Signal(Path)
     video_export_requested = Signal()
+    show_volume_toggled = Signal(bool)
     performance_settings_requested = Signal()
 
     def __init__(self) -> None:
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
         self._multi_file_dock.visibilityChanged.connect(self._size_multi_file_dock_on_first_show)
         self._build_file_menu()
         self._build_view_menu()
+        self._build_layers_menu()
         self._build_settings_menu()
         self._build_status_bar()
 
@@ -114,6 +116,10 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(message)
 
+    def set_volume_visible(self, visible: bool) -> None:
+        """Set the volume layer action, which updates visibility through its toggled signal."""
+        self._show_volume_action.setChecked(visible)
+
     def set_current_file(self, path: Path | None) -> None:
         """
         Show the name of the open file and update file-dependent actions.
@@ -122,6 +128,8 @@ class MainWindow(QMainWindow):
             path: The open file, or None to show only the name of the application.
         """
         self._export_video_action.setEnabled(path is not None)
+        for action in (self._show_volume_action, self._show_blobs_action, self._show_trajectories_action):
+            action.setEnabled(path is not None)
         self._center.set_file_loaded(path is not None)
         if path is None:
             self.setWindowTitle(application.APP_NAME)
@@ -227,6 +235,34 @@ class MainWindow(QMainWindow):
         action.setChecked(False)
         action.toggled.connect(self._on_show_fps_toggled)
         menu.addAction(action)
+
+    def _build_layers_menu(self) -> None:
+        menu = self.menuBar().addMenu(texts.LAYERS_MENU)
+        menu.setObjectName(names.LAYERS_MENU)
+
+        self._show_volume_action = QAction(texts.ACTION_SHOW_VOLUME, self)
+        self._show_volume_action.setObjectName(names.SHOW_VOLUME_ACTION)
+        self._show_volume_action.setCheckable(True)
+        self._show_volume_action.setChecked(True)
+        self._show_volume_action.setEnabled(False)
+        self._show_volume_action.toggled.connect(self.show_volume_toggled)
+        menu.addAction(self._show_volume_action)
+
+        self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
+        self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)
+        self._show_blobs_action.setCheckable(True)
+        self._show_blobs_action.setChecked(True)
+        self._show_blobs_action.setEnabled(False)
+        self._show_blobs_action.toggled.connect(self.left_panel.show_blobs_toggled)
+        menu.addAction(self._show_blobs_action)
+
+        self._show_trajectories_action = QAction(texts.ACTION_SHOW_TRAJECTORIES, self)
+        self._show_trajectories_action.setObjectName(names.SHOW_TRAJECTORIES_ACTION)
+        self._show_trajectories_action.setCheckable(True)
+        self._show_trajectories_action.setChecked(True)
+        self._show_trajectories_action.setEnabled(False)
+        self._show_trajectories_action.toggled.connect(self.left_panel.show_trajectories_toggled)
+        menu.addAction(self._show_trajectories_action)
 
     def _build_settings_menu(self) -> None:
         menu = self.menuBar().addMenu(texts.MENU_SETTINGS)

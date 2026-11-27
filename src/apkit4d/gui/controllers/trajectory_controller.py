@@ -8,7 +8,7 @@ import pyvista as pv
 from PySide6.QtCore import QObject
 
 from apkit4d.gui.constants import texts
-from apkit4d.gui.views.panels.left_panel import LeftPanel
+from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.visualization.data_mapper import (
     PreparedTrajectories,
     TrajectoryColorMode,
@@ -54,12 +54,12 @@ class TrajectoryController(QObject):
 
     def __init__(
         self,
-        panel: LeftPanel,
+        window: MainWindow,
         view: TrajectoryView,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._panel = panel
+        self._panel = window.left_panel
         self._view = view
         self._scalar_bar_view: VelocityScalarBarView | None = (
             view if isinstance(view, VelocityScalarBarView) else None
@@ -69,21 +69,18 @@ class TrajectoryController(QObject):
         self._velocity_vmax: float = 1.0
         self._current_frame = 0
         self._config = TrajectoryRenderConfig(
-            # TODO: layers
-            # visible=panel.layers_section.show_trajectories,
-            # show_blobs=panel.layers_section.show_blobs,
-            visible=True,
-            show_blobs=True,
-            tail_length=panel.appearance_section.trajectory_tail_length,
-            color_mode=panel.appearance_section.trajectory_color_mode,
-            colormap=panel.appearance_section.trajectory_colormap,
+            visible=window._show_trajectories_action.isChecked(),
+            show_blobs=window._show_blobs_action.isChecked(),
+            tail_length=self._panel.appearance_section.trajectory_tail_length,
+            color_mode=self._panel.appearance_section.trajectory_color_mode,
+            colormap=self._panel.appearance_section.trajectory_colormap,
         )
 
-        panel.show_trajectories_toggled.connect(self._on_show_trajectories_toggled)
-        panel.show_blobs_toggled.connect(self._on_show_blobs_toggled)
-        panel.appearance_section.trajectory_tail_changed.connect(self._on_tail_length_changed)
-        panel.appearance_section.trajectory_color_mode_changed.connect(self._on_color_mode_changed)
-        panel.appearance_section.trajectory_colormap_changed.connect(self._on_colormap_changed)
+        self._panel.show_trajectories_toggled.connect(self._on_show_trajectories_toggled)
+        self._panel.show_blobs_toggled.connect(self._on_show_blobs_toggled)
+        self._panel.appearance_section.trajectory_tail_changed.connect(self._on_tail_length_changed)
+        self._panel.appearance_section.trajectory_color_mode_changed.connect(self._on_color_mode_changed)
+        self._panel.appearance_section.trajectory_colormap_changed.connect(self._on_colormap_changed)
 
         view.set_blobs_visible(self._config.show_blobs)
 

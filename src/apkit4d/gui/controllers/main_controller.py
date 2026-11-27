@@ -95,6 +95,7 @@ class MainController(QObject):
             # the volume controller must know the new recording before the playback goes back to frame 0
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
+            window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
             window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
@@ -133,6 +134,8 @@ class MainController(QObject):
                 file_controller=self._file_controller,
                 volume_controller=self._volume_controller,
             )
+            if self._volume_controller is not None:
+                self._blob_controller.detection_completed.connect(self._on_detection_completed)
             self._file_controller.loaded.connect(self._blob_controller.set_source)
             self._file_controller.closed.connect(self._blob_controller.clear_source)
             self._blob_controller.params_changed.connect(
@@ -170,7 +173,7 @@ class MainController(QObject):
         window.left_panel.set_theme(self._theme_controller.theme)
 
         self._trajectory_controller: TrajectoryController | None = (
-            TrajectoryController(window.left_panel, view, parent=self) if view is not None else None
+            TrajectoryController(window, view, parent=self) if view is not None else None
         )
         if self._trajectory_controller is not None:
             self._playback_controller.frame_changed.connect(self._trajectory_controller.on_set_frame)
@@ -425,6 +428,9 @@ class MainController(QObject):
 
     def _on_volume_failed(self) -> None:
         self._playback_controller.set_playing(False)  # otherwise every frame would report the same error
+
+    def _on_detection_completed(self) -> None:
+        self._window.set_volume_visible(False)
 
     def _commit_preprocessing_stage(self) -> None:
         """Auto-commit the active preprocessing configuration and complete Stage 2."""

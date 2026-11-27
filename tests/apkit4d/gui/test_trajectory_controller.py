@@ -4,11 +4,12 @@ import numpy as np
 import pandas as pd
 import pytest
 import pyvista as pv
-from PySide6.QtWidgets import QCheckBox, QComboBox, QSpinBox
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QComboBox, QSpinBox
 
 from apkit4d.gui.constants import names, texts
 from apkit4d.gui.controllers.trajectory_controller import TrajectoryController
-from apkit4d.gui.views.panels.left_panel import LeftPanel
+from apkit4d.gui.views.main_window import MainWindow
 from apkit4d.visualization.data_mapper import PreparedTrajectories, TrajectoryColorMode
 from apkit4d.visualization.viewport import ScalarBarMode, Viewport
 
@@ -49,15 +50,16 @@ def _sample_tracks() -> pd.DataFrame:
 
 @pytest.fixture
 def setup(qtbot):
-    panel = LeftPanel()
-    qtbot.addWidget(panel)
+    window = MainWindow()
+    qtbot.addWidget(window)
     view = _FakeTrajectoryView()
-    controller = TrajectoryController(panel, view)
-    return panel, view, controller
+    controller = TrajectoryController(window, view)
+    return window, view, controller
 
 
 def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(setup) -> None:
-    panel, view, controller = setup
+    window, view, controller = setup
+    panel = window.left_panel
     assert view.blobs_visible == [True]
 
     controller.set_trajectories(_sample_tracks(), dt_s=0.1, current_frame=0)
@@ -85,10 +87,11 @@ def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(se
     assert controller.config.colormap == cmap_combo.currentText()
 
     # Toggling trajectory visibility clears/restores trajectories; toggling blobs updates view
-    traj_cb = panel.findChild(QCheckBox, names.SHOW_TRAJECTORIES_CHECKBOX)
-    blobs_cb = panel.findChild(QCheckBox, names.SHOW_BLOBS_CHECKBOX)
+    traj_cb = window.findChild(QAction, names.SHOW_TRAJECTORIES_ACTION)
+    blobs_cb = window.findChild(QAction, names.SHOW_BLOBS_ACTION)
 
     cleared_before = view.cleared_count
+    assert traj_cb is not None
     traj_cb.setChecked(False)
     assert view.cleared_count == cleared_before + 1
 
@@ -99,6 +102,7 @@ def test_trajectory_controller_renders_and_updates_on_frame_and_panel_changes(se
     traj_cb.setChecked(True)
     assert view.trajectories[-1][0].n_points == 2
 
+    assert blobs_cb is not None
     blobs_cb.setChecked(False)
     assert view.blobs_visible[-1] is False
 
@@ -129,10 +133,11 @@ class _FakeScalarBarTrajectoryView(_FakeTrajectoryView):
 
 
 def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qtbot) -> None:
-    panel = LeftPanel()
-    qtbot.addWidget(panel)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    panel = window.left_panel
     view = _FakeScalarBarTrajectoryView()
-    controller = TrajectoryController(panel, view)
+    controller = TrajectoryController(window, view)
 
     tracks = _sample_tracks()
     expected_vmax = PreparedTrajectories.from_dataframe(tracks, dt_s=0.1).speed_vmax
@@ -180,10 +185,10 @@ def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qt
 
 
 def test_velocity_scalar_bar_switches_even_when_tracking_produces_zero_tracks(qtbot) -> None:
-    panel = LeftPanel()
-    qtbot.addWidget(panel)
+    window = MainWindow()
+    qtbot.addWidget(window)
     view = _FakeScalarBarTrajectoryView()
-    controller = TrajectoryController(panel, view)
+    controller = TrajectoryController(window, view)
 
     controller.set_trajectories(pd.DataFrame(), dt_s=0.1, current_frame=0)
 
@@ -198,8 +203,9 @@ def test_velocity_scalar_bar_switches_even_when_tracking_produces_zero_tracks(qt
 
 
 def test_trajectory_controller_switches_scalar_bar_on_real_viewport(qtbot) -> None:
-    panel = LeftPanel()
-    qtbot.addWidget(panel)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    panel = window.left_panel
     vp = Viewport()
     qtbot.addWidget(vp)
 
@@ -209,7 +215,7 @@ def test_trajectory_controller_switches_scalar_bar_on_real_viewport(qtbot) -> No
         vp.show_volume(grid, reset_camera=False)
         assert "values" in vp.plotter.scalar_bars
 
-        controller = TrajectoryController(panel, vp)
+        controller = TrajectoryController(window, vp)
         controller.set_trajectories(_sample_tracks(), dt_s=0.1, current_frame=3)
 
         assert vp.scalar_bar_mode == ScalarBarMode.VELOCITY

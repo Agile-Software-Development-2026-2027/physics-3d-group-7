@@ -7,18 +7,16 @@ it announces what the user chooses with signals, and shows what it is told with 
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QVBoxLayout,
     QWidget,
 )
 
-from apkit4d.gui.constants import names, texts
+from apkit4d.gui.constants import names
 from apkit4d.gui.theme.themes import THEME_COLORS, Theme
 from apkit4d.gui.views.display.vis_sub_roi_section import VisSubRoiSection
 from apkit4d.gui.views.histograms.histograms_section import HistogramsSection
 from apkit4d.gui.views.panels.appearance_section import AppearanceSection
 from apkit4d.gui.views.panels.side_panel import SidePanel
-from apkit4d.gui.views.widgets.accordion import AccordionSection
 from apkit4d.gui.views.widgets.scroll_area import ModernScrollArea
 from apkit4d.gui.views.widgets.wheel_guard import install_wheel_guard
 
@@ -48,24 +46,6 @@ class LeftPanel(SidePanel):
         self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._appearance_section = AppearanceSection()
-
-        self._show_trajectories_checkbox = QCheckBox(texts.LABEL_SHOW_TRAJECTORIES)
-        self._show_trajectories_checkbox.setObjectName(names.SHOW_TRAJECTORIES_CHECKBOX)
-        self._show_trajectories_checkbox.setChecked(True)
-        self._show_trajectories_checkbox.toggled.connect(self.show_trajectories_toggled)
-        self._show_trajectories_checkbox.hide()  # TODO: layers
-
-        self._show_blobs_checkbox = QCheckBox(texts.LABEL_SHOW_BLOBS)
-        self._show_blobs_checkbox.setObjectName(names.SHOW_BLOBS_CHECKBOX)
-        self._show_blobs_checkbox.setChecked(True)
-        self._show_blobs_checkbox.toggled.connect(self.show_blobs_toggled)
-        self._show_blobs_checkbox.hide()  # TODO: layers
-
-        self._layers_section = AccordionSection(texts.SECTION_LAYERS)
-        self._layers_section.setObjectName(names.LAYERS_SECTION)
-        self._layers_section.add_widget(self._show_trajectories_checkbox)
-        self._layers_section.add_widget(self._show_blobs_checkbox)
-
         self._vis_sub_roi_section = VisSubRoiSection()
         self._histograms_section = HistogramsSection()
 
@@ -74,7 +54,6 @@ class LeftPanel(SidePanel):
         content_layout.setContentsMargins(4, 4, 4, 4)
         content_layout.setSpacing(6)
         content_layout.addWidget(self._appearance_section)
-        content_layout.addWidget(self._layers_section)
         content_layout.addWidget(self._vis_sub_roi_section)
         content_layout.addWidget(self._histograms_section)
         content_layout.addStretch()  # keeps the sections at the top
@@ -90,11 +69,6 @@ class LeftPanel(SidePanel):
     def appearance_section(self) -> AppearanceSection:
         """Section with the settings of the look of the 3D view."""
         return self._appearance_section
-
-    @property
-    def layers_section(self) -> AccordionSection:
-        """Section with the layers of the 3D view."""
-        return self._layers_section
 
     @property
     def vis_sub_roi_section(self) -> VisSubRoiSection:
@@ -134,6 +108,5 @@ class LeftPanel(SidePanel):
         colors = THEME_COLORS[theme]
         self._scroll_area.apply_theme(colors)
         self._appearance_section.apply_theme(colors)
-        self._layers_section.apply_theme(colors)
         self._vis_sub_roi_section.apply_theme(colors)
         self._histograms_section.apply_theme(colors)
