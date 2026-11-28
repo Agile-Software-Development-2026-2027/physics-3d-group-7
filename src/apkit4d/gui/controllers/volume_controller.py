@@ -28,7 +28,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from apkit4d.core.image import Image
 from apkit4d.core.models import PreprocessingConfig
-from apkit4d.core.roi import Bounds6D, RegionOfInterest
+from apkit4d.core.roi import RegionOfInterest, voxel_center_bounds
 from apkit4d.detection.preprocessing import preprocess, suggest_window
 from apkit4d.gui.constants import texts
 from apkit4d.gui.controllers.file_controller import FrameSource
@@ -312,15 +312,8 @@ class VolumeController(QObject):
         self._update_memory_monitor()
         if self._usable:
             # when we read the file we set the bounds so that the ROI inspector can show them
-            sz, sy, sx = self._voxel
-            bounds: Bounds6D = (
-                0.0,
-                max(0, source.info.n_x - 1) * sx,
-                0.0,
-                max(0, source.info.n_y - 1) * sy,
-                0.0,
-                max(0, source.info.n_z - 1) * sz,
-            )
+            info = source.info
+            bounds = voxel_center_bounds((info.n_z, info.n_y, info.n_x), self._voxel)
             self.volume_bounds_changed.emit(bounds)
             self.show_frame(0)
 

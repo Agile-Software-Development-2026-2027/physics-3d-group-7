@@ -71,7 +71,7 @@ class RoiStageController(QObject):
         self._pipeline_controller.complete_stage(PipelineStep.ROI)
         logger.debug("Committed active ROI and completed Stage 1")
 
-    def show_roi(self, roi: RegionOfInterest) -> None:
+    def show_roi(self, roi: RegionOfInterest | None) -> None:
         """
         Show `roi` as the accepted ROI: the volume is cropped to it and the inspector shows its bounds.
 
@@ -80,7 +80,10 @@ class RoiStageController(QObject):
         self._roi_history.clear()
         if self._volume_controller is not None:
             self._volume_controller.set_roi(roi)
-        self._apply_roi_to_inspector(roi)
+        if roi is None:
+            self._restore_inspector_to_roi(None)
+        else:
+            self._apply_roi_to_inspector(roi)
 
     def cancel_active_roi_editing(self) -> None:
         """Cancel an active DATA_ROI selection/preview if one is currently in progress."""

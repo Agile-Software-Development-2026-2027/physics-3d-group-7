@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QLabel,
     QListWidget,
@@ -28,6 +29,10 @@ class MultiFilePanel(QWidget):
         self.remove.setEnabled(False)
         layout.addRow(self.remove)
         layout.setAlignment(self.remove, Qt.AlignmentFlag.AlignLeft)
+        self.settings_mode = QComboBox()
+        self.settings_mode.addItems([texts.MULTI_FILE_COMMON_SETTINGS, texts.MULTI_FILE_PERSONAL_SETTINGS])
+        self.settings_mode.setEnabled(False)
+        layout.addRow(texts.MULTI_FILE_SETTINGS, self.settings_mode)
         self.tracking = QCheckBox(texts.MULTI_FILE_TRACKING)
         self.tracking.setChecked(True)
         self.run = QPushButton(texts.MULTI_FILE_RUN)
