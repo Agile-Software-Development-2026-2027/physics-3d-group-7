@@ -59,7 +59,7 @@ This will install ApKit4D as a `uv tool`, and will add the `.desktop` entry and 
 To uninstall everything run:
 
 ```bash
-./scripts/install.sh uninstall
+scripts/install.sh uninstall
 ```
 
 After installation the `apkit4d` executable will be available[^1].
