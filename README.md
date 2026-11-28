@@ -2,7 +2,9 @@
 
 An application for visualizing and analyzing 4D (3D space + time) microscopy recordings of swimming algae taken in the Zeiss [`.czi`](https://www.zeiss.com/microscopy/en/products/software/zeiss-zen/czi-image-file-format.html) format. The microorganisms are detected in 3D, their trajectories tracked across frames in order to perform a motility analysis and to extract metrics.
 
-<!-- TODO: put a fancy screenshot of the app here -->
+<!-- TODO: update the screenshot as the appearance of the app changes -->
+
+![Screenshot of the ApKit4D window](images/screenshot.png)
 
 ## Getting started
 
@@ -14,7 +16,8 @@ The **recommended way** to run the app is with [uv](https://docs.astral.sh/uv/ge
 uv run apkit4d
 ```
 
-Alternatively, it is possible to run it with standard Python:
+<details>
+<summary>Alternatively, it is possible to run it with standard Python.</summary>
 
 ```bash
 python -m venv .venv # create a Python virtual environment
@@ -25,9 +28,11 @@ python -m apkit4d # run the app
 # execute 'deactivate` to leave the venv
 ```
 
+</details>
+
 Running the app will show its usage:
 
-```
+```text
 Usage: apkit4d [OPTIONS] COMMAND [ARGS]...
 
 Options:
@@ -39,7 +44,30 @@ Commands:
 ```
 
 > [!TIP]
-> Use `--help` with a subcommand to show what it accepts, e.g. `python -m apkit4d pipeline --help`.
+> Use `--help` with a subcommand to show what it accepts, e.g. `uv run apkit4d pipeline --help`.
+
+### Install on Linux desktop
+
+To install the ApKit4D as a desktop app run:
+
+```bash
+scripts/install.sh install
+```
+
+This will install ApKit4D as a `uv tool`, and will add the `.desktop` entry and app icon under the `$HOME/.local` of the current user.
+
+To uninstall everything run:
+
+```bash
+./scripts/install.sh uninstall
+```
+
+After installation the `apkit4d` executable will be available[^1].
+
+[^1]: It will also be possible to run it as a uv tool from anywhere: `uv tool run apkit4d`.
+
+> [!WARNING]
+> If `$HOME/.local/bin` is not in `$PATH` none of this will work.
 
 ### How to update the app
 
@@ -49,7 +77,7 @@ To get the latest changes run
 git pull
 ```
 
-and restart the app.
+and restart or reinstall the app with the updated sources.
 
 ## How we work
 
