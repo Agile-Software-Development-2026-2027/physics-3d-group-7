@@ -4,7 +4,9 @@ from threading import Event
 
 import pandas as pd
 import pytest
+from PySide6.QtGui import QAction
 
+from apkit4d.gui.constants import names
 from apkit4d.gui.controllers.main_controller import MainController
 from apkit4d.gui.models.pipeline_model import PipelineStep, StepStatus
 from apkit4d.gui.views.main_window import MainWindow
@@ -40,6 +42,9 @@ def test_tracking_pipeline_completes(qtbot, qapp) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
     controller = MainController(window, qapp)
+    scalar_bar_action = window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION)
+    assert scalar_bar_action is not None
+    window.set_scalar_bar_visible(False)
 
     _prepare_tracking(controller)
 
@@ -55,6 +60,7 @@ def test_tracking_pipeline_completes(qtbot, qapp) -> None:
     assert result.metadata["num_detections"] == 6
     assert result.metadata["num_tracks_retained"] >= 1
     assert not result.tracks.empty
+    assert scalar_bar_action.isChecked()
 
 
 def test_tracking_pipeline_handles_failure(qtbot, qapp, monkeypatch) -> None:
