@@ -116,6 +116,7 @@ class _FakeScalarBarTrajectoryView(_FakeTrajectoryView):
         super().__init__()
         self.velocity_bar_calls: list[tuple[float, float, str, bool, str]] = []
         self.restore_calls: int = 0
+        self.scalar_bar_visible = True
 
     def show_velocity_scalar_bar(
         self,
@@ -131,6 +132,9 @@ class _FakeScalarBarTrajectoryView(_FakeTrajectoryView):
     def restore_volume_scalar_bar(self) -> None:
         self.restore_calls += 1
 
+    def set_scalar_bar_visible(self, visible: bool) -> None:
+        self.scalar_bar_visible = visible
+
 
 def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qtbot) -> None:
     window = MainWindow()
@@ -138,6 +142,7 @@ def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qt
     panel = window.left_panel
     view = _FakeScalarBarTrajectoryView()
     controller = TrajectoryController(window, view)
+    window.show_scalar_bar_toggled.connect(view.set_scalar_bar_visible)
 
     tracks = _sample_tracks()
     expected_vmax = PreparedTrajectories.from_dataframe(tracks, dt_s=0.1).speed_vmax
@@ -161,11 +166,13 @@ def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qt
     assert mode_combo is not None
     mode_combo.setCurrentIndex(1)
     assert view.velocity_bar_calls[-1][3] is False
+    assert not window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION).isChecked()
     assert view.restore_calls == 0
 
     # Switching back to SPEED shows velocity bar again; changing colormap updates it
     mode_combo.setCurrentIndex(0)
     assert view.velocity_bar_calls[-1][3] is True
+    assert window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION).isChecked()
     cmap_combo = panel.findChild(QComboBox, names.TRAJECTORY_COLORMAP_COMBO)
     assert cmap_combo is not None
     cmap_combo.setCurrentIndex(1)
@@ -174,10 +181,20 @@ def test_velocity_scalar_bar_switches_on_tracking_and_follows_panel_and_reset(qt
     # Hiding trajectories hides velocity bar instead of restoring "values"
     panel.show_trajectories_toggled.emit(False)
     assert view.velocity_bar_calls[-1][3] is False
+    assert not window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION).isChecked()
     assert view.restore_calls == 0
 
     panel.show_trajectories_toggled.emit(True)
     assert view.velocity_bar_calls[-1][3] is True
+    assert window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION).isChecked()
+
+    # Appearance changes must not override an explicit scalar bar toggle.
+    scalar_bar_action = window.findChild(QAction, names.SHOW_SCALAR_BAR_ACTION)
+    assert scalar_bar_action is not None
+    scalar_bar_action.setChecked(False)
+    cmap_combo.setCurrentIndex(0)
+    assert not scalar_bar_action.isChecked()
+    assert not view.scalar_bar_visible
 
     # Reset / file change restores volume bar
     controller.clear_source()

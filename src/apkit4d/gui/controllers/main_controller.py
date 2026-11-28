@@ -96,6 +96,9 @@ class MainController(QObject):
             self._file_controller.loaded.connect(self._volume_controller.set_source)
             self._playback_controller.frame_changed.connect(self._volume_controller.show_frame)
             window.show_volume_toggled.connect(self._volume_controller.set_volume_visible)
+            window.show_outline_toggled.connect(self._volume_controller.set_outline_visible)
+            window.show_scalar_bar_toggled.connect(self._volume_controller.set_scalar_bar_visible)
+            window.show_axes_toggled.connect(self._volume_controller.set_axes_visible)
             self._volume_controller.failed.connect(self._on_volume_failed)
             window.playback_bar.reset_camera_requested.connect(self._volume_controller.reset_camera)
             self.pipeline_model.step_params_changed.connect(self._on_step_params_changed)
@@ -188,6 +191,7 @@ class MainController(QObject):
             trajectory_controller=self._trajectory_controller,
             playback_controller=self._playback_controller,
         )
+        self._tracking_controller.result_ready.connect(self._on_tracking_completed)
 
         self._roi_controller = RoiStageController(
             inspector=window.right_panel.roi_inspector,
@@ -431,6 +435,9 @@ class MainController(QObject):
 
     def _on_detection_completed(self) -> None:
         self._window.set_volume_visible(False)
+
+    def _on_tracking_completed(self, _result: TrackingResult) -> None:
+        self._window.set_scalar_bar_visible(True)
 
     def _commit_preprocessing_stage(self) -> None:
         """Auto-commit the active preprocessing configuration and complete Stage 2."""

@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import override
 
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QDockWidget, QFileDialog, QLabel, QMainWindow, QMenu, QWidget
 
@@ -47,6 +47,9 @@ class MainWindow(QMainWindow):
     results_opened = Signal(Path)
     video_export_requested = Signal()
     show_volume_toggled = Signal(bool)
+    show_outline_toggled = Signal(bool)
+    show_scalar_bar_toggled = Signal(bool)
+    show_axes_toggled = Signal(bool)
     performance_settings_requested = Signal()
 
     def __init__(self) -> None:
@@ -120,6 +123,15 @@ class MainWindow(QMainWindow):
         """Set the volume layer action, which updates visibility through its toggled signal."""
         self._show_volume_action.setChecked(visible)
 
+    def set_scalar_bar_visible(self, visible: bool) -> None:
+        """Set the scalar bar layer action, which updates visibility through its toggled signal."""
+        self._show_scalar_bar_action.setChecked(visible)
+
+    def set_scalar_bar_checked(self, checked: bool) -> None:
+        """Update the scalar bar layer checkbox without changing the user's visibility preference."""
+        with QSignalBlocker(self._show_scalar_bar_action):
+            self._show_scalar_bar_action.setChecked(checked)
+
     def set_current_file(self, path: Path | None) -> None:
         """
         Show the name of the open file and update file-dependent actions.
@@ -128,7 +140,14 @@ class MainWindow(QMainWindow):
             path: The open file, or None to show only the name of the application.
         """
         self._export_video_action.setEnabled(path is not None)
-        for action in (self._show_volume_action, self._show_blobs_action, self._show_trajectories_action):
+        for action in (
+            self._show_volume_action,
+            self._show_outline_action,
+            self._show_scalar_bar_action,
+            self._show_axes_action,
+            self._show_blobs_action,
+            self._show_trajectories_action,
+        ):
             action.setEnabled(path is not None)
         self._center.set_file_loaded(path is not None)
         if path is None:
@@ -247,6 +266,30 @@ class MainWindow(QMainWindow):
         self._show_volume_action.setEnabled(False)
         self._show_volume_action.toggled.connect(self.show_volume_toggled)
         menu.addAction(self._show_volume_action)
+
+        self._show_outline_action = QAction(texts.ACTION_SHOW_OUTLINE, self)
+        self._show_outline_action.setObjectName(names.SHOW_OUTLINE_ACTION)
+        self._show_outline_action.setCheckable(True)
+        self._show_outline_action.setChecked(True)
+        self._show_outline_action.setEnabled(False)
+        self._show_outline_action.toggled.connect(self.show_outline_toggled)
+        menu.addAction(self._show_outline_action)
+
+        self._show_scalar_bar_action = QAction(texts.ACTION_SHOW_SCALAR_BAR, self)
+        self._show_scalar_bar_action.setObjectName(names.SHOW_SCALAR_BAR_ACTION)
+        self._show_scalar_bar_action.setCheckable(True)
+        self._show_scalar_bar_action.setChecked(True)
+        self._show_scalar_bar_action.setEnabled(False)
+        self._show_scalar_bar_action.toggled.connect(self.show_scalar_bar_toggled)
+        menu.addAction(self._show_scalar_bar_action)
+
+        self._show_axes_action = QAction(texts.ACTION_SHOW_AXES, self)
+        self._show_axes_action.setObjectName(names.SHOW_AXES_ACTION)
+        self._show_axes_action.setCheckable(True)
+        self._show_axes_action.setChecked(True)
+        self._show_axes_action.setEnabled(False)
+        self._show_axes_action.toggled.connect(self.show_axes_toggled)
+        menu.addAction(self._show_axes_action)
 
         self._show_blobs_action = QAction(texts.ACTION_SHOW_BLOBS, self)
         self._show_blobs_action.setObjectName(names.SHOW_BLOBS_ACTION)
