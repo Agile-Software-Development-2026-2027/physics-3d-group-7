@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from PySide6.QtWidgets import QFileDialog
 
+from apkit4d.core.frame_range import FrameRange
 from apkit4d.gui.controllers.batch_controller import BatchController
 from apkit4d.gui.controllers.file_controller import FileController
 from apkit4d.gui.controllers.pipeline_controller import PipelineController
@@ -67,7 +68,7 @@ def test_export_runs_only_when_pipeline_reaches_batch(setup_batch, qtbot, tmp_pa
     window, controller, files, source, pipeline, detections, metadata = setup_batch
     view = window.right_panel.batch_inspector
     assert view.output_dir.text() == str(tmp_path)
-    assert view.first_frame.value() == 1 and view.last_frame.value() == 4
+    assert view.selected_frames == FrameRange(0, 3)
     assert view.format.currentText() == "parquet"
     assert not hasattr(view, "run_button")
     assert not hasattr(view, "status")
@@ -76,8 +77,7 @@ def test_export_runs_only_when_pipeline_reaches_batch(setup_batch, qtbot, tmp_pa
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(output))
     view.browse.click()
     view.format.setCurrentText(fmt)
-    view.first_frame.setValue(2)
-    view.last_frame.setValue(3)
+    view.set_frames_range(FrameRange(1, 2))
     window.right_panel.get_play_button(PipelineStep.BATCH).click()
     assert pipeline.model.get_status(PipelineStep.ROI) == StepStatus.RUNNING
     assert pipeline.model.get_status(PipelineStep.BATCH) == StepStatus.PENDING
@@ -142,8 +142,7 @@ def test_one_based_selection_preserves_stored_frame_indices(
 ):
     window, controller, files, source, pipeline, detections, metadata = setup_batch
     view = window.right_panel.batch_inspector
-    view.first_frame.setValue(first)
-    view.last_frame.setValue(last)
+    view.set_frames_range(FrameRange(first - 1, last - 1))
     pipeline.model.set_batch_results(detections, metadata)
     complete_analysis(pipeline)
     pipeline.run_pipeline()
@@ -197,12 +196,36 @@ def test_batch_reset_to_defaults_restores_source_folder_format_and_frames(setup_
 
     view.output_dir.setText(str(tmp_path / "custom"))
     view.format.setCurrentText("csv")
-    view.first_frame.setValue(2)
-    view.last_frame.setValue(3)
+    view.set_selected_frames(1, 2)
 
     view.reset_btn.click()
 
     assert view.output_dir.text() == str(tmp_path)
     assert view.format.currentText() == "parquet"
-    assert view.first_frame.value() == 1
-    assert view.last_frame.value() == 4
+    assert view.selected_frames == FrameRange(0, 3)
+
+
+def test_batch_frames_are_limited_to_the_roi_frame_range(setup_batch):
+    window, _controller, _files, _source, pipeline, _detections, _metadata = setup_batch
+    view = window.right_panel.batch_inspector
+
+    pipeline.model.set_roi_params(pipeline.model.get_roi_params().with_frame_range(FrameRange(1, 2)))
+
+    assert view.selected_frames == FrameRange(1, 2)
+    view.set_selected_frames(0, 3)
+    assert view.selected_frames == FrameRange(1, 2)
+
+    view.set_selected_frames(2, 2)
+    view.reset_btn.click()
+    assert view.selected_frames == FrameRange(1, 2)
+
+
+def test_reset_restores_the_roi_frames(setup_batch):
+    window, _controller, _files, _source, pipeline, _detections, _metadata = setup_batch
+    view = window.right_panel.batch_inspector
+    pipeline.model.set_roi_params(pipeline.model.get_roi_params().with_frame_range(FrameRange(1, 3)))
+    view.set_selected_frames(2, 2)
+
+    view.reset_btn.click()
+
+    assert view.selected_frames == FrameRange(1, 3)

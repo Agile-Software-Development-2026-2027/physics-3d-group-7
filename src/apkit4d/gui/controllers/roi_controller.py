@@ -312,10 +312,14 @@ class RoiStageController(QObject):
             self._inspector.set_status_text(texts.INSPECTOR_STATUS_ROI_FULL)
 
     def _on_source_loaded(self, _path: Path, source: FrameSource) -> None:
+        if inspector := self._inspector:
+            inspector.has_recording = True
+
         self._reset_frame_range_to_full()
 
     def _on_source_closed(self) -> None:
         self._pipeline_model.set_roi_params(self._pipeline_model.get_roi_params().with_frame_range(None))
 
         if inspector := self._inspector:
+            inspector.has_recording = False
             inspector.frames_selector.set_frame_range(None, True)

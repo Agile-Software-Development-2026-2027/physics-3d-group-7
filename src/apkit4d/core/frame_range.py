@@ -98,3 +98,22 @@ class FrameRange:
         return (other.start >= self.start and other.start <= self.end) and (
             other.end <= self.end and other.end >= self.start
         )
+
+    def clamp(self, other: FrameRange) -> Self:
+        """Return a copy of this range moved inside `other`.
+
+        Each end is clamped independently into `other`, so an end that is already inside
+        `other` is left where it is. The result is always a valid range (start <= end)
+        contained in `other`. A range entirely outside `other` collapses onto the single
+        frame of `other` nearest to it.
+
+        Args:
+            other: The range the result must be contained in.
+
+        Returns:
+            A new range with `other.start <= start <= end <= other.end`.
+        """
+        return type(self)(
+            min(max(self.start, other.start), other.end),
+            min(max(self.end, other.start), other.end),
+        )

@@ -18,6 +18,7 @@ class FramesSelector(QWidget):
         super().__init__(parent)
 
         self._frame_range: FrameRange | None = None
+        self._selected_frames: FrameRange | None = None
         self._disabled = False
 
         self._end_frame = QSpinBox()
@@ -59,92 +60,114 @@ class FramesSelector(QWidget):
     ) -> Self:
         return cls(FrameRange(start_frame, end_frame), parent)
 
-    def _update_enabled_state(self):
-        disabled = self._disabled or self._frame_range is None
-
-        special_value_text = "—" if disabled else ""
-
-        self._start_frame.setSpecialValueText(special_value_text)
-        self._end_frame.setSpecialValueText(special_value_text)
-
-        self._start_frame.setDisabled(disabled)
-        self._end_frame.setDisabled(disabled)
+    @property
+    def selected_frames(self) -> FrameRange | None:
+        return self._selected_frames
 
     def disable(self, disabled: bool = True):
         self._disabled = disabled
-        self._update_enabled_state()
+        self._start_frame.setDisabled(disabled)
+        self._end_frame.setDisabled(disabled)
+
+    def set_selected_frames(self, start: int | None = None, end: int | None = None):
+        """Select frames programmatically, clamped to the bounds.
+
+        Args:
+            start: First frame as the user sees it (one-based), or None to keep the current one.
+            end: Last frame as the user sees it (one-based), or None to keep the current one.
+
+        Emits:
+            selected_frames_confirmed: With the new zero-based selection.
+        """
+        if self._selected_frames is None or self._frame_range is None:
+            return
+
+        selection = self._selected_frames
+        if start is not None:
+            selection = selection.with_start(start - 1)
+        if end is not None:
+            selection = selection.with_end(end - 1)
+
+        selection = selection.clamp(self._frame_range)
+
+        self._start_frame.blockSignals(True)
+        self._start_frame.setValue(selection.start_display)
+        self._start_frame.blockSignals(False)
+
+        self._end_frame.blockSignals(True)
+        self._end_frame.setValue(selection.end_display)
+        self._end_frame.blockSignals(False)
+
+        self._selected_frames = selection
+        self.selected_frames_confirmed.emit(selection)
 
     def set_frame_range(
         self,
         frame_range: FrameRange | None,
         adjust_frames: bool = False,
     ):
+        """Update the widget's frame bounds and the selection within them.
+
+        Args:
+            frame_range: The new bounds (zero-based, inclusive), or `None` when no frames
+                are available. When `None`, both spinboxes are locked to `0` with their
+                special value placeholder active and there is no selection.
+            adjust_frames: If `True`, select the whole range. If `False`, keep the current
+                selection, clamped within the new bounds.
+
+        Emits:
+            selected_frames_confirmed: With the new selection, when `adjust_frames` is `True`
+                or the clamping changed the selection.
+            frame_range_changed: Always, with the current selection (or `None`).
+        """
         self._frame_range = frame_range
 
         if frame_range is None:
-            # No frames available: show the special value "—".
+            self.disable()
+
+            special_value_text = "—"
+            self._start_frame.setSpecialValueText(special_value_text)
+            self._end_frame.setSpecialValueText(special_value_text)
+
             self._start_frame.setRange(0, 0)
             self._end_frame.setRange(0, 0)
-
             self._start_frame.setValue(0)
             self._end_frame.setValue(0)
 
+            self._selected_frames = None
             self.selected_frames_confirmed.emit(None)
+            return
 
+        self.disable(False)
+
+        self._start_frame.setSpecialValueText("")
+        self._end_frame.setSpecialValueText("")
+
+        self._start_frame.setRange(frame_range.start_display, frame_range.end_display)
+        self._end_frame.setRange(frame_range.start_display, frame_range.end_display)
+
+        previous = self._selected_frames
+        if adjust_frames or previous is None:
+            selection = FrameRange(frame_range.start, frame_range.end)
         else:
-            self._start_frame.setSpecialValueText("")
-            self._end_frame.setSpecialValueText("")
+            # Clamping both ends into the new bounds
+            selection = previous.clamp(frame_range)
 
-            self._start_frame.setRange(
-                frame_range.start_display,
-                frame_range.end_display,
-            )
-            self._end_frame.setRange(
-                frame_range.start_display,
-                frame_range.end_display,
-            )
+        self._selected_frames = selection
+        self._start_frame.setValue(selection.start_display)
+        self._end_frame.setValue(selection.end_display)
 
-            if adjust_frames:
-                self._start_frame.setValue(frame_range.start_display)
-                self._end_frame.setValue(frame_range.end_display)
-
-            start = self._start_frame.value()
-            end = self._end_frame.value()
-
-            self.selected_frames_confirmed.emit(FrameRange(start - 1, end - 1))
-
-        self._update_enabled_state()
+        if adjust_frames or selection != previous:
+            self.selected_frames_confirmed.emit(selection)
 
     def _on_start_frame_confirmed(self):
-        if self._frame_range is None:
+        if self._selected_frames is None:
             return
 
-        new_frame_range = self._frame_range.with_start(self._start_frame.value() - 1)
-
-        self._start_frame.blockSignals(True)
-        self._start_frame.setValue(new_frame_range.start_display)
-        self._start_frame.blockSignals(False)
-
-        self._end_frame.blockSignals(True)
-        self._end_frame.setValue(new_frame_range.end_display)
-        self._end_frame.blockSignals(False)
-
-        self._frame_range = new_frame_range
-        self.selected_frames_confirmed.emit(new_frame_range)
+        self.set_selected_frames(self._start_frame.value(), self._end_frame.value())
 
     def _on_end_frame_confirmed(self):
-        if self._frame_range is None:
+        if self._selected_frames is None:
             return
 
-        new_frame_range = self._frame_range.with_end(self._end_frame.value() - 1)
-
-        self._start_frame.blockSignals(True)
-        self._start_frame.setValue(new_frame_range.start_display)
-        self._start_frame.blockSignals(False)
-
-        self._end_frame.blockSignals(True)
-        self._end_frame.setValue(new_frame_range.end_display)
-        self._end_frame.blockSignals(False)
-
-        self._frame_range = new_frame_range
-        self.selected_frames_confirmed.emit(new_frame_range)
+        self.set_selected_frames(self._start_frame.value(), self._end_frame.value())
