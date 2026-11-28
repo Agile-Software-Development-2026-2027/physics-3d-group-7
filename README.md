@@ -48,7 +48,7 @@ Commands:
 
 ### Install on Linux desktop
 
-To install the ApKit4D as a desktop app run:
+To install ApKit4D as a desktop app run:
 
 ```bash
 scripts/install.sh install
